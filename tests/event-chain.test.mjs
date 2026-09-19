@@ -15,7 +15,11 @@ function ports() {
   return { settings: { load: async () => fixture('SettingsLoadResponse'), save: async () => fixture('SaveSettingsResponse'), resolve: async () => fixture('SettingsLoadResponse') },
     statuses: { sync: async r => ({ request_id: r.request_id, results: [] }) },
     launch: { activate: async () => fixture('LaunchResponse'), batch: async () => fixture('BatchLaunchResponse') },
-    pdf: { replace: async () => {}, close: async () => {} }, lifecycle: { close: async () => {} } };
+    pdf: { replace: async () => ({ current_page: 1, total_pages: 3, zoom_percent: 100 }), close: async () => {},
+      previous: async () => ({ current_page: 1, total_pages: 3, zoom_percent: 100 }), next: async () => ({ current_page: 2, total_pages: 3, zoom_percent: 100 }),
+      goToPage: async page => ({ current_page: page, total_pages: 3, zoom_percent: 100 }),
+      zoomIn: async () => ({ current_page: 1, total_pages: 3, zoom_percent: 125 }), zoomOut: async () => ({ current_page: 1, total_pages: 3, zoom_percent: 75 }),
+      fit: async () => ({ current_page: 1, total_pages: 3, zoom_percent: 88 }) }, lifecycle: { close: async () => {} } };
 }
 test('fixed CoR: root consumes close once, unknown falls back with zero effects', () => {
   const effects = [], diagnostics = [];
@@ -83,7 +87,6 @@ test('Runner error mapping for every service and malformed response', async () =
     [Effect.SaveSettings, 'settings', 'save', Event.SaveFailed, appError('CONFIG_IO')],
     [Effect.SyncStatuses, 'statuses', 'sync', Event.SyncFailed, appError('PATH_TIMEOUT')],
     [Effect.Activate, 'launch', 'activate', Event.LaunchFailed, appError('LAUNCH_FAILED')],
-    [Effect.BatchLaunch, 'launch', 'batch', Event.BatchLaunchCompleted, appError('LAUNCH_FAILED')],
     [Effect.ReplacePdf, 'pdf', 'replace', Event.PdfPasswordRequired, appError('PDF_PASSWORD_REQUIRED')],
     [Effect.ReplacePdf, 'pdf', 'replace', Event.PdfFailed, appError('PDF_CORRUPT')],
     [Effect.ClosePdf, 'pdf', 'close', Event.EffectFailed, appError('INTERNAL_ERROR')],
@@ -133,4 +136,31 @@ test('application service ports send contract commands without generation', asyn
   await services.settings.load(); await services.settings.resolve({ action: 'initialize_empty', candidate_id: null });
   await services.launch.activate({ material_id: 'm1' });
   assert.deepEqual(calls, [['load_settings'], ['resolve_settings_issue', { action: 'initialize_empty', candidate_id: null }], ['activate_or_launch', { material_id: 'm1' }]]);
+});
+
+test('batch launch cancellation stops unstarted items and retains completed details', async () => {
+  const services = ports(), events = [], calls = [], first = deferred();
+  services.launch.activate = request => { calls.push(request.material_id); return first.promise; };
+  const runner = createEffectRunner(services, event => events.push(event));
+  runner.run([{ type: Effect.BatchLaunch, request: { group_id: 'g1', material_ids: ['m1','m2'] }, generation: 3 }]);
+  runner.run([{ type: Effect.CancelBatch, request: { group_id: 'g1' }, generation: 3 }]);
+  first.resolve(fixture('LaunchResponse'));
+  await runner.settled();
+  assert.deepEqual(calls, ['m1']);
+  assert.equal(events[0].type, Event.BatchLaunchCancelled);
+  assert.equal(events[0].response.results.length, 1);
+});
+
+test('PDF effects publish adapter view snapshots with their original generation', async () => {
+  const services = ports(), events = [], runner = createEffectRunner(services, event => events.push(event));
+  runner.run([
+    { type: Effect.ReplacePdf, request: { material_id: 'm1', url: 'material://pdf/m1', generation: 4 }, generation: 4 },
+    { type: Effect.PdfNext, request: { material_id: 'm1', generation: 4, viewport_width: null }, generation: 4 },
+    { type: Effect.PdfGoToPage, request: { material_id: 'm1', generation: 4, page: 3 }, generation: 4 },
+    { type: Effect.PdfFit, request: { material_id: 'm1', generation: 4, viewport_width: 400 }, generation: 4 },
+  ]);
+  await runner.settled();
+  assert.deepEqual(events.map(event => [event.type, event.generation, event.view.zoom_percent]), [
+    [Event.PdfReady, 4, 100], [Event.PdfViewChanged, 4, 100], [Event.PdfViewChanged, 4, 100], [Event.PdfViewChanged, 4, 88],
+  ]);
 });

@@ -9,6 +9,9 @@ test('PDF.js worker is local and version-pinned; production CSP stays minimal', 
   const config = JSON.parse(readFileSync(new URL('../src-tauri/tauri.conf.json', import.meta.url)));
   const csp = config.app.security.csp;
   assert.match(csp, /worker-src 'self'/);
-  assert.match(csp, /connect-src 'self' material:/);
-  assert.doesNotMatch(csp, /unsafe-eval|unsafe-inline|https?:\/\/|data:/);
+  assert.match(csp, /connect-src 'self'/);
+  assert.match(csp, /material:/);
+  assert.match(csp, /ipc: http:\/\/ipc\.localhost/);
+  assert.match(csp, /http:\/\/material\.localhost/);
+  assert.doesNotMatch(csp, /unsafe-eval|unsafe-inline|https:\/\/|data:/);
 });

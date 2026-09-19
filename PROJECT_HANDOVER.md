@@ -39,6 +39,8 @@ MeetDockは、会議・定例会・案件対応で使用するローカルファ
 - Office ROT／Restart Managerは対応環境確保後へ延期するユーザー判断。次の実装対象はPhase 6のPDF protocol／PDF.jsとし、延期項目を合格扱いにしない
 - Phase 6: 保存済みID再解決を行う`material://` protocol、GET/HEAD・単一Range・32/8 MiB上限、ローカルPDF.js Worker、候補CSP、世代guard付き`PdfViewAdapter`を実装
 - Phase 6のprotocol/adapter/静的試験は合格。詳細は`PHASE_6_IMPLEMENTATION.md`。PDF-01/02/04/05とWorker/CSPのWebView2実機受入は未検証であり、PDF機能全体は未合格
+- Phase 7: Passive View UIにグループ／資料CRUDと階層・コンテキストメニュー、schema 3連番維持、ID-only保存場所表示、ネイティブDnD登録、PDF操作、可変レイアウト、設定問題UIを実装
+- Phase 7のJavaScript 496試験、Rust 43試験、production buildは合格。詳細は`PHASE_7_IMPLEMENTATION.md`。UI-03、200%表示、DnD、PDF/CSP、WebView2描画性能の実機受入は未検証であり、Phase 7全体は未合格
 
 ### 未実装
 
@@ -47,9 +49,8 @@ MeetDockは、会議・定例会・案件対応で使用するローカルファ
 - Office COM/ROT走査
 - Restart Manager連携
 - Office/RM情報を統合したウィンドウ特定（安全なタイトル照合と前面化の基礎は実装済み）
-- Phase 7 Passive ViewへのPDF Canvas/password UI接続
-- ネイティブDnD登録
-- 本番UI
+- Windows/WebView2でのネイティブDnD実機確認
+- 本番UIのUI-03／200%表示／性能実機受入
 - Windows/PDF/UNC/原子的置換の実機試験と製品受入試験
 
 ## 3. 開発環境
@@ -254,3 +255,19 @@ Rust側のConfigManager、Launcher、FileChecker、WindowManager、MaterialProto
 ### 12.3 リリース条件
 
 上記5項目を製品相当buildとテストハーネスで検証し、証跡を保存し、`ACCEPTANCE_TEST_ASSIGNMENT.md`の必須ケースへ合格した場合だけ配布・リリースできます。実装手順は`IMPLEMENTATION_HANDOFF.md`を正とします。
+
+## 13. 2026-09-19 設計差分監査と次回修正対象
+
+ソースと設計書を再照合した結果、次の製品実装差分を確認した。詳細な作業順、対象ファイル、直近の修正済み事項は`NEXT_SESSION_PROMPT.md`を正とする。
+
+1. 一括起動に250 ms間隔、未着手項目のキャンセル、完了件数・失敗明細UIがない。
+2. ネイティブDnDがRust側の事前正規化・検証と複数ファイル確認画面を経ず、直接draftへ追加される。
+3. PDFの32 MiB fallback超過や非対応暗号方式に対する外部アプリ起動導線がない。
+4. 横断検索結果に所属グループが表示されず、UI-01を満たしていない。
+5. PDFのページ数・倍率表示、PDFを閉じるEsc操作、最終同期時刻表示がない。
+6. 設計書7.3の診断ログローテーションと明示エクスポートがない。
+7. 二重起動時の前面化拒否に対するタスクバー通知がない。
+
+Office COM/ROT、Restart Manager、実機受入試験は従来どおり延期・未合格項目であり、上記の新規発見差分と分けて管理する。
+
+直近のPDF操作改善として、Ctrl+ホイール拡大縮小、左ドラッグのパン、100%超でCanvasを表示幅へ縮小しないCSSを実装済み。フォーカス復帰時の2秒クールダウン付き自動同期、結果別通知、PDF WebView2表示修正も維持すること。

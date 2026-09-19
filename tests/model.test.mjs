@@ -17,7 +17,8 @@ const sync = () => run(ready(), Event.SyncRequested, { request_id: request1 }).s
 const launch = () => run(ready(), Event.ActivateRequested, { material_id: 'm1' }).state;
 const batch = () => run(ready(), Event.BatchLaunchRequested, { group_id: 'g1' }).state;
 const loading = () => run(ready(), Event.PdfOpenRequested, { material_id: 'm1' }).state;
-const viewing = () => run(loading(), Event.PdfReady, { material_id: 'm1', generation: 2 }).state;
+const pdfView = { current_page: 1, total_pages: 4, zoom_percent: 100 };
+const viewing = () => run(loading(), Event.PdfReady, { material_id: 'm1', generation: 2, view: pdfView }).state;
 const candidate = { candidate_id: 'candidate1', kind: 'backup', revision: 12, last_updated: null };
 const pending = lifecycle => ({ ...initialState(), lifecycle, candidates: [{ ...candidate, kind: lifecycle === Lifecycle.MigrationPending ? 'legacy' : 'backup' }] });
 const response = mode => ({ mode, config: null, source_schema_version: mode === 'read_only_future_schema' ? 4 : 3, candidates: [{ ...candidate, kind: mode === 'migration_required' ? 'legacy' : 'backup' }], notice_code: null });
@@ -53,11 +54,11 @@ const rows = [
   ['M23 batch', ready, Event.BatchLaunchRequested, { group_id: 'g1' }, 1, s => s.launch.batch.group_id === 'g1', { group_id: 'missing' }],
   ['M24 batch complete', batch, Event.BatchLaunchCompleted, { group_id: 'g1', generation: 1, response: { results: [launched] } }, 0, s => s.launch.batch === null, { group_id: 'g2', generation: 1 }],
   ['M25 pdf open', ready, Event.PdfOpenRequested, { material_id: 'm1' }, 1, s => s.pdf.kind === Pdf.Loading && s.state_generation === 2, { material_id: 'missing' }],
-  ['M26 pdf ready', loading, Event.PdfReady, { material_id: 'm1', generation: 2 }, 0, s => s.pdf.kind === Pdf.Viewing, { material_id: 'm2', generation: 2 }],
+  ['M26 pdf ready', loading, Event.PdfReady, { material_id: 'm1', generation: 2, view: pdfView }, 0, s => s.pdf.kind === Pdf.Viewing && s.pdf.current_page === 1 && s.pdf.total_pages === 4 && s.pdf.zoom_percent === 100, { material_id: 'm2', generation: 2, view: pdfView }],
   ['M27 pdf switch', viewing, Event.PdfOpenRequested, { material_id: 'm2' }, 1, s => s.pdf.material_id === 'm2' && s.state_generation === 3, { material_id: 'm1' }],
   ['M28 pdf password', loading, Event.PdfPasswordRequired, { material_id: 'm1', generation: 2, error: appError('PDF_PASSWORD_REQUIRED') }, 0, s => s.pdf.kind === Pdf.PasswordRequired, { material_id: 'm1', generation: 1 }],
   ['M29 pdf fail', viewing, Event.PdfFailed, { material_id: 'm1', generation: 2, error: pdfError }, 0, s => s.pdf.kind === Pdf.Failed, { material_id: 'm1', generation: 1, error: pdfError }],
-  ['M30 stale pdf', loading, Event.PdfReady, { material_id: 'm1', generation: 1 }, 0, s => s.pdf.kind === Pdf.Loading, { material_id: 'm1', generation: 1 }],
+  ['M30 stale pdf', loading, Event.PdfReady, { material_id: 'm1', generation: 1, view: pdfView }, 0, s => s.pdf.kind === Pdf.Loading, { material_id: 'm1', generation: 1, view: pdfView }],
   ['M31 readonly forbidden', () => ({ ...dirty(), lifecycle: Lifecycle.ReadOnly }), Event.SaveRequested, {}, 0, s => s.lifecycle === Lifecycle.ReadOnly, {}],
   ['M32 fatal', ready, Event.FatalError, {}, 0, s => s.lifecycle === Lifecycle.FatalError, null],
 ];
@@ -125,7 +126,28 @@ test('rapid PDF switching ignores old ready, failure, and password callbacks', (
     const r = run(latest, type, { material_id: 'm1', generation: 2, error: pdfError });
     assert.equal(r.state, latest); assert.equal(r.effects.length, 0);
   }
-  assert.equal(run(latest, Event.PdfReady, { material_id: 'm2', generation: 3 }).state.pdf.kind, Pdf.Viewing);
+  assert.equal(run(latest, Event.PdfReady, { material_id: 'm2', generation: 3, view: pdfView }).state.pdf.kind, Pdf.Viewing);
+});
+test('PDF document navigation follows visible list order without wrapping and remains available after failure', () => {
+  const current = viewing();
+  const next = run(current, Event.PdfDocumentNextRequested);
+  assert.equal(next.effects[0].type, Effect.ReplacePdf); assert.equal(next.effects[0].request.material_id, 'm2');
+  assert.equal(next.state.pdf.kind, Pdf.Loading);
+  assert.equal(run(current, Event.PdfDocumentPreviousRequested).state, current);
+  const failed = run(current, Event.PdfFailed, { material_id: 'm1', generation: 2, error: pdfError }).state;
+  assert.equal(run(failed, Event.PdfDocumentNextRequested).effects[0].request.material_id, 'm2');
+});
+test('search context limits PDF document navigation candidates', () => {
+  const searched = run(viewing(), Event.SearchChanged, { value: 'second' }).state;
+  assert.equal(run(searched, Event.PdfDocumentNextRequested).state, searched);
+  const opened = run(searched, Event.PdfOpenRequested, { material_id: 'm2' }).state;
+  assert.equal(run(opened, Event.PdfDocumentPreviousRequested).state, opened);
+});
+test('direct page requests are bounded and ID-only', () => {
+  const current = viewing(), result = run(current, Event.PdfPageRequested, { page: 4 });
+  assert.deepEqual(result.effects[0].request, { material_id: 'm1', generation: 2, viewport_width: null, page: 4 });
+  assert.equal(result.effects[0].type, Effect.PdfGoToPage);
+  for (const page of [0, 5, 1.5, '2']) assert.equal(run(current, Event.PdfPageRequested, { page }).state, current);
 });
 test('generation never overflows; reset requires idle runner and idle state', () => {
   const s = { ...ready(), state_generation: MAX_SAFE };
@@ -145,9 +167,8 @@ test('migration remains gated until service result, and failure permits explicit
   assert.equal(run(s, Event.SettingsLoaded, { config }).state.lifecycle, Lifecycle.Ready);
 });
 test('effects contain only saved IDs, never a path or arbitrary URL', () => {
-  for (const [type, fields] of [[Event.ActivateRequested, { material_id: 'm1' }], [Event.BatchLaunchRequested, { group_id: 'g1' }]]) {
-    const f = run(ready(), type, fields).effects[0]; assert.deepEqual(f.request, fields);
-  }
+  const activate = run(ready(), Event.ActivateRequested, { material_id: 'm1' }).effects[0]; assert.deepEqual(activate.request, { material_id: 'm1' });
+  const batch = run(ready(), Event.BatchLaunchRequested, { group_id: 'g1' }).effects[0]; assert.deepEqual(batch.request, { group_id: 'g1', material_ids: ['m1'] });
   const f = run(ready(), Event.PdfOpenRequested, { material_id: 'm1' }).effects[0];
   assert.equal(f.request.url, 'material://pdf/m1'); assert.equal(f.type, Effect.ReplacePdf);
 });
@@ -166,6 +187,17 @@ test('ordinary PDF failure preserves editing and synchronization', () => {
   const result = run(s, Event.PdfFailed, { material_id: 'm1', generation: 2, error: pdfError });
   assert.equal(result.state.edit, Edit.Dirty); assert.equal(result.state.sync.request_id, request1);
   assert.equal(result.state.lifecycle, Lifecycle.Ready); assert.equal(result.state.pdf.kind, Pdf.Failed);
+});
+test('PDF view information updates only for the current generation and clears outside Viewing', () => {
+  const current = viewing();
+  const changed = run(current, Event.PdfViewChanged, { material_id: 'm1', generation: 2, view: { current_page: 2, total_pages: 4, zoom_percent: 125 } }).state;
+  assert.deepEqual(changed.pdf, { ...current.pdf, current_page: 2, total_pages: 4, zoom_percent: 125 });
+  assert.equal(run(changed, Event.PdfViewChanged, { material_id: 'm1', generation: 1, view: pdfView }).state, changed);
+  const switched = run(changed, Event.PdfOpenRequested, { material_id: 'm2' }).state;
+  assert.deepEqual(switched.pdf, { kind: Pdf.Loading, material_id: 'm2', generation: 3 });
+  const failed = run(current, Event.PdfFailed, { material_id: 'm1', generation: 2, error: pdfError }).state;
+  assert.equal(Object.hasOwn(failed.pdf, 'total_pages'), false);
+  assert.equal(Object.hasOwn(failed.pdf, 'zoom_percent'), false);
 });
 test('guard matrix: every non-ready lifecycle blocks edits/save/launch/batch', () => {
   for (const lifecycle of Object.values(Lifecycle).filter(x => x !== Lifecycle.Ready)) {
@@ -228,4 +260,61 @@ test('guard matrix: PDF state/target restrictions and mismatched batch/launch ge
   assert.equal(run(l, Event.LaunchSucceeded, { material_id: 'm1', generation: 0, response: launched }).state, l);
   assert.equal(run(b, Event.BatchLaunchCompleted, { group_id: 'g1', generation: 0 }).state, b);
   assert.equal(run(b, Event.BatchLaunchRequested, { group_id: 'g2' }).state, b);
+});
+
+test('Phase 7 CRUD keeps hierarchy and schema 3 order contiguous', () => {
+  let state = ready();
+  state = run(state, Event.GroupAdded, { group: { id: 'child', parent_id: 'g1', name: '子', order: 1 } }).state;
+  assert.equal(state.edit, Edit.Dirty); assert.equal(state.draft.groups.find(g => g.id === 'child').parent_id, 'g1');
+  state = run(state, Event.MaterialAdded, { material: { id: 'm3', group_id: 'child', name: '資料', role: 'reference', target_type: 'file', path: 'C:\\Fixtures\\third.pdf', window_match_pattern: null, order: 99 } }).state;
+  assert.deepEqual(state.draft.materials.filter(m => m.group_id === 'child').map(m => m.order), [1]);
+  state = run(state, Event.MaterialUpdated, { material: { ...state.draft.materials.find(m => m.id === 'm3'), group_id: 'g1', role: 'main' } }).state;
+  assert.deepEqual(state.draft.materials.filter(m => m.group_id === 'g1' && m.role === 'main').map(m => m.order).sort(), [1, 2]);
+  const blocked = run(state, Event.GroupDeleted, { group_id: 'g1', confirmed: true });
+  assert.equal(blocked.state, state); assert.equal(blocked.notice.code, 'VALIDATION_ERROR');
+  state = run(state, Event.MaterialDeleted, { material_id: 'm3', confirmed: true }).state;
+  state = run(state, Event.GroupDeleted, { group_id: 'child', confirmed: true }).state;
+  assert.ok(!state.draft.groups.some(g => g.id === 'child'));
+});
+
+test('DnD is draft-only and execution effects remain ID-only', () => {
+  const requested = run(ready(), Event.NativeFilesDropped, { group_id: 'g1', paths: ['C:\\Drop\\drop.pdf'] });
+  assert.equal(requested.effects[0].type, Effect.PrepareDroppedFiles);
+  const prepared = run(requested.state, Event.DroppedFilesPrepared, { group_id: 'g1', response: { candidates: [{ name: 'drop.pdf', path: 'C:\\Drop\\drop.pdf' }] } });
+  assert.equal(prepared.state.edit, Edit.Clean); assert.equal(prepared.state.dropped_files.candidates.length, 1);
+  const dropped = run(prepared.state, Event.DroppedFilesConfirmed, { group_id: 'g1', role: 'main' });
+  assert.equal(dropped.effects.length, 0); assert.equal(dropped.state.edit, Edit.Dirty);
+  const added = dropped.state.draft.materials.find(m => m.path === 'C:\\Drop\\drop.pdf');
+  assert.equal(added.role, 'main'); assert.equal(added.group_id, 'g1');
+  const unsavedOpen = run(dropped.state, Event.OpenContainingFolderRequested, { material_id: added.id });
+  assert.equal(unsavedOpen.effects.length, 0, 'unsaved dropped paths cannot reach execution IPC');
+  const open = run(dropped.state, Event.OpenContainingFolderRequested, { material_id: 'm1' });
+  assert.deepEqual(open.effects[0].request, { material_id: 'm1' });
+});
+
+test('PDF fallback opens only its saved material ID through Activate', () => {
+  const failed = { ...viewing(), pdf: { kind: 'Failed', material_id: 'm1', generation: 1, code: 'PDF_FALLBACK_TOO_LARGE' } };
+  const result = run(failed, Event.PdfOpenExternalRequested);
+  assert.equal(result.effects[0].type, Effect.Activate);
+  assert.deepEqual(result.effects[0].request, { material_id: 'm1' });
+  const unsupported = run({ ...failed, pdf: { ...failed.pdf, code: 'PDF_PASSWORD_REQUIRED' } }, Event.PdfOpenExternalRequested);
+  assert.equal(unsupported.effects.length, 0);
+});
+
+test('layout boundaries and PDF controls are mediated', () => {
+  let state = ready(); state = run(state, Event.SidebarWidthChanged, { value: 5 }).state; assert.equal(state.layout.sidebar_width, 180);
+  state = run(state, Event.PdfWidthChanged, { value: 9999 }).state; assert.equal(state.layout.pdf_width, 1200);
+  const pdf = viewing(); assert.equal(run(pdf, Event.PdfNextRequested).effects[0].type, Effect.PdfNext);
+  assert.equal(run(pdf, Event.PdfFitRequested, { viewport_width: 400 }).effects[0].request.viewport_width, 400);
+});
+
+test('drag reorder is draft-only and limited to the same parent or material section', () => {
+  const s=ready(),withPeers={...s,saved_config:structuredClone(s.saved_config)};
+  withPeers.saved_config.groups.push({id:'g3',parent_id:null,name:'会議3',order:3});
+  withPeers.saved_config.materials.push({...withPeers.saved_config.materials[0],id:'m3',order:2});
+  const groups=run(withPeers,Event.GroupReordered,{group_id:'g3',before_group_id:'g1'}).state;
+  assert.deepEqual(groups.draft.groups.filter(g=>g.parent_id===null).sort((a,b)=>a.order-b.order).map(g=>g.id),['g3','g1','g2']);
+  const materials=run(withPeers,Event.MaterialReordered,{material_id:'m3',before_material_id:'m1'}).state;
+  assert.deepEqual(materials.draft.materials.filter(m=>m.group_id==='g1'&&m.role==='main').sort((a,b)=>a.order-b.order).map(m=>m.id),['m3','m1']);
+  assert.equal(run(withPeers,Event.MaterialReordered,{material_id:'m2',before_material_id:'m1'}).state,withPeers);
 });

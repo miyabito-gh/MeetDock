@@ -5,9 +5,10 @@ pub mod settings;
 pub mod settings_io;
 pub mod status;
 use contracts::{
-    ActivateOrLaunchRequest, AppError, BatchLaunchRequest, BatchLaunchResponse, ErrorCode,
-    LaunchResponse, OpenContainingFolderRequest, SaveSettingsResponse, SettingsLoadResponse,
-    SyncStatusesRequest, SyncStatusesResponse,
+    ActivateOrLaunchRequest, AppError, BatchLaunchRequest, BatchLaunchResponse,
+    DroppedFileCandidate, ErrorCode, LaunchResponse, OpenContainingFolderRequest,
+    PrepareDroppedFilesRequest, PrepareDroppedFilesResponse, SaveSettingsResponse,
+    SettingsLoadResponse, SyncStatusesRequest, SyncStatusesResponse,
 };
 use launcher::NativeLauncher;
 use pdf_protocol::{NativePdfFileOps, PdfAccessError};
@@ -97,12 +98,36 @@ mod ipc_tests {
             "allow-activate-or-launch",
             "allow-batch-launch-main",
             "allow-open-containing-folder",
+            "allow-prepare-dropped-files",
         ] {
             assert!(main["permissions"]
                 .as_array()
                 .unwrap()
                 .contains(&json!(permission)));
         }
+    }
+
+    #[test]
+    fn dropped_files_are_canonicalized_and_non_files_are_rejected() {
+        let directory = std::env::temp_dir().join(format!("meetdock-dnd-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let file = directory.join("sample.pdf");
+        std::fs::write(&file, b"%PDF-").unwrap();
+        let response =
+            prepare_dropped_candidates(vec![file.to_string_lossy().into_owned()]).unwrap();
+        assert_eq!(response.candidates.len(), 1);
+        assert_eq!(response.candidates[0].name, "sample.pdf");
+        assert!(contracts::windows_absolute_path(
+            &response.candidates[0].path
+        ));
+        assert_eq!(
+            prepare_dropped_candidates(vec![directory.to_string_lossy().into_owned()])
+                .unwrap_err()
+                .code,
+            ErrorCode::ValidationError
+        );
+        std::fs::remove_file(file).unwrap();
+        std::fs::remove_dir(directory).unwrap();
     }
 }
 
@@ -196,7 +221,13 @@ async fn batch_launch_main(
     tokio::task::spawn_blocking(move || BatchLaunchResponse {
         results: materials
             .into_iter()
-            .map(|m| service.activate_or_launch(m))
+            .enumerate()
+            .map(|(index, m)| {
+                if index > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                }
+                service.activate_or_launch(m)
+            })
             .collect(),
     })
     .await
@@ -220,6 +251,48 @@ async fn open_containing_folder(
         .ok_or_else(|| AppError::new(ErrorCode::NotFound, None))?;
     let service = launcher.inner().clone();
     tokio::task::spawn_blocking(move || service.reveal(material))
+        .await
+        .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
+}
+
+fn prepare_dropped_candidates(paths: Vec<String>) -> Result<PrepareDroppedFilesResponse, AppError> {
+    let mut candidates = Vec::with_capacity(paths.len());
+    let mut seen = std::collections::HashSet::new();
+    for raw in paths {
+        let path = std::fs::canonicalize(&raw)
+            .map_err(|_| AppError::new(ErrorCode::ValidationError, None))?;
+        let metadata = std::fs::metadata(&path)
+            .map_err(|_| AppError::new(ErrorCode::ValidationError, None))?;
+        if !metadata.is_file() {
+            return Err(AppError::new(ErrorCode::ValidationError, None));
+        }
+        let normalized = path.to_string_lossy().into_owned();
+        if !contracts::windows_absolute_path(&normalized) || !seen.insert(normalized.to_lowercase())
+        {
+            return Err(AppError::new(ErrorCode::ValidationError, None));
+        }
+        let name = path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| AppError::new(ErrorCode::ValidationError, None))?
+            .to_owned();
+        candidates.push(DroppedFileCandidate {
+            name,
+            path: normalized,
+        });
+    }
+    Ok(PrepareDroppedFilesResponse { candidates })
+}
+
+#[tauri::command]
+async fn prepare_dropped_files(
+    window: tauri::WebviewWindow,
+    body: tauri::ipc::Request<'_>,
+) -> Result<PrepareDroppedFilesResponse, AppError> {
+    let request: PrepareDroppedFilesRequest =
+        contracts::decode(payload(&window, body, true)?, ErrorCode::InvalidRequest)?;
+    tokio::task::spawn_blocking(move || prepare_dropped_candidates(request.paths))
         .await
         .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
 }
@@ -297,7 +370,8 @@ pub fn run() {
             sync_material_statuses,
             activate_or_launch,
             batch_launch_main,
-            open_containing_folder
+            open_containing_folder,
+            prepare_dropped_files
         ])
         .run(tauri::generate_context!())
         .expect("error while running MeetDock");

@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; worker-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; worker-src 'self' blob:; connect-src 'self' ipc: http://ipc.localhost material: http://material.localhost; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
     <link rel="icon" type="image/png" href="/src/assets/meetdock-icon.png" />
     <title>MeetDock</title>
   </head>
   <body>
-    <main id="app"><h1>MeetDock</h1><p>開発環境を初期化しています。</p></main>
+    <main id="app" aria-busy="true"><h1>MeetDock</h1><p>設定を読み込んでいます。</p></main>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

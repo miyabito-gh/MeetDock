@@ -4,8 +4,8 @@ import { PdfViewAdapter, PDF_WORKER_URL } from '../src/pdf-view-adapter.js';
 
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 function canvas(log) { return { _w: 1, _h: 1, get width() { return this._w; }, set width(v) { this._w=v; log.push(`width:${v}`); }, get height() { return this._h; }, set height(v) { this._h=v; log.push(`height:${v}`); }, getContext: () => ({}) }; }
-function page(log, pending = Promise.resolve()) { return { getViewport: () => ({ width: 10, height: 20 }), render: () => ({ promise: pending, cancel: () => log.push('cancel') }) }; }
-function document(log, renderPromise) { return { getPage: async () => page(log, renderPromise), cleanup: () => log.push('cleanup'), destroy: async () => log.push('destroy-document') }; }
+function page(log, pending = Promise.resolve(), baseWidth = 10) { return { getViewport: ({ scale = 1 } = {}) => ({ width: baseWidth * scale, height: 20 * scale }), render: () => ({ promise: pending, cancel: () => log.push('cancel') }) }; }
+function document(log, renderPromise, numPages = 4, baseWidth = 10) { return { numPages, getPage: async () => page(log, renderPromise, baseWidth), cleanup: () => log.push('cleanup'), destroy: async () => log.push('destroy-document') }; }
 function loading(doc, log) { return { promise: Promise.resolve(doc), destroy: async () => log.push('destroy-loading'), onPassword: null }; }
 
 test('PDF replace cancels, resets Canvas, cleans and destroys before loading next document', async () => {
@@ -56,4 +56,55 @@ test('invalid URL binding is rejected before PDF.js', async () => {
   const adapter = new PdfViewAdapter({ canvas: canvas([]), pdfjs: { GlobalWorkerOptions:{}, getDocument(){ called=true; } } });
   await assert.rejects(adapter.replace({url:'material://pdf/m2', material_id:'m1', generation:1}), e => e.code === 'PDF_NOT_ALLOWED');
   assert.equal(called, false);
+});
+
+test('URL resolver can translate the custom scheme for WebView2', async () => {
+  let loadedUrl = null;
+  const pdfjs = {
+    GlobalWorkerOptions: {},
+    getDocument({ url }) {
+      loadedUrl = url;
+      return loading(document([], Promise.resolve()), []);
+    },
+  };
+  const adapter = new PdfViewAdapter({
+    canvas: canvas([]),
+    pdfjs,
+    resolveUrl: (_url, materialId) => `http://material.localhost/pdf/${materialId}`,
+  });
+  await adapter.replace({ url:'material://pdf/m1', material_id:'m1', generation:1 });
+  assert.equal(loadedUrl, 'http://material.localhost/pdf/m1');
+});
+
+test('HTTP 413 and unreadable or unsupported PDF failures expose fallback codes', async () => {
+  for (const [raw, code] of [
+    [Object.assign(new Error(), { name: 'UnexpectedResponseException', status: 413 }), 'PDF_FALLBACK_TOO_LARGE'],
+    [Object.assign(new Error(), { name: 'UnknownErrorException' }), 'PDF_NOT_READABLE'],
+  ]) {
+    const pdfjs = { GlobalWorkerOptions: {}, getDocument: () => ({ promise: Promise.reject(raw), destroy: async () => {} }) };
+    const adapter = new PdfViewAdapter({ canvas: canvas([]), pdfjs });
+    await assert.rejects(adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 1 }), error => error.code === code);
+  }
+});
+
+test('view snapshot starts at page 1 and 100%, follows navigation and zoom, fits computed width, and clamps page boundaries', async () => {
+  const adapter = new PdfViewAdapter({ canvas: canvas([]), pdfjs: { GlobalWorkerOptions: {}, getDocument: () => loading(document([], Promise.resolve(), 2, 200), []) } });
+  assert.deepEqual(await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 7 }), { current_page: 1, total_pages: 2, zoom_percent: 100 });
+  assert.deepEqual(await adapter.previous({ generation: 7 }), { current_page: 1, total_pages: 2, zoom_percent: 100 });
+  assert.equal((await adapter.next({ generation: 7 })).current_page, 2);
+  assert.equal((await adapter.next({ generation: 7 })).current_page, 2);
+  assert.equal((await adapter.previous({ generation: 7 })).current_page, 1);
+  assert.equal((await adapter.goToPage(2, { generation: 7 })).current_page, 2);
+  assert.equal(await adapter.goToPage(3, { generation: 7 }), null);
+  assert.equal((await adapter.zoomIn({ generation: 7 })).zoom_percent, 125);
+  assert.equal((await adapter.zoomOut({ generation: 7 })).zoom_percent, 100);
+  assert.equal((await adapter.fit(432, { generation: 7 })).zoom_percent, 200);
+});
+
+test('superseded generation cannot report view information for the replacement PDF', async () => {
+  const adapter = new PdfViewAdapter({ canvas: canvas([]), pdfjs: { GlobalWorkerOptions: {}, getDocument: () => loading(document([], Promise.resolve()), []) } });
+  await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 1 });
+  await adapter.replace({ url: 'material://pdf/m2', material_id: 'm2', generation: 2 });
+  assert.equal(await adapter.next({ generation: 1 }), null);
+  assert.deepEqual(await adapter.next({ generation: 2 }), { current_page: 2, total_pages: 4, zoom_percent: 100 });
 });

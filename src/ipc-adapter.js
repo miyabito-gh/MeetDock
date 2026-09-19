@@ -8,6 +8,7 @@ const commands = Object.freeze({
   activate_or_launch: ['ActivateOrLaunchRequest', 'LaunchResponse'],
   batch_launch_main: ['BatchLaunchRequest', 'BatchLaunchResponse'],
   open_containing_folder: ['OpenContainingFolderRequest', 'EmptyResponse'],
+  prepare_dropped_files: ['PrepareDroppedFilesRequest', 'PrepareDroppedFilesResponse'],
 });
 
 // Composition Root supplies Tauri invoke; tests supply a plain function.

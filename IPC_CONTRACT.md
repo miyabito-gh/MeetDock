@@ -84,6 +84,7 @@ SettingsCandidate {
 | `activate_or_launch` | `{ material_id: string }` | `LaunchResponse` |
 | `batch_launch_main` | `{ group_id: string }` | `{ results: LaunchResponse[] }` |
 | `open_containing_folder` | `{ material_id: string }` | `{}` |
+| `prepare_dropped_files` | `{ paths: string[] }` | `{ candidates: { name, path }[] }` |
 
 Tauri commandは`load_settings`を除き、表のrequest全体を単一引数`request`として受ける。JavaScriptは`invoke(command, { request })`を使用し、コマンドごとの引数名変換へ依存しない。
 
@@ -167,6 +168,7 @@ AppError {
 - `activate_or_launch`、`batch_launch_main`、`open_containing_folder`、`material://`は`material_id`または`group_id`だけを受け、実パスや任意URLを受けない。
 - Rustは実行直前に保存済み設定から対象を引き、種別、絶対パス、許可スキームを再検証する。
 - `load_settings`と`save_settings`は設定編集用であるため`path`を含む。この例外を実行系IPCへ流用しない。
+- `prepare_dropped_files`はネイティブDnD入力専用であり、Rustが存在する通常ファイルをcanonicalizeして登録候補を返す。候補は確認後にのみdraftへ追加し、起動系IPCへは渡さない。
 - 初期版で起動を許可するURLは`https`だけとする。`http`、`file`、`javascript`、`data`、その他の独自スキームは拒否し、管理者例外機能は実装しない。
 
 ## 競合規則

@@ -146,6 +146,9 @@ export const validators = Object.freeze({
   OpenContainingFolderRequest: v => object(v, { material_id: id }),
   BatchLaunchRequest: v => object(v, { group_id: id }),
   BatchLaunchResponse: v => object(v, { results: array(launch) }),
+  PrepareDroppedFilesRequest: v => { object(v, { paths: array(string) }); requireValue(v.paths.length > 0 && v.paths.length <= 100 && v.paths.every(path => path.length > 0 && path.length <= 32767)); },
+  DroppedFileCandidate: v => object(v, { name: string, path: string }),
+  PrepareDroppedFilesResponse: v => object(v, { candidates: array(x => object(x, { name: string, path: string })) }),
 });
 export function validate(type, value) {
   requireValue(Object.hasOwn(validators, type)); validators[type](value);

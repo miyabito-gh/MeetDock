@@ -17,7 +17,8 @@ export function createServices(ipc, pdf, lifecycle) {
   return Object.freeze({
     settings: Object.freeze({ load: () => ipc.call('load_settings'), resolve: r => ipc.call('resolve_settings_issue', r), save: r => ipc.call('save_settings', r) }),
     statuses: Object.freeze({ sync: r => ipc.call('sync_material_statuses', r) }),
-    launch: Object.freeze({ activate: r => ipc.call('activate_or_launch', r), batch: r => ipc.call('batch_launch_main', r) }),
+    launch: Object.freeze({ activate: r => ipc.call('activate_or_launch', r), batch: r => ipc.call('batch_launch_main', r), openContainingFolder: r => ipc.call('open_containing_folder', r) }),
+    droppedFiles: Object.freeze({ prepare: r => ipc.call('prepare_dropped_files', r) }),
     pdf, lifecycle,
   });
 }
@@ -27,9 +28,9 @@ export function createServices(ipc, pdf, lifecycle) {
  * pdf.replace owns cancel -> Canvas reset -> cleanup -> destroy -> load (Phase 6).
  */
 export function createEffectRunner(services, dispatch, onIdle = () => {}) {
-  const seen = new WeakSet(), pending = new Set();
+  const seen = new WeakSet(), pending = new Set(), batches = new Map();
   async function execute(f) {
-    const context = { generation: f.generation, material_id: f.request.material_id, group_id: f.request.group_id };
+    const context = { generation: f.generation, material_id: f.request.material_id, group_id: f.group_id ?? f.request.group_id };
     let event;
     try {
       switch (f.type) {
@@ -44,18 +45,48 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         case Effect.SyncStatuses: {
           const r = validate('SyncStatusesResponse', await services.statuses.sync(f.request));
           if (r.request_id !== f.request.request_id) throw appError('INTERNAL_ERROR');
-          event = { type: Event.SyncSucceeded, request_id: r.request_id, results: r.results }; break;
+          event = { type: Event.SyncSucceeded, request_id: r.request_id, results: r.results, completed_at: Date.now() }; break;
         }
         case Effect.Activate: {
           const r = validate('LaunchResponse', await services.launch.activate(f.request));
           if (r.material_id !== f.request.material_id) throw appError('INTERNAL_ERROR');
           event = { type: r.outcome === 'foreground_denied' ? Event.ForegroundDenied : r.error ? Event.LaunchFailed : Event.LaunchSucceeded, response: r, ...context }; break;
         }
-        case Effect.BatchLaunch:
-          event = { type: Event.BatchLaunchCompleted, response: validate('BatchLaunchResponse', await services.launch.batch(f.request)), ...context }; break;
-        case Effect.ReplacePdf:
-          await services.pdf.replace(f.request); event = { type: Event.PdfReady, ...context }; break;
+        case Effect.OpenContainingFolder:
+          await services.launch.openContainingFolder(f.request); event = { type: Event.OpenContainingFolderCompleted, ...context }; break;
+        case Effect.PrepareDroppedFiles: {
+          const response = validate('PrepareDroppedFilesResponse', await services.droppedFiles.prepare(f.request));
+          event = { type: Event.DroppedFilesPrepared, response, ...context }; break;
+        }
+        case Effect.BatchLaunch: {
+          const control = { cancelled: false }; batches.set(f.request.group_id, control);
+          const results = [];
+          for (let index = 0; index < f.request.material_ids.length; index++) {
+            if (control.cancelled) break;
+            if (index) await new Promise(resolve => setTimeout(resolve, 250));
+            if (control.cancelled) break;
+            try { results.push(validate('LaunchResponse', await services.launch.activate({ material_id: f.request.material_ids[index] }))); }
+            catch (raw) { results.push({ material_id: f.request.material_ids[index], outcome: 'launch_failed', error: safeError(raw) }); }
+          }
+          batches.delete(f.request.group_id);
+          event = { type: control.cancelled ? Event.BatchLaunchCancelled : Event.BatchLaunchCompleted,
+            response: validate('BatchLaunchResponse', { results }), ...context }; break;
+        }
+        case Effect.CancelBatch:
+          if (batches.has(f.request.group_id)) batches.get(f.request.group_id).cancelled = true;
+          return;
+        case Effect.ReplacePdf: {
+          const view = await services.pdf.replace(f.request);
+          if (!view) return;
+          event = { type: Event.PdfReady, view, ...context }; break;
+        }
         case Effect.ClosePdf: await services.pdf.close(); return;
+        case Effect.PdfPrevious: event = { type: Event.PdfViewChanged, view: await services.pdf.previous(f.request), ...context }; break;
+        case Effect.PdfNext: event = { type: Event.PdfViewChanged, view: await services.pdf.next(f.request), ...context }; break;
+        case Effect.PdfGoToPage: event = { type: Event.PdfViewChanged, view: await services.pdf.goToPage(f.request.page, f.request), ...context }; break;
+        case Effect.PdfZoomIn: event = { type: Event.PdfViewChanged, view: await services.pdf.zoomIn(f.request), ...context }; break;
+        case Effect.PdfZoomOut: event = { type: Event.PdfViewChanged, view: await services.pdf.zoomOut(f.request), ...context }; break;
+        case Effect.PdfFit: event = { type: Event.PdfViewChanged, view: await services.pdf.fit(f.request.viewport_width, f.request), ...context }; break;
         case Effect.CloseWindow: await services.lifecycle.close(); return;
         default: throw appError('INTERNAL_ERROR');
       }
@@ -64,13 +95,16 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
       const type = {
         [Effect.LoadSettings]: Event.SettingsLoadFailed, [Effect.ResolveSettings]: Event.ResolutionFailed,
         [Effect.SaveSettings]: error.code === 'CONFIG_CONFLICT' ? Event.SaveConflict : Event.SaveFailed,
-        [Effect.SyncStatuses]: Event.SyncFailed, [Effect.Activate]: Event.LaunchFailed,
+        [Effect.SyncStatuses]: Event.SyncFailed, [Effect.Activate]: Event.LaunchFailed, [Effect.OpenContainingFolder]: Event.OpenContainingFolderCompleted,
+        [Effect.PrepareDroppedFiles]: Event.DroppedFilesPrepareFailed,
         [Effect.BatchLaunch]: Event.BatchLaunchCompleted,
         [Effect.ReplacePdf]: error.code === 'PDF_PASSWORD_REQUIRED' ? Event.PdfPasswordRequired : Event.PdfFailed,
-        [Effect.ClosePdf]: Event.EffectFailed, [Effect.CloseWindow]: Event.EffectFailed,
+        [Effect.ClosePdf]: Event.EffectFailed, [Effect.PdfPrevious]: Event.PdfFailed, [Effect.PdfNext]: Event.PdfFailed,
+        [Effect.PdfZoomIn]: Event.PdfFailed, [Effect.PdfZoomOut]: Event.PdfFailed, [Effect.PdfFit]: Event.PdfFailed, [Effect.CloseWindow]: Event.EffectFailed,
       }[f.type] ?? Event.FatalError;
       event = { type, error, ...context, effect_type: f.type, request_id: f.request.request_id };
     }
+    if (event?.type === Event.PdfViewChanged && !event.view) return;
     dispatch(event);
   }
   return Object.freeze({

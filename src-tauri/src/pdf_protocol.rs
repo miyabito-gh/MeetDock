@@ -65,7 +65,7 @@ pub fn material_id(uri: &Uri) -> Option<String> {
         return None;
     }
     let host = uri.host()?;
-    if host != "pdf" && host != "material.localhost" {
+    if host != "pdf" && host != "material.localhost" && host != "localhost" {
         return None;
     }
     let path = uri.path();
@@ -158,7 +158,12 @@ fn response(
 ) -> Response<Vec<u8>> {
     let mut builder = Response::builder()
         .status(status)
-        .header(CONTENT_LENGTH, body.len().to_string());
+        .header(CONTENT_LENGTH, body.len().to_string())
+        .header("Access-Control-Allow-Origin", "*")
+        .header(
+            "Access-Control-Expose-Headers",
+            "Accept-Ranges, Content-Length, Content-Range",
+        );
     if matches!(
         status,
         StatusCode::OK | StatusCode::PARTIAL_CONTENT | StatusCode::RANGE_NOT_SATISFIABLE
@@ -185,11 +190,24 @@ pub fn serve(
     material: Result<&MaterialItem, PdfAccessError>,
     files: &impl PdfFileOps,
 ) -> Response<Vec<u8>> {
+    if method == Method::OPTIONS {
+        return Response::builder()
+            .status(StatusCode::NO_CONTENT)
+            .header(ALLOW, "GET, HEAD, OPTIONS")
+            .header(CONTENT_LENGTH, "0")
+            .header("Access-Control-Allow-Origin", "*")
+            .header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
+            .header("Access-Control-Allow-Headers", "Range")
+            .header("Access-Control-Max-Age", "86400")
+            .body(vec![])
+            .unwrap();
+    }
     if method != Method::GET && method != Method::HEAD {
         return Response::builder()
             .status(StatusCode::METHOD_NOT_ALLOWED)
-            .header(ALLOW, "GET, HEAD")
+            .header(ALLOW, "GET, HEAD, OPTIONS")
             .header(CONTENT_LENGTH, "0")
+            .header("Access-Control-Allow-Origin", "*")
             .body(vec![])
             .unwrap();
     }
@@ -340,6 +358,7 @@ mod tests {
         for (uri, expected) in [
             ("material://pdf/pdf_1", Some("pdf_1")),
             ("http://material.localhost/pdf/pdf-2", Some("pdf-2")),
+            ("material://localhost/pdf/pdf-2", Some("pdf-2")),
             ("material://pdf/%70df", Some("pdf")),
             ("material://pdf/a/b", None),
             ("material://pdf/%252e%252e", None),
@@ -360,6 +379,11 @@ mod tests {
         assert_eq!(full.body().len(), 100);
         assert_eq!(headers(&full)["content-length"], "100");
         assert_eq!(headers(&full)["accept-ranges"], "bytes");
+        assert_eq!(headers(&full)["access-control-allow-origin"], "*");
+        assert_eq!(
+            headers(&full)["access-control-expose-headers"],
+            "Accept-Ranges, Content-Length, Content-Range"
+        );
         let ranged = call(&files, Method::GET, Some("bytes=10-19"));
         assert_eq!(ranged.status(), 206);
         assert_eq!(ranged.body().len(), 10);
@@ -407,7 +431,11 @@ mod tests {
         }
         let post = call(&files, Method::POST, None);
         assert_eq!(post.status(), 405);
-        assert_eq!(headers(&post)["allow"], "GET, HEAD");
+        assert_eq!(headers(&post)["allow"], "GET, HEAD, OPTIONS");
+        let options = call(&files, Method::OPTIONS, None);
+        assert_eq!(options.status(), 204);
+        assert_eq!(headers(&options)["access-control-allow-headers"], "Range");
+        assert_eq!(headers(&options)["access-control-allow-origin"], "*");
         let huge = MemoryFiles {
             bytes: b"%PDF-".to_vec(),
             total: Some(MAX_PDF_FALLBACK_BYTES + 1),

@@ -207,6 +207,12 @@
           "markdownDescription": "Enables the open_containing_folder command without any pre-configured scope."
         },
         {
+          "description": "Enables the prepare_dropped_files command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-prepare-dropped-files",
+          "markdownDescription": "Enables the prepare_dropped_files command without any pre-configured scope."
+        },
+        {
           "description": "Enables the resolve_settings_issue command without any pre-configured scope.",
           "type": "string",
           "const": "allow-resolve-settings-issue",
@@ -253,6 +259,12 @@
           "type": "string",
           "const": "deny-open-containing-folder",
           "markdownDescription": "Denies the open_containing_folder command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the prepare_dropped_files command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-prepare-dropped-files",
+          "markdownDescription": "Denies the prepare_dropped_files command without any pre-configured scope."
         },
         {
           "description": "Denies the resolve_settings_issue command without any pre-configured scope.",

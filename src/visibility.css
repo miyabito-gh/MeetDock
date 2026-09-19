@@ -1,0 +1,31 @@
+.app-shell [hidden],
+body > [hidden] {
+  display: none !important;
+}
+
+.editbar[hidden] {
+  display: none;
+}
+
+.canvas-wrap {
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+.canvas-wrap canvas {
+  display: block;
+  width: auto;
+  max-width: none;
+  height: auto;
+  margin-inline: auto;
+}
+
+.canvas-wrap.panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.canvas-wrap.panning canvas {
+  pointer-events: none;
+}

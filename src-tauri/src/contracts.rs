@@ -280,6 +280,12 @@ dto!(ActivateOrLaunchRequest { material_id: Id });
 dto!(OpenContainingFolderRequest { material_id: Id });
 dto!(BatchLaunchRequest { group_id: Id });
 dto!(BatchLaunchResponse { results: Vec<LaunchResponse> });
+dto!(PrepareDroppedFilesRequest { paths: Vec<String> });
+dto!(DroppedFileCandidate {
+    name: String,
+    path: String
+});
+dto!(PrepareDroppedFilesResponse { candidates: Vec<DroppedFileCandidate> });
 dto!(MaterialStatusResult { material_id: Id, open_state: OpenState, confidence: Confidence, path_state: PathState,
     #[serde(deserialize_with = "required_nullable")] detail: Option<String> });
 dto!(LaunchResponse { material_id: Id, outcome: LaunchOutcome, #[serde(deserialize_with = "required_nullable")] error: Option<AppError> });
@@ -318,8 +324,20 @@ structural!(
     ActivateOrLaunchRequest,
     OpenContainingFolderRequest,
     BatchLaunchRequest,
-    MaterialStatusResult
+    MaterialStatusResult,
+    DroppedFileCandidate,
+    PrepareDroppedFilesResponse
 );
+impl Validate for PrepareDroppedFilesRequest {
+    fn validate(&mut self) -> Result<(), AppError> {
+        ensure(!self.paths.is_empty() && self.paths.len() <= 100)?;
+        ensure(
+            self.paths
+                .iter()
+                .all(|path| !path.is_empty() && path.len() <= 32_767),
+        )
+    }
+}
 fn nonblank(s: &str) -> bool {
     s.chars().any(|c| !c.is_whitespace() && c != '\u{feff}')
 }
