@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "MeetDock main window permissions",
   "windows": ["main"],
-  "permissions": ["core:default", "allow-health-check", "allow-load-settings", "allow-resolve-settings-issue", "allow-save-settings"]
+  "permissions": ["core:default", "allow-health-check", "allow-load-settings", "allow-resolve-settings-issue", "allow-save-settings", "allow-sync-material-statuses"]
 }

@@ -201,6 +201,12 @@
           "markdownDescription": "Enables the save_settings command without any pre-configured scope."
         },
         {
+          "description": "Enables the sync_material_statuses command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-sync-material-statuses",
+          "markdownDescription": "Enables the sync_material_statuses command without any pre-configured scope."
+        },
+        {
           "description": "Denies the health_check command without any pre-configured scope.",
           "type": "string",
           "const": "deny-health-check",
@@ -223,6 +229,12 @@
           "type": "string",
           "const": "deny-save-settings",
           "markdownDescription": "Denies the save_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the sync_material_statuses command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-sync-material-statuses",
+          "markdownDescription": "Denies the sync_material_statuses command without any pre-configured scope."
         },
         {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",

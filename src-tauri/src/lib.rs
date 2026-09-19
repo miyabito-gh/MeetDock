@@ -1,9 +1,14 @@
 pub mod contracts;
 pub mod settings;
 pub mod settings_io;
-use contracts::{AppError, ErrorCode, SaveSettingsResponse, SettingsLoadResponse};
+pub mod status;
+use contracts::{
+    AppError, ErrorCode, SaveSettingsResponse, SettingsLoadResponse, SyncStatusesRequest,
+    SyncStatusesResponse,
+};
 use settings::{ConfigManager, SettingsPaths};
 use settings_io::NativeFileOps;
+use status::PathStatusService;
 use tauri::Manager;
 
 fn payload(
@@ -83,6 +88,7 @@ mod ipc_tests {
             "allow-load-settings",
             "allow-save-settings",
             "allow-resolve-settings-issue",
+            "allow-sync-material-statuses",
         ] {
             assert!(main["permissions"]
                 .as_array()
@@ -120,6 +126,34 @@ async fn save_settings(
 }
 
 #[tauri::command]
+async fn sync_material_statuses(
+    window: tauri::WebviewWindow,
+    body: tauri::ipc::Request<'_>,
+    manager: tauri::State<'_, ConfigManager>,
+    statuses: tauri::State<'_, PathStatusService>,
+) -> Result<SyncStatusesResponse, AppError> {
+    let request: SyncStatusesRequest =
+        contracts::decode(payload(&window, body, true)?, ErrorCode::InvalidRequest)?;
+    let materials = manager.resolve_materials(request.material_ids).await?;
+    let service = statuses.inner().clone();
+    let mut tasks = tokio::task::JoinSet::new();
+    for (index, material) in materials.into_iter().enumerate() {
+        let service = service.clone();
+        tasks.spawn(async move { (index, service.check(material).await) });
+    }
+    let mut indexed = Vec::new();
+    while let Some(value) = tasks.join_next().await {
+        indexed.push(value.map_err(|_| AppError::new(ErrorCode::InternalError, None))?);
+    }
+    indexed.sort_by_key(|(index, _)| *index);
+    let results = indexed.into_iter().map(|(_, value)| value).collect();
+    Ok(SyncStatusesResponse {
+        request_id: request.request_id,
+        results,
+    })
+}
+
+#[tauri::command]
 fn health_check() -> Result<String, AppError> {
     Ok("MeetDock backend is ready".to_owned())
 }
@@ -135,6 +169,7 @@ pub fn run() {
             }
         }))
         .setup(|app| {
+            app.manage(PathStatusService::default());
             app.manage(ConfigManager::new(
                 SettingsPaths {
                     directory: app.path().app_config_dir()?,
@@ -153,7 +188,8 @@ pub fn run() {
             health_check,
             load_settings,
             resolve_settings_issue,
-            save_settings
+            save_settings,
+            sync_material_statuses
         ])
         .run(tauri::generate_context!())
         .expect("error while running MeetDock");

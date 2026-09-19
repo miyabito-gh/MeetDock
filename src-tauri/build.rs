@@ -5,6 +5,7 @@ fn main() {
             "load_settings",
             "resolve_settings_issue",
             "save_settings",
+            "sync_material_statuses",
         ]),
     ))
     .expect("failed to build MeetDock permissions")

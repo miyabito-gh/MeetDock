@@ -112,6 +112,28 @@ impl<F: FileOps> ConfigManager<F> {
         let _: LoadSettingsRequest = decode(request, ErrorCode::InvalidRequest)?;
         self.run(load).await
     }
+    /// Resolve execution data from the persisted document. Callers never supply paths.
+    pub async fn resolve_materials(&self, ids: Vec<Id>) -> Result<Vec<MaterialItem>, AppError> {
+        self.run(move |files, paths, session| {
+            if session.issue.is_some() {
+                return Err(error(ErrorCode::ConfigCorrupt));
+            }
+            let bytes =
+                read_current(files, paths)?.ok_or_else(|| error(ErrorCode::ConfigCorrupt))?;
+            let config = valid_config(&bytes)?;
+            let mut result = Vec::with_capacity(ids.len());
+            for id in ids {
+                let material = config
+                    .materials
+                    .iter()
+                    .find(|m| m.id == id)
+                    .ok_or_else(|| AppError::new(ErrorCode::NotFound, Some(id.clone())))?;
+                result.push(material.clone());
+            }
+            Ok(result)
+        })
+        .await
+    }
     pub async fn save_settings(&self, request: Value) -> Result<SaveSettingsResponse, AppError> {
         let request: SaveSettingsRequest = decode(request, ErrorCode::ValidationError)?;
         self.run(move |files, paths, session| {
