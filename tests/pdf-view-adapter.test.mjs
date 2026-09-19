@@ -4,7 +4,7 @@ import { PdfViewAdapter, PDF_WORKER_URL } from '../src/pdf-view-adapter.js';
 
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 function canvas(log) { return { _w: 1, _h: 1, get width() { return this._w; }, set width(v) { this._w=v; log.push(`width:${v}`); }, get height() { return this._h; }, set height(v) { this._h=v; log.push(`height:${v}`); }, getContext: () => ({}) }; }
-function page(log, pending = Promise.resolve(), baseWidth = 10) { return { getViewport: ({ scale = 1 } = {}) => ({ width: baseWidth * scale, height: 20 * scale }), render: () => ({ promise: pending, cancel: () => log.push('cancel') }) }; }
+function page(log, pending = Promise.resolve(), baseWidth = 10, text = '') { return { getViewport: ({ scale = 1 } = {}) => ({ width: baseWidth * scale, height: 20 * scale }), render: () => ({ promise: pending, cancel: () => log.push('cancel') }), getTextContent: async () => ({ items: [{ str: text }] }) }; }
 function document(log, renderPromise, numPages = 4, baseWidth = 10) { return { numPages, getPage: async () => page(log, renderPromise, baseWidth), cleanup: () => log.push('cleanup'), destroy: async () => log.push('destroy-document') }; }
 function loading(doc, log) { return { promise: Promise.resolve(doc), destroy: async () => log.push('destroy-loading'), onPassword: null }; }
 
@@ -87,10 +87,12 @@ test('HTTP 413 and unreadable or unsupported PDF failures expose fallback codes'
   }
 });
 
+const emptySearch = { search_query: '', search_index: 0, search_total: 0 };
+
 test('view snapshot starts at page 1 and 100%, follows navigation and zoom, fits computed width, and clamps page boundaries', async () => {
   const adapter = new PdfViewAdapter({ canvas: canvas([]), pdfjs: { GlobalWorkerOptions: {}, getDocument: () => loading(document([], Promise.resolve(), 2, 200), []) } });
-  assert.deepEqual(await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 7 }), { current_page: 1, total_pages: 2, zoom_percent: 100 });
-  assert.deepEqual(await adapter.previous({ generation: 7 }), { current_page: 1, total_pages: 2, zoom_percent: 100 });
+  assert.deepEqual(await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 7 }), { current_page: 1, total_pages: 2, zoom_percent: 100, ...emptySearch });
+  assert.deepEqual(await adapter.previous({ generation: 7 }), { current_page: 1, total_pages: 2, zoom_percent: 100, ...emptySearch });
   assert.equal((await adapter.next({ generation: 7 })).current_page, 2);
   assert.equal((await adapter.next({ generation: 7 })).current_page, 2);
   assert.equal((await adapter.previous({ generation: 7 })).current_page, 1);
@@ -106,5 +108,18 @@ test('superseded generation cannot report view information for the replacement P
   await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 1 });
   await adapter.replace({ url: 'material://pdf/m2', material_id: 'm2', generation: 2 });
   assert.equal(await adapter.next({ generation: 1 }), null);
-  assert.deepEqual(await adapter.next({ generation: 2 }), { current_page: 2, total_pages: 4, zoom_percent: 100 });
+  assert.deepEqual(await adapter.next({ generation: 2 }), { current_page: 2, total_pages: 4, zoom_percent: 100, ...emptySearch });
+});
+
+test('PDF text search counts matches, opens the first page, wraps navigation, and clears', async () => {
+  const log = [], pages = ['Agenda agenda', 'notes', 'agenda'];
+  const doc = { numPages: pages.length, getPage: async number => page(log, Promise.resolve(), 10, pages[number - 1]), cleanup() {}, async destroy() {} };
+  const adapter = new PdfViewAdapter({ canvas: canvas(log), pdfjs: { GlobalWorkerOptions: {}, getDocument: () => loading(doc, log) } });
+  await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 3 });
+  assert.deepEqual(await adapter.search('AGENDA', { generation: 3 }), { current_page: 1, total_pages: 3, zoom_percent: 100, search_query: 'AGENDA', search_index: 1, search_total: 3 });
+  assert.equal((await adapter.searchNext({ generation: 3 })).search_index, 2);
+  assert.equal((await adapter.searchNext({ generation: 3 })).current_page, 3);
+  assert.equal((await adapter.searchNext({ generation: 3 })).search_index, 1);
+  assert.equal((await adapter.searchPrevious({ generation: 3 })).search_index, 3);
+  assert.deepEqual(await adapter.search('', { generation: 3 }), { current_page: 3, total_pages: 3, zoom_percent: 100, ...emptySearch });
 });

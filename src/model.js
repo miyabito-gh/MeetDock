@@ -4,8 +4,8 @@ const enumeration = names => Object.freeze(Object.fromEntries(names.split(' ').m
 export const Lifecycle = enumeration('Booting Ready ReadOnly RecoveryPending MigrationPending FatalError');
 export const Edit = enumeration('Clean Dirty Saving Conflict');
 export const Pdf = enumeration('Closed Loading Viewing PasswordRequired Failed');
-export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
-export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit CloseWindow');
+export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
+export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit PdfSearch PdfSearchPrevious PdfSearchNext CloseWindow');
 
 export function initialState() {
   return { lifecycle: Lifecycle.Booting, edit: Edit.Clean, sync: { kind: 'Idle' },
@@ -309,6 +309,25 @@ export function transition(s, e) {
       const type = { PdfPreviousRequested: Effect.PdfPrevious, PdfNextRequested: Effect.PdfNext, PdfPageRequested: Effect.PdfGoToPage, PdfZoomInRequested: Effect.PdfZoomIn, PdfZoomOutRequested: Effect.PdfZoomOut, PdfFitRequested: Effect.PdfFit }[e.type];
       return result(s, [effect(type, { material_id: s.pdf.material_id, generation: s.pdf.generation, viewport_width: e.viewport_width ?? null, page: e.page ?? null })]);
     }
+    case Event.PdfSearchRequested:
+    case Event.PdfSearchPreviousRequested:
+    case Event.PdfSearchNextRequested: {
+      if (s.pdf.kind !== Pdf.Viewing || s.pdf.search_status === 'searching') return deny();
+      const query = e.type === Event.PdfSearchRequested ? String(e.query ?? '').trim() : s.pdf.search_query;
+      if (e.type !== Event.PdfSearchRequested && !s.pdf.search_total) return deny();
+      const search_generation = (s.pdf.search_generation ?? 0) + 1;
+      if (!Number.isSafeInteger(search_generation)) return deny();
+      const type = { PdfSearchRequested: Effect.PdfSearch, PdfSearchPreviousRequested: Effect.PdfSearchPrevious, PdfSearchNextRequested: Effect.PdfSearchNext }[e.type];
+      return result({ ...s, pdf: { ...s.pdf, search_query: query, search_status: 'searching', search_generation } },
+        [effect(type, { material_id: s.pdf.material_id, generation: s.pdf.generation, search_generation, query })]);
+    }
+    case Event.PdfSearchCompleted:
+      if (s.pdf.kind !== Pdf.Viewing || e.generation !== s.pdf.generation || e.search_generation !== s.pdf.search_generation ||
+        e.material_id !== s.pdf.material_id || !Number.isSafeInteger(e.view?.search_index) || !Number.isSafeInteger(e.view?.search_total) ||
+        !Number.isSafeInteger(e.view?.current_page) || !Number.isSafeInteger(e.view?.total_pages) || !Number.isSafeInteger(e.view?.zoom_percent) ||
+        typeof e.view?.search_query !== 'string' || e.view.search_index < 0 || e.view.search_index > e.view.search_total ||
+        e.view.current_page < 1 || e.view.current_page > e.view.total_pages || e.view.zoom_percent < 1) return result(s, [], null, 'stale_pdf_search');
+      return result({ ...s, pdf: { ...s.pdf, ...e.view, search_status: 'ready' } });
     case Event.PdfMaximizeToggled:
       if (s.pdf.kind === Pdf.Closed) return deny();
       return result({ ...s, layout: { ...s.layout, pdf_maximized: !s.layout.pdf_maximized } });

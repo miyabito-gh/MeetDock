@@ -30,7 +30,8 @@ export function createServices(ipc, pdf, lifecycle) {
 export function createEffectRunner(services, dispatch, onIdle = () => {}) {
   const seen = new WeakSet(), pending = new Set(), batches = new Map();
   async function execute(f) {
-    const context = { generation: f.generation, material_id: f.request.material_id, group_id: f.group_id ?? f.request.group_id };
+    const context = { generation: f.generation, material_id: f.request.material_id, group_id: f.group_id ?? f.request.group_id,
+      ...(Number.isSafeInteger(f.request.search_generation) ? { search_generation: f.request.search_generation } : {}) };
     let event;
     try {
       switch (f.type) {
@@ -87,6 +88,9 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         case Effect.PdfZoomIn: event = { type: Event.PdfViewChanged, view: await services.pdf.zoomIn(f.request), ...context }; break;
         case Effect.PdfZoomOut: event = { type: Event.PdfViewChanged, view: await services.pdf.zoomOut(f.request), ...context }; break;
         case Effect.PdfFit: event = { type: Event.PdfViewChanged, view: await services.pdf.fit(f.request.viewport_width, f.request), ...context }; break;
+        case Effect.PdfSearch: event = { type: Event.PdfSearchCompleted, view: await services.pdf.search(f.request.query, f.request), ...context }; break;
+        case Effect.PdfSearchPrevious: event = { type: Event.PdfSearchCompleted, view: await services.pdf.searchPrevious(f.request), ...context }; break;
+        case Effect.PdfSearchNext: event = { type: Event.PdfSearchCompleted, view: await services.pdf.searchNext(f.request), ...context }; break;
         case Effect.CloseWindow: await services.lifecycle.close(); return;
         default: throw appError('INTERNAL_ERROR');
       }
@@ -100,11 +104,12 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         [Effect.BatchLaunch]: Event.BatchLaunchCompleted,
         [Effect.ReplacePdf]: error.code === 'PDF_PASSWORD_REQUIRED' ? Event.PdfPasswordRequired : Event.PdfFailed,
         [Effect.ClosePdf]: Event.EffectFailed, [Effect.PdfPrevious]: Event.PdfFailed, [Effect.PdfNext]: Event.PdfFailed,
-        [Effect.PdfZoomIn]: Event.PdfFailed, [Effect.PdfZoomOut]: Event.PdfFailed, [Effect.PdfFit]: Event.PdfFailed, [Effect.CloseWindow]: Event.EffectFailed,
+        [Effect.PdfZoomIn]: Event.PdfFailed, [Effect.PdfZoomOut]: Event.PdfFailed, [Effect.PdfFit]: Event.PdfFailed,
+        [Effect.PdfSearch]: Event.PdfFailed, [Effect.PdfSearchPrevious]: Event.PdfFailed, [Effect.PdfSearchNext]: Event.PdfFailed, [Effect.CloseWindow]: Event.EffectFailed,
       }[f.type] ?? Event.FatalError;
       event = { type, error, ...context, effect_type: f.type, request_id: f.request.request_id };
     }
-    if (event?.type === Event.PdfViewChanged && !event.view) return;
+    if ([Event.PdfViewChanged, Event.PdfSearchCompleted].includes(event?.type) && !event.view) return;
     dispatch(event);
   }
   return Object.freeze({

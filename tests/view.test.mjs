@@ -63,6 +63,21 @@ test('PDF toolbar owns direct page input, page total and zoom indicators', () =>
   for (const token of ["'page-input'", "'移動先のページ'", "emit('pdfPage',page)", "`/ ${next.pdf.total_pages}`", '`${next.pdf.zoom_percent}%`', "const viewing=next.pdf.kind==='Viewing'"]) assert.ok(source.includes(token));
 });
 
+test('PDF toolbar exposes submitted text search, match navigation, counts, and PDF-aware Ctrl+F', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  for (const token of ["'pdf-search'", "'pdf-search-toggle'", "'pdf-search-close'", 'searchTools.hidden=true', 'setPdfSearchOpen(true)', "emit('pdfSearch'", "emit('pdfSearchPrevious')", "emit('pdfSearchNext')", "`${next.pdf.search_index} / ${next.pdf.search_total}`"]) assert.ok(source.includes(token));
+});
+
+test('PDF controls reflow against the resizable preview width without overflowing labels', () => {
+  const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  assert.match(styles, /\.preview\{container:pdf-preview \/ inline-size/);
+  assert.match(styles, /@container pdf-preview \(max-width:420px\)/);
+  assert.match(styles, /\.preview-head\{[^}]*flex-wrap:wrap/);
+  assert.match(styles, /\.viewer-toolbar\{[^}]*flex-wrap:wrap/);
+  assert.match(styles, /\.pdf-search\{display:grid;grid-template-columns:minmax\(0,1fr\) repeat\(4,auto\)\}/);
+  assert.match(styles, /\.viewer-toolbar button\{[^}]*white-space:nowrap/);
+});
+
 test('material rows expose a persistent PDF preview action and current-row state', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   assert.ok(source.includes("if(isPdf(item))add('アプリ内でPDF表示','pdf')"));

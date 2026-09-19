@@ -20,6 +20,10 @@ export class PdfViewAdapter {
   #pageNumber = 1;
   #scale = 1;
   #requestGeneration = null;
+  #searchToken = 0;
+  #searchQuery = '';
+  #searchMatches = [];
+  #searchIndex = -1;
 
   constructor({ canvas, requestPassword = async () => null, resolveUrl = url => url, pdfjs }) {
     if (!canvas?.getContext || typeof requestPassword !== 'function' || typeof resolveUrl !== 'function' || !pdfjs?.getDocument) throw new TypeError('invalid PDF adapter ports');
@@ -42,6 +46,10 @@ export class PdfViewAdapter {
     const loading = this.#loadingTask;
     this.#loadingTask = null;
     this.#requestGeneration = null;
+    this.#searchToken++;
+    this.#searchQuery = '';
+    this.#searchMatches = [];
+    this.#searchIndex = -1;
     document?.cleanup?.();
     const previous = this.#destroying;
     const destroying = previous.catch(() => {}).then(async () => {
@@ -102,6 +110,9 @@ export class PdfViewAdapter {
       current_page: this.#pageNumber,
       total_pages: this.#document.numPages,
       zoom_percent: Math.round(this.#scale * 100),
+      search_query: this.#searchQuery,
+      search_index: this.#searchIndex < 0 ? 0 : this.#searchIndex + 1,
+      search_total: this.#searchMatches.length,
     });
   }
 
@@ -138,6 +149,53 @@ export class PdfViewAdapter {
     if (generation !== this.#requestGeneration || !this.#document || !Number.isFinite(viewportWidth) || viewportWidth <= 0) return null;
     const page = await this.#document.getPage(this.#pageNumber), base = page.getViewport({ scale: 1 });
     this.#scale = Math.max(.5, Math.min(3, (viewportWidth - 32) / base.width)); await this.#renderPage();
+    return this.#snapshot(generation);
+  }
+
+  async search(query, { generation } = {}) {
+    if (generation !== this.#requestGeneration || !this.#document || typeof query !== 'string') return null;
+    const normalized = query.trim().toLocaleLowerCase('ja');
+    const token = ++this.#searchToken;
+    this.#searchQuery = query.trim();
+    this.#searchMatches = [];
+    this.#searchIndex = -1;
+    if (!normalized) return this.#snapshot(generation);
+
+    const matches = [];
+    for (let pageNumber = 1; pageNumber <= this.#document.numPages; pageNumber++) {
+      let page;
+      try { page = await this.#document.getPage(pageNumber); } catch { continue; }
+      if (token !== this.#searchToken || generation !== this.#requestGeneration) return null;
+      let content;
+      try { content = await page.getTextContent(); } catch { continue; }
+      if (token !== this.#searchToken || generation !== this.#requestGeneration) return null;
+      const text = content.items.map(item => `${item.str ?? ''}${item.hasEOL ? '\n' : ''}`).join('').toLocaleLowerCase('ja');
+      let offset = 0;
+      while ((offset = text.indexOf(normalized, offset)) >= 0) {
+        matches.push({ page: pageNumber, offset });
+        offset += Math.max(1, normalized.length);
+      }
+    }
+    if (token !== this.#searchToken || generation !== this.#requestGeneration) return null;
+    this.#searchMatches = matches;
+    this.#searchIndex = matches.length ? 0 : -1;
+    if (matches.length) {
+      this.#pageNumber = matches[0].page;
+      await this.#renderPage();
+    }
+    return this.#snapshot(generation);
+  }
+
+  async searchPrevious({ generation } = {}) { return this.#moveSearch(-1, generation); }
+  async searchNext({ generation } = {}) { return this.#moveSearch(1, generation); }
+  async #moveSearch(offset, generation) {
+    if (generation !== this.#requestGeneration || !this.#document || !this.#searchMatches.length) return this.#snapshot(generation);
+    this.#searchIndex = (this.#searchIndex + offset + this.#searchMatches.length) % this.#searchMatches.length;
+    const pageNumber = this.#searchMatches[this.#searchIndex].page;
+    if (pageNumber !== this.#pageNumber) {
+      this.#pageNumber = pageNumber;
+      await this.#renderPage();
+    }
     return this.#snapshot(generation);
   }
 

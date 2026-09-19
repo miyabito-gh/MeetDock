@@ -149,6 +149,19 @@ test('direct page requests are bounded and ID-only', () => {
   assert.equal(result.effects[0].type, Effect.PdfGoToPage);
   for (const page of [0, 5, 1.5, '2']) assert.equal(run(current, Event.PdfPageRequested, { page }).state, current);
 });
+test('PDF text search is mediated, reports counts, navigates matches, and rejects stale completion', () => {
+  const requested = run(viewing(), Event.PdfSearchRequested, { query: ' agenda ' });
+  assert.equal(requested.effects[0].type, Effect.PdfSearch);
+  assert.deepEqual(requested.effects[0].request, { material_id: 'm1', generation: 2, search_generation: 1, query: 'agenda' });
+  assert.equal(requested.state.pdf.search_status, 'searching');
+  const view = { current_page: 2, total_pages: 4, zoom_percent: 100, search_query: 'agenda', search_index: 1, search_total: 3 };
+  const completed = run(requested.state, Event.PdfSearchCompleted, { material_id: 'm1', generation: 2, search_generation: 1, view });
+  assert.equal(completed.state.pdf.search_status, 'ready');
+  assert.equal(completed.state.pdf.search_total, 3);
+  assert.equal(run(completed.state, Event.PdfSearchNextRequested).effects[0].type, Effect.PdfSearchNext);
+  assert.equal(run(completed.state, Event.PdfSearchPreviousRequested).effects[0].type, Effect.PdfSearchPrevious);
+  assert.equal(run(requested.state, Event.PdfSearchCompleted, { material_id: 'm1', generation: 2, search_generation: 0, view }).state, requested.state);
+});
 test('generation never overflows; reset requires idle runner and idle state', () => {
   const s = { ...ready(), state_generation: MAX_SAFE };
   assert.equal(run(s, Event.PdfOpenRequested, { material_id: 'm1' }).state, s);

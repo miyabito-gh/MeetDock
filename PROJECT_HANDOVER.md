@@ -144,6 +144,9 @@ cargo check --manifest-path src-tauri/Cargo.toml
 - Range応答、`206`、`416`、`Content-Range`、`Accept-Ranges` を実装する。
 - 全体取得は32 MiB、1回のRange応答は8 MiBを上限とする。
 - PDF切替時は `renderTask.cancel()`、世代トークン更新、Canvas初期化、`cleanup()`、`destroy()` の順で破棄する。
+- PDF本文検索はPDF.jsの`getTextContent()`で全ページの文字列を抽出し、大文字・小文字を区別せず一致件数、現在位置、前後移動、一致ページへの遷移を提供する。PDF切替および連続検索ではPDF世代と検索世代の両方を照合し、古い完了結果を破棄する。
+- PDF内検索欄は通常非表示とし、ツールバーの「検索」またはPDF表示中の`Ctrl+F`で開く。`Esc`は検索欄を先に閉じ、次の`Esc`でPDFプレビューを閉じる。
+- スキャンPDFなどテキストを抽出できないページは検索対象外とする。OCRおよび一致箇所のページ内ハイライトは未実装。
 - 実パスをフロントエンドへ公開しない。
 
 ## 7. 推奨実装順
@@ -280,3 +283,12 @@ Office COM/ROT、Restart Manager、実機受入試験は従来どおり延期・
 - ファイル種別アイコンは製品の中心操作である`activate_or_launch`を実行する。既存ウィンドウがあれば前面化し、なければ外部アプリで起動する。
 - 行右端の操作は右から詰め、「…」を最右端へ固定する。PDF行ではその左にPDFプレビューを表示し、非PDF行では空き枠を残さない。「…」メニューには「外部で開く」を残す。
 - 関連JavaScriptテスト31件、Vite production build、`git diff --check`は合格済み。Windows 11／WebView2での表示倍率100%／200%、長い名称、レスポンシブ境界の手動確認は未実施。
+
+## 15. 2026-09-19 PDF本文検索と狭幅レイアウト
+
+- PDF本文検索、件数表示、前後の一致への循環移動、一致ページへの自動遷移を実装した。
+- 検索欄は利用時のみ表示し、ツールバーボタン、`Ctrl+F`、閉じるボタン、`Esc`の操作を実装した。検索欄を閉じても同じPDFの検索結果は保持する。
+- 検索処理はMediator／Effect Runnerを経由し、`PdfViewAdapter`だけがPDF.jsの文字抽出、検索結果、ページ描画を保持する。検索世代に一致しない完了通知は状態へ反映しない。
+- PDFプレビューペインへinline-size container queryを追加した。420 px以下ではPDF選択とヘッダー操作、ページと倍率操作、検索入力と検索操作を折り返し、ボタン文字のはみ出しを防ぐ。
+- 全JavaScriptテスト530件に合格後、狭幅レイアウト変更では関連Viewテスト21件、Vite production build、`git diff --check`に合格した。
+- Windows 11／WebView2実機で、280～420 px、表示倍率100%／200%、長いPDF名、検索結果多数、スキャンPDFを確認する手動受入は未実施。
