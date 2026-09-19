@@ -15,6 +15,7 @@ MeetDockの本実装を、承認済み設計に沿って小さな段階に分け
 - `pdfjs-dist` 5.4.149、`windows` crate、Tokio、Serde、single-instance plugin導入済み
 - `health_check` IPCだけ実装済み
 - 本番UI、設定、Windows連携、PDF protocol、UNC検査は未実装
+- 上記は設計引継ぎ時点の記録。Phase 0〜2は`PHASE_0_2_IMPLEMENTATION.md`、Phase 3設定永続化・設定IPCは`PHASE_3_IMPLEMENTATION.md`に実装結果を記録済み。本番UIへの接続と各実機受入は未実施。
 - `src-tauri/tauri.conf.json`のCSPは現在`null`
 - 設計レビュー・実装引継ぎ文書はコミット`2b7959a`（`docs: finalize implementation handoff`）で保存済み。作業開始時に`git status`を確認し、この基準差分を破棄・巻き戻ししないこと
 

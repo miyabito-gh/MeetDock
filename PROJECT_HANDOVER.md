@@ -29,11 +29,13 @@ MeetDockは、会議・定例会・案件対応で使用するローカルファ
 - Phase 0〜2: Rust DTO/enum/AppError、JS IPC adapter/validator、共通fixture契約試験
 - Phase 2: 純粋Mediator、固定Event Chain、Effect Runner、Root/Presenter境界と自動試験
 - 実装結果・残課題は `PHASE_0_2_IMPLEMENTATION.md` を参照。本番UIへの接続は未実施
+- Phase 3: 完全なschema 3業務検証、設定の保存/読込/3世代backup/候補復旧、条件付き旧試作移行
+- `load_settings` / `resolve_settings_issue` / `save_settings`のstrict native IPC、local/main限定permission
+- 実装・試験・設計補足は`PHASE_3_IMPLEMENTATION.md`、CFG-01実機手順は`CFG_01_VERIFICATION.md`。独立レビューと実機障害受入は未実施
 
 ### 未実装
 
-- 設定JSONの保存・読込・バックアップ・マイグレーション
-- `load_settings` / `save_settings`
+- schema 1/2の自動migrationは設計どおり実装対象外
 - `sync_material_statuses`
 - `activate_or_launch`
 - `batch_launch_main`
