@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-resolve-settings-issue"
+description = "Enables the resolve_settings_issue command without any pre-configured scope."
+commands.allow = ["resolve_settings_issue"]
+
+[[permission]]
+identifier = "deny-resolve-settings-issue"
+description = "Denies the resolve_settings_issue command without any pre-configured scope."
+commands.deny = ["resolve_settings_issue"]

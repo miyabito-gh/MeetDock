@@ -91,6 +91,18 @@ Tauri commandは`load_settings`を除き、表のrequest全体を単一引数`re
 
 `save_settings`では`config.revision == expected_revision`を必須とする。RustはMutex取得後にディスク上のrevisionを再読込して比較し、成功時だけJavaScript安全整数の範囲内で1増加させる。上限到達は`VALIDATION_ERROR`とする。`last_updated`と`app_version`の保存値はRust側で確定する。
 
+### Phase 3の設定処理補足
+
+- commandのJSON envelopeも検証する。loadは`{}`、他は`{ request }`だけ。native commandではraw JSONを受け、`decode`/`Validate`へ渡す。型デコードだけで検証完了とはしない。Tauriの生成permissionをlocal/main capabilityだけに付与する。
+- pristine起動（current、復旧用残存ファイル、有効legacy候補が全てない場合）は空設定revision 0を初回保存する。currentがないだけでは初期化せず、backup/tempが存在する場合は破損していても復旧選択を要求する。
+- 正常currentを優先する。currentが破損/欠落の場合にbak1〜3、bak.new、temp、ReplaceFileW退避ファイルを完全検証して候補化する。候補はrevision降順。同revisionはファイル名順で安定化するが、名前/実パスはDTOへ公開しない。
+- candidate IDは読込ごとの不透明なセッショントークン。選択時に再読込・完全検証・提示時のbyte列との一致確認を行う。候補の差し替え/失効は拒否し、自動復元しない。
+- 復元/旧試作移行は候補revisionを維持し、明示初期化は0とする。いずれも日時/アプリ版はRustが確定する。revision+1は通常の`save_settings`だけに適用する。
+- 旧試作候補はcurrentも復旧残存ファイルもない場合だけ提示する。元ファイルは変更せず、import_legacy以外で移行しない。open_read_only後はセッション終了まで再提示・保存・復旧を禁止する。schema 1/2も将来schemaも自動migrationしない。
+- 読込時に将来/旧schemaを検出したセッションも読み取り専用を維持する。復旧承認後にcurrentが変わっていれば競合とし、未知schemaに変わっていればREAD_ONLY_SCHEMAで拒否する。読み取りのI/Oエラーは破損/不存在と区別し、初期化しない。
+- 保存のMutexはblocking処理の完了まで所有する。最終置換の直前にもcurrentのbyte列を再確認するが、外部プロセスとのOSレベルCASではない。アプリの単一プロセス前提は変えない。
+- ReplaceFileW成功をcommit点とする。成功後の残存退避ファイル削除失敗で保存失敗へ戻さない。ReplaceFileWの1177等ではcurrent名が失われ得るため、明示退避先と検証済みbackup/tempで旧/新内容を保護してCONFIG_IOを返す。無断の復元やMoveFileExWへの置換再試行はしない。詳細は基本・詳細設計書2.3とCFG_01_VERIFICATION.mdを参照。
+
 ## 状態・起動DTO
 
 ```text

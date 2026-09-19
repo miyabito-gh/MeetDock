@@ -201,9 +201,13 @@ pub enum TargetType {
 5. **一時ファイル生成**: 同一ディレクトリにランダム接尾辞付き一時ファイルを排他的に作り、完全なschema 3 JSONを書き、`File::sync_all()`後に再読込検証する。
 6. **バックアップ準備**: 現行が有効なら削除・移動せず`.bak.new`へコピーし、同期して再検証する。現行が破損している場合は破損内容をバックアップへ昇格しない。
 7. **3世代ローテーション**: `.bak2`を`.bak3`、`.bak1`を`.bak2`、`.bak.new`を`.bak1`の順に`MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`で置換する。途中停止による世代重複は許容するが、現行を失わない。
-8. **原子的置換**: 現行がある場合は`ReplaceFileW`を優先し、初回だけ`MoveFileExW(MOVEFILE_WRITE_THROUGH)`を使用する。失敗時は現行を残し`CONFIG_IO`を返す。
+8. **原子的置換**: 現行がある場合は`ReplaceFileW`を使用し、初回だけ`MoveFileExW(MOVEFILE_WRITE_THROUGH)`を使用する。ReplaceFileWへ同一ディレクトリの一意な退避名を渡す。通常の失敗では現行を残して`CONFIG_IO`を返す。ただしOSの1177ではcurrent名が失われ得るため、退避ファイルと検証済みbackup/tempで旧/新内容を保護し、次回に候補として提示する。自動復元・置換API切替再試行は行わない。`REPLACEFILE_WRITE_THROUGH`はMicrosoft仕様で非対応のため指定せず、temp/bak.newを事前syncする。電源断耐性は実機ゲートで確認する。
 9. **後処理**: 成功時だけ一時ファイルを削除し、Rustが確定した`revision`と`last_updated`を返す。失敗時の一時ファイルは次回起動時の検証候補とする。
 10. **起動時修復**: `settings.json`、残存一時ファイル、`.bak1`～`.bak3`を検証し、revision降順で候補表示する。自動復元せず、利用者が選んだ`candidate_id`だけを復元する。
+
+Phase 3補足: 正常currentはそのまま使用し、破損/欠落時に候補を走査する。bak.newとReplaceFileW退避ファイルも候補対象とする。復元/移行では元revisionを維持し、通常保存だけが+1する。未知schemaとI/Oエラーを破損扱いで初期化しない。正常currentの退避ファイルは成功後に削除できるが、破損currentの退避は証跡として残す。cleanup失敗はcommit済み保存の成功を覆さない。完全な補足契約は`IPC_CONTRACT.md`を正とする。
+
+API根拠: [ReplaceFileW（1176/1177と非対応フラグ）](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew)、[MoveFileExW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-movefileexw)。OS/APIが失敗時にcurrent名を常に維持すると保証しているわけではないため、従来の無条件な記述を上記へ訂正した。独立レビュー・実機受入は未実施。
 
 ### 2.4 データ整合性ルール
 

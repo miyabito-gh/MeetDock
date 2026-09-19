@@ -217,7 +217,10 @@ impl Revision {
         self.0
     }
     pub fn next(self) -> Result<Self, AppError> {
-        Self::try_from(self.0 + 1).map_err(|_| AppError::new(ErrorCode::ValidationError, None))
+        self.0
+            .checked_add(1)
+            .and_then(|v| Self::try_from(v).ok())
+            .ok_or_else(|| AppError::new(ErrorCode::ValidationError, None))
     }
 }
 impl TryFrom<u64> for Revision {
