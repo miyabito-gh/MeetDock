@@ -1,5 +1,6 @@
 pub mod contracts;
 pub mod launcher;
+pub mod pdf_protocol;
 pub mod settings;
 pub mod settings_io;
 pub mod status;
@@ -9,6 +10,7 @@ use contracts::{
     SyncStatusesRequest, SyncStatusesResponse,
 };
 use launcher::NativeLauncher;
+use pdf_protocol::{NativePdfFileOps, PdfAccessError};
 use settings::{ConfigManager, SettingsPaths};
 use settings_io::NativeFileOps;
 use status::PathStatusService;
@@ -230,6 +232,39 @@ fn health_check() -> Result<String, AppError> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol("material", |context, request, responder| {
+            let app = context.app_handle().clone();
+            let label = context.webview_label().to_owned();
+            tauri::async_runtime::spawn(async move {
+                let id = pdf_protocol::material_id(request.uri());
+                let material = if label != "main" || id.is_none() {
+                    Err(PdfAccessError::NotFound)
+                } else {
+                    let id =
+                        contracts::Id::try_from(id.unwrap()).map_err(|_| PdfAccessError::NotFound);
+                    match id {
+                        Ok(id) => match app
+                            .state::<ConfigManager>()
+                            .resolve_materials(vec![id])
+                            .await
+                        {
+                            Ok(mut values) => values.pop().ok_or(PdfAccessError::NotFound),
+                            Err(error) if error.code == ErrorCode::NotFound => {
+                                Err(PdfAccessError::NotFound)
+                            }
+                            Err(_) => Err(PdfAccessError::Internal),
+                        },
+                        Err(error) => Err(error),
+                    }
+                };
+                responder.respond(pdf_protocol::serve(
+                    request.method(),
+                    request.headers(),
+                    material.as_ref().map_err(|e| *e),
+                    &NativePdfFileOps,
+                ));
+            });
+        })
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();

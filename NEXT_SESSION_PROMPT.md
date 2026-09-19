@@ -1,6 +1,6 @@
 # MeetDock 次セッション引継ぎ指示
 
-MeetDockの実装をPhase 6から継続してください。
+MeetDockの実装をPhase 7から継続してください。
 
 ## 作業開始時
 
@@ -14,7 +14,7 @@ MeetDockの実装をPhase 6から継続してください。
    - `PDF_RANGE_VERIFICATION.md`
    - `ACCEPTANCE_TEST_ASSIGNMENT.md`
    - `MeetDock 基本・詳細設計書.md`
-4. 実装済み内容は`PHASE_0_2_IMPLEMENTATION.md`、`PHASE_3_IMPLEMENTATION.md`、`PHASE_4_IMPLEMENTATION.md`、`PHASE_5_IMPLEMENTATION.md`で確認すること。
+4. 実装済み内容は`PHASE_0_2_IMPLEMENTATION.md`、`PHASE_3_IMPLEMENTATION.md`、`PHASE_4_IMPLEMENTATION.md`、`PHASE_5_IMPLEMENTATION.md`、`PHASE_6_IMPLEMENTATION.md`で確認すること。
 
 ## 現在の状態
 
@@ -23,43 +23,22 @@ MeetDockの実装をPhase 6から継続してください。
 - WIN-04～06と前面化失敗分岐のモック試験、strict envelope、local/main限定permission、ID-only DTO試験は合格している。
 - Office ROTとRestart Managerは未実装。この端末にMicrosoft 365 x64の検証環境がないため、ユーザー判断で実機環境確保後へ延期した。Phase 5全体およびWIN-01～03を合格扱いにしないこと。
 - PATH-03～05のACL/SMB実機受入も環境未登録のため未合格。
-- 最新検証ではRust 39テスト、JavaScript 484テスト、Vite production build、`cargo check`、`git diff --check`が成功している。
-- JavaScript側にはMediator、固定Event Chain、Effect Runner、IPC adapterとPDF切替用の世代ガード骨格がある。古い非同期応答で現在表示を上書きしない契約を維持すること。
+- 最新検証ではRust 43テスト、JavaScript 489テスト、Vite production build、`cargo check`、`git diff --check`が成功している。
+- JavaScript側にはMediator、固定Event Chain、Effect Runner、IPC adapterとPDF切替adapterがある。古い非同期応答で現在表示を上書きしない契約を維持すること。
 
-## 次の対象: Phase 6 PDF protocolとPDF.js
+## Phase 6完了状況
+
+`PHASE_6_IMPLEMENTATION.md`を参照してください。protocol、PDF.js adapter、Worker、候補CSPと自動試験は実装済みです。PDF-01/02/04/05およびWorker/CSPはWebView2実機未検証のため合格扱いにしません。
+
+## 次の対象: Phase 7 Passive View UI
 
 次を小さな変更単位で実装すること。
 
-1. `material://pdf/{material_id}`を登録し、要求ごとに現在の保存済み設定を再読込してIDを認可する。
-2. 許可対象を`target_type=file`、`.pdf`拡張子、通常ファイル、読取可能、先頭1024 byte以内に`%PDF-`がある資料へ限定する。
-3. URLデコードは1回だけとし、IDの完全一致、query/fragment/余分なパス要素/二重エンコード/トラバーサルを拒否する。実パスをJavaScriptへ公開しない。
-4. GET/HEADだけを許可し、200/206/403/404/405/413/416と必須ヘッダーを`PDF_RANGE_VERIFICATION.md`どおり実装する。
-5. 単一Rangeの`start-end`、`start-`、`-suffix`を扱い、複数Rangeや不正Rangeを416にする。整数オーバーフローを防ぐ。
-6. 全体取得は32 MiB、1回のRange応答は8 MiBを上限とする。大容量ファイルを全読み込みしないport/reader境界と試験を作る。
-7. `pdfjs-dist` 5.4.149の`pdf.worker.min.mjs`をローカル同梱し、CDN、data URL、実行時ダウンロード、`unsafe-eval`を使わない。
-8. `tauri.conf.json`へ承認済み候補CSPを反映する。production CSPとdev接続要件を混同せず、必要最小限を維持する。
-9. `PdfViewAdapter`で切替時の`renderTask.cancel()`、generation更新、Canvas初期化、`cleanup()`、`destroy()`、新規loadの順序を守る。
-10. password callbackは都度入力とし、保存・ログ・自動再試行をしない。3回失敗または取消で当該プレビューを終了する。
-11. 暗号化、破損、fallback超過、古いcallbackを他資料・同期・編集へ波及させない。
+1. 設計書第6章を視覚参照に限定し、モックの状態・業務ロジックはコピーしない。
+2. PresenterがRenderModelを作り、ViewはDOM、入力、フォーカス、ARIA、Canvasだけを扱う。
+3. グループ/資料一覧、検索、編集、保存、一括/個別起動、状態表示、PDF Canvas/password UIを既存MediatorとServiceへ接続する。
+4. 保存失敗時は編集内容を保持し、timeout、unknown、前面化拒否を成功色で表示しない。
+5. 全一覧再描画を避け、検索入力とresizeを統合する。
+6. キーボード操作、200%表示、長い名称、2,000件検索を自動/手動試験する。
 
-## 初期版の対象外
-
-- 複数Range応答
-- 32 MiBを超えるRangeなし全体取得
-- PDF CDN、外部Worker、実行時Worker取得
-- `unsafe-eval`、`unsafe-inline`
-- password保存、隠れた自動再試行
-- Phase 5のOffice ROT／Restart ManagerをPDF変更へ混在させること
-
-## Phase 6完了条件
-
-- PDF-03のprotocol単体/統合試験が合格し、GET/HEAD、Range境界、open-ended、suffix、不正・複数Range、0 byte、上限、全必須ヘッダーを確認すること。
-- 未登録ID、非PDF、query/fragment、トラバーサル、アクセス拒否で内容や実パスを漏らさないこと。
-- PDF切替自動試験で最後の資料だけが表示され、cancel/cleanup/destroy順、古いgeneration破棄、未処理Promise rejectionなしを確認すること。
-- Workerがproduction buildへ同梱され、CSPにCDN、`unsafe-eval`、`unsafe-inline`がないことを静的試験すること。
-- `npm test`、`npm run build`、`cargo test --manifest-path src-tauri/Cargo.toml`、`cargo check --manifest-path src-tauri/Cargo.toml`、`git diff --check`を実行すること。
-- WebView2実機でRange/Worker/CSP、128 MiB PDF、暗号化・破損PDFを確認できない項目は未検証と明記し、自動試験だけでPDF-01/02/04/05を合格扱いにしないこと。
-- 実装結果と残課題を`PHASE_6_IMPLEMENTATION.md`へ記録し、`PROJECT_HANDOVER.md`を更新すること。
-- 受入IDを含む小さなコミットとして保存し、勝手にpushやリリースをしないこと。
-
-まずTauri v2の既存設定と現在固定されている`pdfjs-dist`のアセット構成を確認し、Range計算・認可・ファイル読取を純粋/モック可能な境界へ分けてください。その後protocol、PDF.js adapter、CSPの順で実装・試験まで進め、確認だけで止まらないでください。
+完了条件はSEC-01、UI-01～03と自動UI試験の合格、主要操作のキーボード完結である。Phase 5延期項目やPhase 6実機受入を合格扱いにせず、UI変更へOffice/RM実装を混在させないこと。

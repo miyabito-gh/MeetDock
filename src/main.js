@@ -1,4 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
+// Keep PDF.js and its adapter in the production graph; Phase 7 supplies the passive Canvas view.
+import './pdf-runtime.js';
 
 document.querySelector('#app').innerHTML = `
   <h1>MeetDock</h1>

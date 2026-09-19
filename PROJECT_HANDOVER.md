@@ -37,6 +37,8 @@ MeetDockは、会議・定例会・案件対応で使用するローカルファ
 - Phase 5第一段: ID-only strict IPCの`activate_or_launch` / `batch_launch_main` / `open_containing_folder`、https/file/folder起動port、リテラルタイトル照合、制約付き前面化、一括継続を実装
 - Phase 5の結果と未完了項目は`PHASE_5_IMPLEMENTATION.md`。WIN-04～06モック試験は実装済みだが、Office ROT、Restart Manager、WIN-01～03および実アプリ受入は未実装/未検証であり、Phase 5全体は未完了
 - Office ROT／Restart Managerは対応環境確保後へ延期するユーザー判断。次の実装対象はPhase 6のPDF protocol／PDF.jsとし、延期項目を合格扱いにしない
+- Phase 6: 保存済みID再解決を行う`material://` protocol、GET/HEAD・単一Range・32/8 MiB上限、ローカルPDF.js Worker、候補CSP、世代guard付き`PdfViewAdapter`を実装
+- Phase 6のprotocol/adapter/静的試験は合格。詳細は`PHASE_6_IMPLEMENTATION.md`。PDF-01/02/04/05とWorker/CSPのWebView2実機受入は未検証であり、PDF機能全体は未合格
 
 ### 未実装
 
@@ -45,8 +47,7 @@ MeetDockは、会議・定例会・案件対応で使用するローカルファ
 - Office COM/ROT走査
 - Restart Manager連携
 - Office/RM情報を統合したウィンドウ特定（安全なタイトル照合と前面化の基礎は実装済み）
-- `material://` PDF Rangeプロトコル
-- PDF.jsプレビュー画面
+- Phase 7 Passive ViewへのPDF Canvas/password UI接続
 - ネイティブDnD登録
 - 本番UI
 - Windows/PDF/UNC/原子的置換の実機試験と製品受入試験
@@ -95,7 +96,9 @@ cargo check --manifest-path src-tauri/Cargo.toml
 | `ACCEPTANCE_TEST_ASSIGNMENT.md` | 実装後・リリース前の受入試験割当 |
 | `package.json` | Node依存関係と開発コマンド |
 | `vite.config.js` | Vite設定 |
-| `src/main.js` | フロントエンド起点。現在は疎通確認UI |
+| `src/main.js` | フロントエンド起点。現在は疎通確認UIとPDF.js production graph登録 |
+| `src/pdf-view-adapter.js` | PDF切替、破棄順、password/generation境界 |
+| `src-tauri/src/pdf_protocol.rs` | PDF認可、Range計算、bounded file reader |
 | `src-tauri/Cargo.toml` | Rust依存関係 |
 | `src-tauri/src/lib.rs` | Tauriアプリ本体・IPC登録 |
 | `src-tauri/src/main.rs` | Rustエントリポイント |
@@ -216,7 +219,7 @@ Rust側のConfigManager、Launcher、FileChecker、WindowManager、MaterialProto
 
 - 現在の `src/main.js` は最小の疎通確認画面であり、設計書第6章のモックはまだ製品UIへ移植していません。
 - `src-tauri/gen/schemas` はTauriが生成した権限スキーマです。capability変更時はTauriコマンドで再生成される内容を確認してください。
-- 現在の`src-tauri/tauri.conf.json`はCSPが`null`です。Phase 6のPDF本実装時に承認済み候補を反映し、WebView2実機検証で確定してください。
+- `src-tauri/tauri.conf.json`へ承認済み候補CSPを反映済み。WebView2製品相当buildで最終確定してください。
 - `icon.ico` は登録済みですが、正式なブランドアイコンの更新時はTauri用の各サイズ素材も再生成してください。
 - Windows API実装はWindows上でのみ実行・検証してください。
 

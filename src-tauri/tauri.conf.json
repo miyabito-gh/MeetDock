@@ -19,7 +19,9 @@
       "minHeight": 640,
       "resizable": true
     }],
-    "security": { "csp": null }
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; worker-src 'self'; connect-src 'self' material:; img-src 'self' blob:; style-src 'self'"
+    }
   },
   "bundle": {
     "active": true,
