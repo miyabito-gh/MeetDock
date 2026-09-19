@@ -26,12 +26,13 @@ MeetDockは、会議・定例会・案件対応で使用するローカルファ
 - `src-tauri/icons/icon.ico`登録済み
 - Windows向けTauriバンドル設定を有効化済み
 - `health_check` IPCコマンド実装済み
+- Phase 0〜2: Rust DTO/enum/AppError、JS IPC adapter/validator、共通fixture契約試験
+- Phase 2: 純粋Mediator、固定Event Chain、Effect Runner、Root/Presenter境界と自動試験
+- 実装結果・残課題は `PHASE_0_2_IMPLEMENTATION.md` を参照。本番UIへの接続は未実施
 
 ### 未実装
 
-- 設定モデル（AppConfig、GroupItem、MaterialItem）
 - 設定JSONの保存・読込・バックアップ・マイグレーション
-- IPC DTOと共通エラー契約
 - `load_settings` / `save_settings`
 - `sync_material_statuses`
 - `activate_or_launch`
@@ -46,7 +47,7 @@ MeetDockは、会議・定例会・案件対応で使用するローカルファ
 - PDF.jsプレビュー画面
 - ネイティブDnD登録
 - 本番UI
-- 自動テスト・受入試験
+- Windows/PDF/UNC/原子的置換の実機試験と製品受入試験
 
 ## 3. 開発環境
 
@@ -211,7 +212,7 @@ Rust側のConfigManager、Launcher、FileChecker、WindowManager、MaterialProto
 
 - 現在の `src/main.js` は最小の疎通確認画面であり、設計書第6章のモックはまだ製品UIへ移植していません。
 - `src-tauri/gen/schemas` はTauriが生成した権限スキーマです。capability変更時はTauriコマンドで再生成される内容を確認してください。
-- 現在の`src-tauri/tauri.conf.json`はCSPが`null`です。承認済みCSPはPDF/WebView2技術検証後の本実装フェーズで反映してください。
+- 現在の`src-tauri/tauri.conf.json`はCSPが`null`です。Phase 6のPDF本実装時に承認済み候補を反映し、WebView2実機検証で確定してください。
 - `icon.ico` は登録済みですが、正式なブランドアイコンの更新時はTauri用の各サイズ素材も再生成してください。
 - Windows API実装はWindows上でのみ実行・検証してください。
 
