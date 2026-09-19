@@ -84,7 +84,7 @@ test('material rows expose a persistent PDF preview action and current-row state
   assert.ok(source.includes('pdf-preview-button'));
   assert.ok(source.includes("r.setAttribute('aria-current','true')"));
   assert.ok(source.includes("icon=button('','activate','file-icon')"));
-  assert.ok(source.includes("acts.append(pdfPreview,more)"));
+  assert.ok(source.includes("acts.append(openFolder,pdfPreview,more)"));
   assert.ok(source.includes('開いていない場合は外部アプリで開きます'));
   assert.ok(source.includes("add('外部で開く','activate')"));
   assert.doesNotMatch(source, /button\('開く','activate','primary'\)/);
@@ -97,9 +97,22 @@ test('PDF header exposes previous, direct selection and next document controls',
   for (const token of ["'pdf-document-previous'", "'pdf-document-select'", "'pdf-document-next'", "emit('openPdf',documentSelect.value)", "emit('pdfDocumentPrevious')", "emit('pdfDocumentNext')"]) assert.ok(source.includes(token));
 });
 
+test('file rows expose a direct open-containing-folder action', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.ok(source.includes("actionIcon('open-folder','open-folder-button'"));
+  assert.ok(source.includes("else if(a==='open-folder')emit('openContainingFolder',id)"));
+  assert.ok(source.includes("p.openFolder.hidden=item.target_type!=='file'"));
+  assert.ok(source.includes('の保存場所を開く'));
+});
+
 test('group navigation renders a collapsible parent-child tree', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   for (const token of ['collapsedGroups', "'group-toggle'", "'aria-expanded'", "children.get(g.id)", "'group-menu'", "'＋ ルート追加'"]) assert.ok(source.includes(token));
+  assert.ok(source.includes("row.setAttribute('aria-level',String(depth+1))"));
+  assert.ok(source.includes("'group-label'"));
+  const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  assert.match(styles, /padding-left:calc\(var\(--group-depth\) \* 18px\)/);
+  assert.doesNotMatch(styles, /\.group-row::before|\.group-row::after/);
 });
 
 test('material icons are stable by target type and common extension', () => {
