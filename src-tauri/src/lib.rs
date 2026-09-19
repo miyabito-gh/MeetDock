@@ -1,11 +1,14 @@
 pub mod contracts;
+pub mod launcher;
 pub mod settings;
 pub mod settings_io;
 pub mod status;
 use contracts::{
-    AppError, ErrorCode, SaveSettingsResponse, SettingsLoadResponse, SyncStatusesRequest,
-    SyncStatusesResponse,
+    ActivateOrLaunchRequest, AppError, BatchLaunchRequest, BatchLaunchResponse, ErrorCode,
+    LaunchResponse, OpenContainingFolderRequest, SaveSettingsResponse, SettingsLoadResponse,
+    SyncStatusesRequest, SyncStatusesResponse,
 };
+use launcher::NativeLauncher;
 use settings::{ConfigManager, SettingsPaths};
 use settings_io::NativeFileOps;
 use status::PathStatusService;
@@ -89,6 +92,9 @@ mod ipc_tests {
             "allow-save-settings",
             "allow-resolve-settings-issue",
             "allow-sync-material-statuses",
+            "allow-activate-or-launch",
+            "allow-batch-launch-main",
+            "allow-open-containing-folder",
         ] {
             assert!(main["permissions"]
                 .as_array()
@@ -154,6 +160,69 @@ async fn sync_material_statuses(
 }
 
 #[tauri::command]
+async fn activate_or_launch(
+    window: tauri::WebviewWindow,
+    body: tauri::ipc::Request<'_>,
+    manager: tauri::State<'_, ConfigManager>,
+    launcher: tauri::State<'_, NativeLauncher>,
+) -> Result<LaunchResponse, AppError> {
+    let request: ActivateOrLaunchRequest =
+        contracts::decode(payload(&window, body, true)?, ErrorCode::InvalidRequest)?;
+    let material = manager
+        .resolve_materials(vec![request.material_id])
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| AppError::new(ErrorCode::NotFound, None))?;
+    let service = launcher.inner().clone();
+    tokio::task::spawn_blocking(move || service.activate_or_launch(material))
+        .await
+        .map_err(|_| AppError::new(ErrorCode::InternalError, None))
+}
+
+#[tauri::command]
+async fn batch_launch_main(
+    window: tauri::WebviewWindow,
+    body: tauri::ipc::Request<'_>,
+    manager: tauri::State<'_, ConfigManager>,
+    launcher: tauri::State<'_, NativeLauncher>,
+) -> Result<BatchLaunchResponse, AppError> {
+    let request: BatchLaunchRequest =
+        contracts::decode(payload(&window, body, true)?, ErrorCode::InvalidRequest)?;
+    let materials = manager.resolve_group_main(request.group_id).await?;
+    let service = launcher.inner().clone();
+    tokio::task::spawn_blocking(move || BatchLaunchResponse {
+        results: materials
+            .into_iter()
+            .map(|m| service.activate_or_launch(m))
+            .collect(),
+    })
+    .await
+    .map_err(|_| AppError::new(ErrorCode::InternalError, None))
+}
+
+#[tauri::command]
+async fn open_containing_folder(
+    window: tauri::WebviewWindow,
+    body: tauri::ipc::Request<'_>,
+    manager: tauri::State<'_, ConfigManager>,
+    launcher: tauri::State<'_, NativeLauncher>,
+) -> Result<contracts::EmptyResponse, AppError> {
+    let request: OpenContainingFolderRequest =
+        contracts::decode(payload(&window, body, true)?, ErrorCode::InvalidRequest)?;
+    let material = manager
+        .resolve_materials(vec![request.material_id])
+        .await?
+        .into_iter()
+        .next()
+        .ok_or_else(|| AppError::new(ErrorCode::NotFound, None))?;
+    let service = launcher.inner().clone();
+    tokio::task::spawn_blocking(move || service.reveal(material))
+        .await
+        .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
+}
+
+#[tauri::command]
 fn health_check() -> Result<String, AppError> {
     Ok("MeetDock backend is ready".to_owned())
 }
@@ -170,6 +239,7 @@ pub fn run() {
         }))
         .setup(|app| {
             app.manage(PathStatusService::default());
+            app.manage(NativeLauncher::default());
             app.manage(ConfigManager::new(
                 SettingsPaths {
                     directory: app.path().app_config_dir()?,
@@ -189,7 +259,10 @@ pub fn run() {
             load_settings,
             resolve_settings_issue,
             save_settings,
-            sync_material_statuses
+            sync_material_statuses,
+            activate_or_launch,
+            batch_launch_main,
+            open_containing_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running MeetDock");

@@ -134,6 +134,30 @@ impl<F: FileOps> ConfigManager<F> {
         })
         .await
     }
+    /// Resolve all main materials for one persisted group in stable configured order.
+    pub async fn resolve_group_main(&self, group_id: Id) -> Result<Vec<MaterialItem>, AppError> {
+        self.run(move |files, paths, session| {
+            if session.issue.is_some() {
+                return Err(error(ErrorCode::ConfigCorrupt));
+            }
+            let bytes =
+                read_current(files, paths)?.ok_or_else(|| error(ErrorCode::ConfigCorrupt))?;
+            let config = valid_config(&bytes)?;
+            if !config.groups.iter().any(|group| group.id == group_id) {
+                return Err(AppError::new(ErrorCode::NotFound, None));
+            }
+            let mut materials: Vec<_> = config
+                .materials
+                .into_iter()
+                .filter(|material| {
+                    material.group_id == group_id && material.role == MaterialRole::Main
+                })
+                .collect();
+            materials.sort_by_key(|material| material.order);
+            Ok(materials)
+        })
+        .await
+    }
     pub async fn save_settings(&self, request: Value) -> Result<SaveSettingsResponse, AppError> {
         let request: SaveSettingsRequest = decode(request, ErrorCode::ValidationError)?;
         self.run(move |files, paths, session| {

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-activate-or-launch"
+description = "Enables the activate_or_launch command without any pre-configured scope."
+commands.allow = ["activate_or_launch"]
+
+[[permission]]
+identifier = "deny-activate-or-launch"
+description = "Denies the activate_or_launch command without any pre-configured scope."
+commands.deny = ["activate_or_launch"]

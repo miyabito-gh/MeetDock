@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-batch-launch-main"
+description = "Enables the batch_launch_main command without any pre-configured scope."
+commands.allow = ["batch_launch_main"]
+
+[[permission]]
+identifier = "deny-batch-launch-main"
+description = "Denies the batch_launch_main command without any pre-configured scope."
+commands.deny = ["batch_launch_main"]

@@ -34,18 +34,16 @@ MeetDockは、会議・定例会・案件対応で使用するローカルファ
 - 実装・試験・設計補足は`PHASE_3_IMPLEMENTATION.md`、CFG-01実機手順は`CFG_01_VERIFICATION.md`。独立レビューと実機障害受入は未実施
 - Phase 4: `sync_material_statuses`、ローカル/UNC分離、固定2ワーカー・64件キュー、同一パス統合、600 ms期限、30/10秒キャッシュ
 - Phase 4の実装・自動試験結果は`PHASE_4_IMPLEMENTATION.md`。PATH-03～05のWindows/SMB実機受入は未実施
+- Phase 5第一段: ID-only strict IPCの`activate_or_launch` / `batch_launch_main` / `open_containing_folder`、https/file/folder起動port、リテラルタイトル照合、制約付き前面化、一括継続を実装
+- Phase 5の結果と未完了項目は`PHASE_5_IMPLEMENTATION.md`。WIN-04～06モック試験は実装済みだが、Office ROT、Restart Manager、WIN-01～03および実アプリ受入は未実装/未検証であり、Phase 5全体は未完了
 
 ### 未実装
 
 - schema 1/2の自動migrationは設計どおり実装対象外
-- `activate_or_launch`
-- `batch_launch_main`
-- `open_containing_folder`
 - Windows Named Mutex相当の二重起動側通知
 - Office COM/ROT走査
 - Restart Manager連携
-- ウィンドウタイトル照合と前面化
-- ローカル／UNCパス検査ワーカー
+- Office/RM情報を統合したウィンドウ特定（安全なタイトル照合と前面化の基礎は実装済み）
 - `material://` PDF Rangeプロトコル
 - PDF.jsプレビュー画面
 - ネイティブDnD登録
