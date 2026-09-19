@@ -1,7 +1,8 @@
-# MeetDock 基本・詳細設計書 (v2.3)
+# MeetDock 基本・詳細設計書 (v2.4)
 
 > 本書は、実装時の判断基準となる基本設計・詳細設計と、画面挙動を確認するためのフロントエンドモックをまとめたものである。  
 > 第6章のHTMLは画面プロトタイプであり、PDF.js・Windows API・Tauri IPCそのものを再現する実装ではない。製品実装では第3～5章および第7～10章の契約を満たすこと。
+> 責務境界、Mediator、IPC、PDF、Windows、受入試験の詳細契約は、同階層の各実装前確認文書を本書の一部として扱う。重複記載に差がある場合は、2026-09-19更新の実装前確認文書を優先する。
 
 ## 1. システム基本構成・アーキテクチャ
 
@@ -65,10 +66,10 @@
 
 * **バックエンド層 (Rust Native Engine)**:
 * `ConfigManager`: アトミック書き込み・3世代ローテーションバックアップによるJSON永続化
-* `WindowManager`: COM/ROTモニカ走査、Restart Managerバッチ登録、タイトル正規表現による多層ウィンドウ特定とRAIIスレッド同期前面化
+* `WindowManager`: COM/ROTモニカ走査、Restart Managerバッチ登録、タイトルのリテラル照合による多層ウィンドウ特定とRAIIスレッド同期前面化
 
 
-* `FileChecker`: ローカル検査とUNC検査を分離し、UNCは専用の固定数ワーカーで実行。600msはUI応答待ちの上限であり、OS処理の中断保証ではない
+* `FileChecker`: ローカル検査とUNC検査を分離し、UNCは専用2ワーカー・64件キューで実行。600msはUI応答待ちの上限であり、OS処理の中断保証ではない
 * `Launcher`: 250msスロットリング順次プロセス起動エンジン
 * `SingleInstanceGuard`: アプリ自身の多重起動防止と、二重起動時の既存ウィンドウ通知
 * `MaterialProtocol`: PDF Range応答、認可、MIME判定、読み取り上限を担当
@@ -111,7 +112,7 @@
       "role": "main",
       "target_type": "file",
       "path": "C:\\Work\\SNK-R\\Weekly\\進捗管理表.xlsx",
-      "window_match_pattern": "進捗管理表.*Excel",
+      "window_match_pattern": "進捗管理表",
       "order": 1
     },
     {
@@ -193,14 +194,16 @@ pub enum TargetType {
 
 ### 2.3 アトミック書き込み・世代管理アルゴリズム
 
-1. **プロセス内排他**: `ConfigManager`の非同期Mutexで同時保存を直列化する。
-2. **楽観ロック**: IPC受信時の`expected_revision`と現行`revision`を比較し、不一致なら`CONFIG_CONFLICT`を返す。
-3. **検証**: ID重複、孤立参照、グループ循環、重複順序、空名称、パス／URL形式、正規表現を検証する。
-4. **一時ファイル生成**: 同一ディレクトリ内にランダム接尾辞付き一時ファイルを作成し、JSONを書き込み、`File::sync_all()`を実行する。
-5. **バックアップ作成**: 現行ファイルを削除・移動せず、まず`.bak1.tmp`へコピーして同期し、その後バックアップ名をローテーションする。
-6. **原子的置換**: Windowsでは`ReplaceFileW`を優先し、現行ファイルがない初回のみ`MoveFileExW(MOVEFILE_WRITE_THROUGH)`を使用する。
-7. **後処理**: 一時ファイルを削除し、成功後の`revision`と`last_updated`を呼び出し元へ返す。
-8. **起動時修復**: 現行JSONが読めない場合はバックアップを検証し、復元候補と理由をユーザーへ表示してから復元する。無通知の自動上書きは行わない。
+1. **プロセス内排他**: `ConfigManager`の非同期Mutexで同時保存を直列化する。Mutex取得後に現行ファイルを再読込する。
+2. **楽観ロック**: `config.revision == expected_revision`かつディスク上の`revision == expected_revision`を必須とし、不一致は`CONFIG_CONFLICT`とする。
+3. **revision採番**: 初期設定を0とし、Rustが保存成功時に`checked_add(1)`で増加させる。JSON/IPCではJavaScript安全整数`9,007,199,254,740,991`を上限とし、呼出側が次revisionや`last_updated`を指定することはできない。
+4. **検証**: ID重複、孤立参照、グループ循環、重複順序、空名称、絶対パス、https URL、128文字以下のリテラルタイトルヒントを検証する。
+5. **一時ファイル生成**: 同一ディレクトリにランダム接尾辞付き一時ファイルを排他的に作り、完全なschema 3 JSONを書き、`File::sync_all()`後に再読込検証する。
+6. **バックアップ準備**: 現行が有効なら削除・移動せず`.bak.new`へコピーし、同期して再検証する。現行が破損している場合は破損内容をバックアップへ昇格しない。
+7. **3世代ローテーション**: `.bak2`を`.bak3`、`.bak1`を`.bak2`、`.bak.new`を`.bak1`の順に`MoveFileExW(MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)`で置換する。途中停止による世代重複は許容するが、現行を失わない。
+8. **原子的置換**: 現行がある場合は`ReplaceFileW`を優先し、初回だけ`MoveFileExW(MOVEFILE_WRITE_THROUGH)`を使用する。失敗時は現行を残し`CONFIG_IO`を返す。
+9. **後処理**: 成功時だけ一時ファイルを削除し、Rustが確定した`revision`と`last_updated`を返す。失敗時の一時ファイルは次回起動時の検証候補とする。
+10. **起動時修復**: `settings.json`、残存一時ファイル、`.bak1`～`.bak3`を検証し、revision降順で候補表示する。自動復元せず、利用者が選んだ`candidate_id`だけを復元する。
 
 ### 2.4 データ整合性ルール
 
@@ -208,10 +211,12 @@ pub enum TargetType {
 * `parent_id`は自身を指さず、祖先をたどって循環しないこと。
 * `group_id`は必ず存在するグループを指すこと。
 * `order`は同一親・同一区分内で正規化し、1からの連番とすること。
-* `target_type=url`では`https`を既定許可とし、`http`や独自スキームは管理設定で明示許可すること。
+* `target_type=url`では初期版は`https`だけを許可する。管理設定による例外は設けない。
 * 実行時状態（起動中、リンク状態、最終検査時刻、PID/HWND）は設定JSONへ保存しないこと。
-* `schema_version`が新しすぎる場合は読み取り専用で起動し、古い場合はバックアップ後に段階的マイグレーションを行うこと。
-* 旧試作版の`%APPDATA%/com.launcher.meeting/settings.json`が存在し、新パスに設定がない場合は、一度だけMeetDockへの移行確認を表示すること。
+* `schema_version > 3`は内容をschema 3として推測せず、設定を変更しない読み取り専用画面で起動する。
+* 初期版以前に製品schema 1/2は配布されていないため、自動マイグレーションは実装しない。schema 1/2は読み取り専用とし、将来必要になった時点でfixture付きmigrationを別schemaで追加する。
+* 旧試作版の`%APPDATA%/com.launcher.meeting/settings.json`は、schema 3として完全検証でき、新パスに設定がない場合だけ一度だけ移行候補にする。承認時は元ファイルを残して新パスへコピーし、拒否時はそのセッション中は再表示しない。
+* 現行と全バックアップが破損している場合は、初期化またはファイルを変更しない読み取り専用起動を選ばせる。
 
 ---
 
@@ -220,36 +225,39 @@ pub enum TargetType {
 ```rust
 // 設定管理
 #[tauri::command]
-async fn load_settings() -> Result<AppConfig, AppError>;
+async fn load_settings() -> Result<SettingsLoadResponse, AppError>;
+
+#[tauri::command]
+async fn resolve_settings_issue(
+    request: ResolveSettingsIssueRequest
+) -> Result<SettingsLoadResponse, AppError>;
 
 #[tauri::command]
 async fn save_settings(
-    config: AppConfig,
-    expected_revision: u64
+    request: SaveSettingsRequest
 ) -> Result<SaveSettingsResponse, AppError>;
 
 // バッチ状態同期（Restart Manager補助情報＋ローカル／UNC分離検証）
 #[tauri::command]
 async fn sync_material_statuses(
-    material_ids: Vec<String>,
-    request_id: String
+    request: SyncStatusesRequest
 ) -> Result<SyncStatusesResponse, AppError>;
 
 // 単一資料の前面化または起動
 #[tauri::command]
 async fn activate_or_launch(
-    material_id: String
+    request: ActivateOrLaunchRequest
 ) -> Result<LaunchResponse, AppError>;
 
 // メイン資料の一括起動（250msスロットリング）
 #[tauri::command]
 async fn batch_launch_main(
-    group_id: String
+    request: BatchLaunchRequest
 ) -> Result<BatchLaunchResponse, AppError>;
 
 // 親フォルダをExplorerで開く
 #[tauri::command]
-async fn open_containing_folder(material_id: String) -> Result<(), AppError>;
+async fn open_containing_folder(request: OpenContainingFolderRequest) -> Result<(), AppError>;
 
 ```
 
@@ -267,7 +275,7 @@ async fn open_containing_folder(material_id: String) -> Result<(), AppError>;
  | 一般ファイル（PDF、テキスト等） | 関連ファイルを一括登録して利用プロセス候補を取得する。ただし一括結果からファイルとPIDの対応は確定できないため、個別資料の「起動中」確定には使用しない。
 
  |
-| **第3層** | タイトル照合（フォールバック） | PowerPoint、PDF、メモリ展開型エディタ等 | `EnumWindows`で取得した可視ウィンドウについてPID、実行ファイル名、正規化済みタイトルを照合。既定はファイル名のリテラル部分一致とし、正規表現は明示設定時のみ長さ制限・事前コンパイルを行う。 |
+| **第3層** | タイトル照合（フォールバック） | PowerPoint、PDF、メモリ展開型エディタ等 | `EnumWindows`で取得した可視ウィンドウについてPID、実行ファイル名、正規化済みタイトルを照合。ファイル名または最大128文字の明示的なタイトルヒントをリテラル部分一致させ、正規表現は実行しない。複数候補は`unknown`とする。 |
 
 Restart Managerは「登録リソースを使用しているプロセス候補の一括取得」に限定する。同一アプリの複数タブや、読み込み後にファイルハンドルを閉じるアプリでは対象文書を特定できないため、状態結果には`confidence`（`exact`／`estimated`／`unknown`）を付与する。
 
@@ -349,7 +357,10 @@ pub fn try_foreground_window(hwnd: HWND) -> Result<(), String> {
 * `Accept-Ranges: bytes`、正しい`Content-Length`、`206 Partial Content`、`Content-Range`、不正Range時の`416`を実装する。
 * フロントエンドから渡された実パスを使用せず、Rust側の設定から正規化済みパスを取得する。
 * WebView2＋PDF.jsで初回取得量と追加ページ取得を確認する。暗号化PDF、線形化／非線形化PDFも試験対象とする。
-* すべてのPDFで部分取得できるとは断定せず、部分取得不可時はサイズ上限付き全体取得へフォールバックする。
+* 単一Rangeの`start-end`、`start-`、`-suffix`を扱い、複数Rangeは`416`とする。1応答は8 MiBまでに制限する。
+* 部分取得不可時の全体取得は32 MiBまでとし、超過は`PDF_FALLBACK_TOO_LARGE`として外部アプリで開く導線を出す。
+* 不正・未知・非PDFのmaterial IDは一律`404`、登録PDFの権限拒否は`403`とする。
+* `pdfjs-dist` 5.4.149のWorkerを同梱し、`unsafe-eval`、CDN、実行時ダウンロードを使用しない。
 * メモリ削減率は試験前に固定値で表現せず、同一PDF・同一操作の実測値を性能試験記録へ残す。
 
 PDF切替時は次の順序で破棄する。
@@ -374,15 +385,15 @@ PDF切替時は次の順序で破棄する。
 
 ### 5.3 ファイル存在確認とUNC隔離
 
-ローカルパスは通常のメタデータ取得で確認する。UNCパスは応答不能になる可能性があるため、Tokioの共用blocking poolへ無制限に投入せず、専用の固定数ワーカー（最大4）へ投入する。
+ローカルパスは通常のメタデータ取得で確認する。UNCパスは応答不能になる可能性があるため、Tokioの共用blocking poolへ投入せず、専用の固定2ワーカー・64件キューへ投入する。タイムアウト後も代替ワーカーを増殖させない。
 
 600msはUIが結果を待つ時間の上限であり、開始済みOSファイルI/Oを停止する保証ではない。`timeout(spawn_blocking(...))`だけで処理が中断される設計にはしない。以下を組み合わせる。
 
-* キュー長上限と同一パスの重複排除
+* キュー長64件と同一正規化パスの重複排除
 * 成功・不存在・タイムアウト・アクセス拒否・未確認の分類
-* 成功結果30秒、タイムアウト結果10秒などの短期キャッシュ
-* タイムアウト後の即時連続再試行禁止
-* 高い隔離性が必要な場合は、期限超過時に終了可能なヘルパープロセスを使用
+* 成功・不存在30秒、アクセス拒否・エラー・タイムアウト10秒の短期キャッシュ
+* タイムアウト後10秒間の再試行禁止
+* キュー満杯は`PATH_QUEUE_BUSY`とし、ローカル検査とUI操作を継続
 
 状態モデル例：
 
@@ -1716,9 +1727,9 @@ void initialize();
 
 * ファイル／フォルダパスは絶対パスへ正規化し、存在確認結果とアクセス拒否を区別する。
 * `material://`はPDFとして登録されたIDだけを配信し、ディレクトリトラバーサルを拒否する。
-* Range開始位置・終了位置・最大応答サイズを検証し、整数オーバーフローを防ぐ。
+* Range開始位置・終了位置・8 MiBの最大応答サイズを検証し、整数オーバーフローを防ぐ。
 * グループ名、表示名、パス、エラー詳細は信頼済みHTMLとして扱わず、DOMの`textContent`を使用する。
-* 正規表現を許可する場合は長さ上限を設け、保存時にコンパイル可否を検証する。通常のファイル名照合はリテラル一致を使用する。
+* 初期版はウィンドウタイトルの正規表現を許可しない。最大128文字のタイトルヒントまたはファイル名をリテラル一致させる。
 
 ### 7.3 ログ
 
@@ -1773,7 +1784,7 @@ void initialize();
 
 | ID | 試験 | 期待結果 |
 | --- | --- | --- |
-| WIN-01 | 起動中のExcel文書を指定 | 同じ絶対パスの文書を特定し、前面化を試行する |
+| WIN-01 | 起動中のExcel文書を指定 | 同じ絶対パスの文書だけを`exact`として特定し、前面化結果を成功・拒否で正しく表示する |
 | WIN-02 | 同名ファイルを別フォルダから起動 | ROT対応形式では絶対パスで区別する |
 | WIN-03 | Windowsが前面化を拒否 | 成功と偽装せず、タスクバー通知と理由を表示する |
 | WIN-04 | タイトルに正規表現記号を含む | リテラルとして安全に照合する |
@@ -1797,7 +1808,7 @@ void initialize();
 | PDF-01 | 100MB以上のPDFを開く | 初回表示前に全体取得せず、Range応答を確認できる |
 | PDF-02 | 高速に別PDFへ切替 | 旧レンダリングが新Canvasを上書きしない |
 | PDF-03 | 不正Range | `416`を返し、アプリが停止しない |
-| PDF-04 | 暗号化PDF | パスワード要求または対応不可理由を表示する |
+| PDF-04 | 暗号化PDF | 都度パスワードを要求し、3回失敗または取消で終了する。非対応暗号方式は外部起動導線を表示する |
 | PDF-05 | 破損PDF | 他の資料操作へ影響せずエラーを表示する |
 
 ### 9.5 セキュリティ・UI
@@ -1806,7 +1817,7 @@ void initialize();
 | --- | --- | --- |
 | SEC-01 | 表示名へ`<img onerror=...>`を入力 | 文字列として表示し、スクリプトを実行しない |
 | SEC-02 | `javascript:` URLを登録 | 保存時に拒否する |
-| SEC-03 | 未登録IDでmaterialプロトコルへ要求 | `403`または`404`を返す |
+| SEC-03 | 未登録IDでmaterialプロトコルへ要求 | 一律`404`を返し、存在有無と実パスを露出しない |
 | UI-01 | 検索中に結果を選択 | 所属グループを表示し、選択後も文脈を確認できる |
 | UI-02 | 保存失敗 | 編集内容を保持し、未保存状態と再試行手段を表示する |
 | UI-03 | キーボードのみで操作 | 主要機能へ到達でき、フォーカス位置を視認できる |
@@ -1830,18 +1841,21 @@ void initialize();
 
 ---
 
-## 11. 実装着手条件
+## 11. 実装着手・リリース条件
 
-以下を満たした時点で詳細実装へ移行する。
+### 11.1 実装着手
 
-1. `material://`によるRange配信の技術検証が完了している。
-2. UNC検査を専用ワーカーまたはヘルパープロセスのどちらで実装するか決定している。
-3. Office各形式と対象バージョンでROT／タイトル照合の成立範囲を確認している。
-4. Tauri capability、CSP、URL許可スキームがレビュー済みである。
-5. IPCの全DTOとエラーコードがRust／JavaScript双方で共有されている。
-6. 第9章の試験を自動／手動のどちらで行うか割り当て済みである。
+2026-09-19のプロジェクトオーナー判断により、責務、Mediator、IPC、永続化、PDF、Windows、受入試験の設計承認をもって本実装へ条件付きで移行できる。実装順序と各段階の完了条件は`IMPLEMENTATION_HANDOFF.md`を正とする。
 
-以上。
+### 11.2 配布・リリース
+
+以下をすべて満たすまで配布・リリースしない。
+
+1. `material://`、PDF.js Worker、Range、CSPを製品相当buildのWebView2実機で検証している。
+2. UNC 2ワーカー・64件キュー・600 ms UI期限を制御可能なSMB共有で検証している。
+3. Windows 11 x64、Microsoft 365 Apps x64のExcel/WordでROT、タイトル照合、前面化制約を検証している。
+4. `ReplaceFileW`、`MoveFileExW`、3世代バックアップを工程別障害注入で検証している。
+5. CFG/WIN/PATH/PDF/SEC/UIの必須受入試験に合格し、証跡を保存している。
 
 上記は処理方針を示す抜粋である。実装では`IsWindow`のimport、`GetWindowThreadProcessId`の失敗確認、`AttachThreadInput`のエラー記録、別デスクトップ判定、および`FlashWindowEx`フォールバックを含める。Windowsの制約上「必ず強制前面化できる」とは定義しない。
 
@@ -1882,9 +1896,7 @@ pub struct SyncStatusesResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LaunchResponse {
     pub material_id: String,
-    pub success: bool,
-    pub state: String, // "activated" | "launched" | "not_trackable" | "failed"
-    pub message: String,
+    pub outcome: String, // "activated" | "launched" | "not_trackable" | "foreground_denied" | "not_found" | "failed"
     pub error: Option<AppError>,
 }
 
@@ -1894,7 +1906,7 @@ pub struct BatchLaunchResponse {
 }
 ```
 
-代表エラーコードは`CONFIG_CONFLICT`、`VALIDATION_ERROR`、`NOT_FOUND`、`ACCESS_DENIED`、`PATH_TIMEOUT`、`UNSUPPORTED_TARGET`、`WINDOW_NOT_FOUND`、`FOREGROUND_DENIED`、`LAUNCH_FAILED`、`PDF_RANGE_INVALID`とする。一括起動は全体を失敗扱いにせず、資料ごとの成功・失敗を返す。
+エラーコードと`retryable`の完全な一覧は`IPC_CONTRACT.md`を正とする。`message`はパスやOS内部詳細を含まないユーザー表示用とし、内部詳細は診断ログだけへ記録する。一括起動は全体を失敗扱いにせず、資料ごとの成功・失敗を返す。
 
 ### 3.2 同期の競合防止
 
