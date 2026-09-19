@@ -16,7 +16,7 @@ MeetDockの本実装を、承認済み設計に沿って小さな段階に分け
 - `health_check` IPCだけ実装済み
 - 本番UI、設定、Windows連携、PDF protocol、UNC検査は未実装
 - `src-tauri/tauri.conf.json`のCSPは現在`null`
-- 設計文書は変更済みだが未コミット・一部未追跡。作業開始時に`git status`を確認し、破棄・上書きしないこと
+- 設計レビュー・実装引継ぎ文書はコミット`2b7959a`（`docs: finalize implementation handoff`）で保存済み。作業開始時に`git status`を確認し、この基準差分を破棄・巻き戻ししないこと
 
 現在の作業端末ではx64、DisplayVersion 25H2、build 26200.9457、WebView2 153.0.4234.46を確認済み。Microsoft 365/Excel/Wordと制御可能なSMB試験先は未検出。
 
