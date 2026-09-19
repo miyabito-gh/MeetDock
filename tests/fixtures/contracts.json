@@ -1,0 +1,4537 @@
+{
+  "seed": "meetdock-contract-v1",
+  "fixtures": [
+    {
+      "name": "AppConfig: valid",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "AppConfig: unknown_field=1",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ],
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: null",
+      "type": "AppConfig",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "AppConfig: array",
+      "type": "AppConfig",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "AppConfig: missing schema_version",
+      "type": "AppConfig",
+      "value": {
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: schema_version=null",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": null,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: missing app_version",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: app_version=null",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": null,
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: missing revision",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: revision=null",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": null,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: missing last_updated",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: last_updated=null",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": null,
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: missing groups",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: groups=null",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": null,
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: missing materials",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppConfig: materials=null",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": null
+      },
+      "valid": false
+    },
+    {
+      "name": "GroupItem: valid",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": null,
+        "name": "会議",
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "GroupItem: unknown_field=1",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": null,
+        "name": "会議",
+        "order": 1,
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "GroupItem: null",
+      "type": "GroupItem",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "GroupItem: array",
+      "type": "GroupItem",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "GroupItem: missing id",
+      "type": "GroupItem",
+      "value": {
+        "parent_id": null,
+        "name": "会議",
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "GroupItem: id=null",
+      "type": "GroupItem",
+      "value": {
+        "id": null,
+        "parent_id": null,
+        "name": "会議",
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "GroupItem: missing parent_id",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "name": "会議",
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "GroupItem: missing name",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "GroupItem: name=null",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": null,
+        "name": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "GroupItem: missing order",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": null,
+        "name": "会議"
+      },
+      "valid": false
+    },
+    {
+      "name": "GroupItem: order=null",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": null,
+        "name": "会議",
+        "order": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: valid",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialItem: unknown_field=1",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1,
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: null",
+      "type": "MaterialItem",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: array",
+      "type": "MaterialItem",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: missing id",
+      "type": "MaterialItem",
+      "value": {
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: id=null",
+      "type": "MaterialItem",
+      "value": {
+        "id": null,
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: missing group_id",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: group_id=null",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": null,
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: missing name",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: name=null",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": null,
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: missing role",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: role=null",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": null,
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: missing target_type",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: target_type=null",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": null,
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: missing path",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: path=null",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": null,
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: missing window_match_pattern",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: missing order",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: order=null",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsCandidate: valid",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "kind": "backup",
+        "revision": null,
+        "last_updated": null
+      },
+      "valid": true
+    },
+    {
+      "name": "SettingsCandidate: unknown_field=1",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "kind": "backup",
+        "revision": null,
+        "last_updated": null,
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsCandidate: null",
+      "type": "SettingsCandidate",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "SettingsCandidate: array",
+      "type": "SettingsCandidate",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "SettingsCandidate: missing candidate_id",
+      "type": "SettingsCandidate",
+      "value": {
+        "kind": "backup",
+        "revision": null,
+        "last_updated": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsCandidate: candidate_id=null",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": null,
+        "kind": "backup",
+        "revision": null,
+        "last_updated": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsCandidate: missing kind",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "revision": null,
+        "last_updated": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsCandidate: kind=null",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "kind": null,
+        "revision": null,
+        "last_updated": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsCandidate: missing revision",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "kind": "backup",
+        "last_updated": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsCandidate: missing last_updated",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "kind": "backup",
+        "revision": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: valid",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "ready",
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "source_schema_version": 3,
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "backup",
+            "revision": null,
+            "last_updated": null
+          }
+        ],
+        "notice_code": null
+      },
+      "valid": true
+    },
+    {
+      "name": "SettingsLoadResponse: unknown_field=1",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "ready",
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "source_schema_version": 3,
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "backup",
+            "revision": null,
+            "last_updated": null
+          }
+        ],
+        "notice_code": null,
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: null",
+      "type": "SettingsLoadResponse",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: array",
+      "type": "SettingsLoadResponse",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: missing mode",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "source_schema_version": 3,
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "backup",
+            "revision": null,
+            "last_updated": null
+          }
+        ],
+        "notice_code": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: mode=null",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": null,
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "source_schema_version": 3,
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "backup",
+            "revision": null,
+            "last_updated": null
+          }
+        ],
+        "notice_code": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: missing config",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "ready",
+        "source_schema_version": 3,
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "backup",
+            "revision": null,
+            "last_updated": null
+          }
+        ],
+        "notice_code": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: config=null",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "ready",
+        "config": null,
+        "source_schema_version": 3,
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "backup",
+            "revision": null,
+            "last_updated": null
+          }
+        ],
+        "notice_code": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: missing source_schema_version",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "ready",
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "backup",
+            "revision": null,
+            "last_updated": null
+          }
+        ],
+        "notice_code": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: source_schema_version=null",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "ready",
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "source_schema_version": null,
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "backup",
+            "revision": null,
+            "last_updated": null
+          }
+        ],
+        "notice_code": null
+      },
+      "valid": true
+    },
+    {
+      "name": "SettingsLoadResponse: missing candidates",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "ready",
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "source_schema_version": 3,
+        "notice_code": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: candidates=null",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "ready",
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "source_schema_version": 3,
+        "candidates": null,
+        "notice_code": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: missing notice_code",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "ready",
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "source_schema_version": 3,
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "backup",
+            "revision": null,
+            "last_updated": null
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: valid",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_IO",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: unknown_field=1",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_IO",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true,
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: null",
+      "type": "AppError",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "AppError: array",
+      "type": "AppError",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "AppError: missing code",
+      "type": "AppError",
+      "value": {
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: code=null",
+      "type": "AppError",
+      "value": {
+        "code": null,
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: missing message",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_IO",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: message=null",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_IO",
+        "message": null,
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: missing material_id",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_IO",
+        "message": "操作を完了できませんでした。",
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: missing retryable",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_IO",
+        "message": "操作を完了できませんでした。",
+        "material_id": null
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: retryable=null",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_IO",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: valid",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: unknown_field=1",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null,
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: null",
+      "type": "MaterialStatusResult",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: array",
+      "type": "MaterialStatusResult",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: missing material_id",
+      "type": "MaterialStatusResult",
+      "value": {
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: material_id=null",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": null,
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: missing open_state",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: open_state=null",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": null,
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: missing confidence",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: confidence=null",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": null,
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: missing path_state",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "detail": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: path_state=null",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": null,
+        "detail": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: missing detail",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "unchecked"
+      },
+      "valid": false
+    },
+    {
+      "name": "LaunchResponse: valid",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "launched",
+        "error": null
+      },
+      "valid": true
+    },
+    {
+      "name": "LaunchResponse: unknown_field=1",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "launched",
+        "error": null,
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "LaunchResponse: null",
+      "type": "LaunchResponse",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "LaunchResponse: array",
+      "type": "LaunchResponse",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "LaunchResponse: missing material_id",
+      "type": "LaunchResponse",
+      "value": {
+        "outcome": "launched",
+        "error": null
+      },
+      "valid": false
+    },
+    {
+      "name": "LaunchResponse: material_id=null",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": null,
+        "outcome": "launched",
+        "error": null
+      },
+      "valid": false
+    },
+    {
+      "name": "LaunchResponse: missing outcome",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "error": null
+      },
+      "valid": false
+    },
+    {
+      "name": "LaunchResponse: outcome=null",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": null,
+        "error": null
+      },
+      "valid": false
+    },
+    {
+      "name": "LaunchResponse: missing error",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "launched"
+      },
+      "valid": false
+    },
+    {
+      "name": "LoadSettingsRequest: valid",
+      "type": "LoadSettingsRequest",
+      "value": {},
+      "valid": true
+    },
+    {
+      "name": "LoadSettingsRequest: unknown_field=1",
+      "type": "LoadSettingsRequest",
+      "value": {
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "LoadSettingsRequest: null",
+      "type": "LoadSettingsRequest",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "LoadSettingsRequest: array",
+      "type": "LoadSettingsRequest",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "EmptyResponse: valid",
+      "type": "EmptyResponse",
+      "value": {},
+      "valid": true
+    },
+    {
+      "name": "EmptyResponse: unknown_field=1",
+      "type": "EmptyResponse",
+      "value": {
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "EmptyResponse: null",
+      "type": "EmptyResponse",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "EmptyResponse: array",
+      "type": "EmptyResponse",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "ResolveSettingsIssueRequest: valid",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "action": "initialize_empty",
+        "candidate_id": null
+      },
+      "valid": true
+    },
+    {
+      "name": "ResolveSettingsIssueRequest: unknown_field=1",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "action": "initialize_empty",
+        "candidate_id": null,
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "ResolveSettingsIssueRequest: null",
+      "type": "ResolveSettingsIssueRequest",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "ResolveSettingsIssueRequest: array",
+      "type": "ResolveSettingsIssueRequest",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "ResolveSettingsIssueRequest: missing action",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "candidate_id": null
+      },
+      "valid": false
+    },
+    {
+      "name": "ResolveSettingsIssueRequest: action=null",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "action": null,
+        "candidate_id": null
+      },
+      "valid": false
+    },
+    {
+      "name": "ResolveSettingsIssueRequest: missing candidate_id",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "action": "initialize_empty"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsRequest: valid",
+      "type": "SaveSettingsRequest",
+      "value": {
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "expected_revision": 12
+      },
+      "valid": true
+    },
+    {
+      "name": "SaveSettingsRequest: unknown_field=1",
+      "type": "SaveSettingsRequest",
+      "value": {
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "expected_revision": 12,
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsRequest: null",
+      "type": "SaveSettingsRequest",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsRequest: array",
+      "type": "SaveSettingsRequest",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsRequest: missing config",
+      "type": "SaveSettingsRequest",
+      "value": {
+        "expected_revision": 12
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsRequest: config=null",
+      "type": "SaveSettingsRequest",
+      "value": {
+        "config": null,
+        "expected_revision": 12
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsRequest: missing expected_revision",
+      "type": "SaveSettingsRequest",
+      "value": {
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsRequest: expected_revision=null",
+      "type": "SaveSettingsRequest",
+      "value": {
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "expected_revision": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: valid",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": "2026-09-19T08:35:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "SaveSettingsResponse: unknown_field=1",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: null",
+      "type": "SaveSettingsResponse",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: array",
+      "type": "SaveSettingsResponse",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: missing revision",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "last_updated": "2026-09-19T08:35:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: revision=null",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": null,
+        "last_updated": "2026-09-19T08:35:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: missing last_updated",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: last_updated=null",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: valid",
+      "type": "SyncStatusesRequest",
+      "value": {
+        "material_ids": [
+          "m1"
+        ],
+        "request_id": "12345678-1234-4234-8234-123456789abc"
+      },
+      "valid": true
+    },
+    {
+      "name": "SyncStatusesRequest: unknown_field=1",
+      "type": "SyncStatusesRequest",
+      "value": {
+        "material_ids": [
+          "m1"
+        ],
+        "request_id": "12345678-1234-4234-8234-123456789abc",
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: null",
+      "type": "SyncStatusesRequest",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: array",
+      "type": "SyncStatusesRequest",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: missing material_ids",
+      "type": "SyncStatusesRequest",
+      "value": {
+        "request_id": "12345678-1234-4234-8234-123456789abc"
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: material_ids=null",
+      "type": "SyncStatusesRequest",
+      "value": {
+        "material_ids": null,
+        "request_id": "12345678-1234-4234-8234-123456789abc"
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: missing request_id",
+      "type": "SyncStatusesRequest",
+      "value": {
+        "material_ids": [
+          "m1"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: request_id=null",
+      "type": "SyncStatusesRequest",
+      "value": {
+        "material_ids": [
+          "m1"
+        ],
+        "request_id": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesResponse: valid",
+      "type": "SyncStatusesResponse",
+      "value": {
+        "request_id": "12345678-1234-4234-8234-123456789abc",
+        "results": [
+          {
+            "material_id": "m1",
+            "open_state": "unknown",
+            "confidence": "unknown",
+            "path_state": "unchecked",
+            "detail": null
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "SyncStatusesResponse: unknown_field=1",
+      "type": "SyncStatusesResponse",
+      "value": {
+        "request_id": "12345678-1234-4234-8234-123456789abc",
+        "results": [
+          {
+            "material_id": "m1",
+            "open_state": "unknown",
+            "confidence": "unknown",
+            "path_state": "unchecked",
+            "detail": null
+          }
+        ],
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesResponse: null",
+      "type": "SyncStatusesResponse",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesResponse: array",
+      "type": "SyncStatusesResponse",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesResponse: missing request_id",
+      "type": "SyncStatusesResponse",
+      "value": {
+        "results": [
+          {
+            "material_id": "m1",
+            "open_state": "unknown",
+            "confidence": "unknown",
+            "path_state": "unchecked",
+            "detail": null
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesResponse: request_id=null",
+      "type": "SyncStatusesResponse",
+      "value": {
+        "request_id": null,
+        "results": [
+          {
+            "material_id": "m1",
+            "open_state": "unknown",
+            "confidence": "unknown",
+            "path_state": "unchecked",
+            "detail": null
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesResponse: missing results",
+      "type": "SyncStatusesResponse",
+      "value": {
+        "request_id": "12345678-1234-4234-8234-123456789abc"
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesResponse: results=null",
+      "type": "SyncStatusesResponse",
+      "value": {
+        "request_id": "12345678-1234-4234-8234-123456789abc",
+        "results": null
+      },
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: valid",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": "m1"
+      },
+      "valid": true
+    },
+    {
+      "name": "ActivateOrLaunchRequest: unknown_field=1",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": "m1",
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: null",
+      "type": "ActivateOrLaunchRequest",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: array",
+      "type": "ActivateOrLaunchRequest",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: missing material_id",
+      "type": "ActivateOrLaunchRequest",
+      "value": {},
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: material_id=null",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": null
+      },
+      "valid": false
+    },
+    {
+      "name": "OpenContainingFolderRequest: valid",
+      "type": "OpenContainingFolderRequest",
+      "value": {
+        "material_id": "m1"
+      },
+      "valid": true
+    },
+    {
+      "name": "OpenContainingFolderRequest: unknown_field=1",
+      "type": "OpenContainingFolderRequest",
+      "value": {
+        "material_id": "m1",
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "OpenContainingFolderRequest: null",
+      "type": "OpenContainingFolderRequest",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "OpenContainingFolderRequest: array",
+      "type": "OpenContainingFolderRequest",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "OpenContainingFolderRequest: missing material_id",
+      "type": "OpenContainingFolderRequest",
+      "value": {},
+      "valid": false
+    },
+    {
+      "name": "OpenContainingFolderRequest: material_id=null",
+      "type": "OpenContainingFolderRequest",
+      "value": {
+        "material_id": null
+      },
+      "valid": false
+    },
+    {
+      "name": "BatchLaunchRequest: valid",
+      "type": "BatchLaunchRequest",
+      "value": {
+        "group_id": "g1"
+      },
+      "valid": true
+    },
+    {
+      "name": "BatchLaunchRequest: unknown_field=1",
+      "type": "BatchLaunchRequest",
+      "value": {
+        "group_id": "g1",
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "BatchLaunchRequest: null",
+      "type": "BatchLaunchRequest",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "BatchLaunchRequest: array",
+      "type": "BatchLaunchRequest",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "BatchLaunchRequest: missing group_id",
+      "type": "BatchLaunchRequest",
+      "value": {},
+      "valid": false
+    },
+    {
+      "name": "BatchLaunchRequest: group_id=null",
+      "type": "BatchLaunchRequest",
+      "value": {
+        "group_id": null
+      },
+      "valid": false
+    },
+    {
+      "name": "BatchLaunchResponse: valid",
+      "type": "BatchLaunchResponse",
+      "value": {
+        "results": [
+          {
+            "material_id": "m1",
+            "outcome": "launched",
+            "error": null
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "BatchLaunchResponse: unknown_field=1",
+      "type": "BatchLaunchResponse",
+      "value": {
+        "results": [
+          {
+            "material_id": "m1",
+            "outcome": "launched",
+            "error": null
+          }
+        ],
+        "unknown_field": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "BatchLaunchResponse: null",
+      "type": "BatchLaunchResponse",
+      "value": null,
+      "valid": false
+    },
+    {
+      "name": "BatchLaunchResponse: array",
+      "type": "BatchLaunchResponse",
+      "value": [],
+      "valid": false
+    },
+    {
+      "name": "BatchLaunchResponse: missing results",
+      "type": "BatchLaunchResponse",
+      "value": {},
+      "valid": false
+    },
+    {
+      "name": "BatchLaunchResponse: results=null",
+      "type": "BatchLaunchResponse",
+      "value": {
+        "results": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: role main",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialItem: role reference",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "reference",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialItem: role=\"unknown_enum\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "unknown_enum",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: target_type file",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialItem: target_type folder",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "folder",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialItem: target_type url",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "https://example.com/docs",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialItem: target_type=\"unknown_enum\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "unknown_enum",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsCandidate: kind backup",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "kind": "backup",
+        "revision": null,
+        "last_updated": null
+      },
+      "valid": true
+    },
+    {
+      "name": "SettingsCandidate: kind legacy",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "kind": "legacy",
+        "revision": null,
+        "last_updated": null
+      },
+      "valid": true
+    },
+    {
+      "name": "SettingsCandidate: kind temporary",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "kind": "temporary",
+        "revision": null,
+        "last_updated": null
+      },
+      "valid": true
+    },
+    {
+      "name": "SettingsCandidate: kind=\"unknown_enum\"",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "kind": "unknown_enum",
+        "revision": null,
+        "last_updated": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: open_state open",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "open",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: open_state not_detected",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "not_detected",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: open_state unknown",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: open_state not_trackable",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "not_trackable",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: open_state=\"unknown_enum\"",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown_enum",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: confidence exact",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "exact",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: confidence estimated",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "estimated",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: confidence unknown",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: confidence=\"unknown_enum\"",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown_enum",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialStatusResult: path_state exists",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "exists",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: path_state missing",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "missing",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: path_state timeout",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "timeout",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: path_state access_denied",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "access_denied",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: path_state unchecked",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: path_state error",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "error",
+        "detail": null
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: path_state=\"unknown_enum\"",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "unknown_enum",
+        "detail": null
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: INVALID_REQUEST",
+      "type": "AppError",
+      "value": {
+        "code": "INVALID_REQUEST",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry INVALID_REQUEST",
+      "type": "AppError",
+      "value": {
+        "code": "INVALID_REQUEST",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: VALIDATION_ERROR",
+      "type": "AppError",
+      "value": {
+        "code": "VALIDATION_ERROR",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry VALIDATION_ERROR",
+      "type": "AppError",
+      "value": {
+        "code": "VALIDATION_ERROR",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: CONFIG_CONFLICT",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_CONFLICT",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry CONFIG_CONFLICT",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_CONFLICT",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: CONFIG_CORRUPT",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_CORRUPT",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry CONFIG_CORRUPT",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_CORRUPT",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: CONFIG_IO",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_IO",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry CONFIG_IO",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_IO",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: READ_ONLY_SCHEMA",
+      "type": "AppError",
+      "value": {
+        "code": "READ_ONLY_SCHEMA",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry READ_ONLY_SCHEMA",
+      "type": "AppError",
+      "value": {
+        "code": "READ_ONLY_SCHEMA",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: NOT_FOUND",
+      "type": "AppError",
+      "value": {
+        "code": "NOT_FOUND",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry NOT_FOUND",
+      "type": "AppError",
+      "value": {
+        "code": "NOT_FOUND",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: ACCESS_DENIED",
+      "type": "AppError",
+      "value": {
+        "code": "ACCESS_DENIED",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry ACCESS_DENIED",
+      "type": "AppError",
+      "value": {
+        "code": "ACCESS_DENIED",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: PATH_TIMEOUT",
+      "type": "AppError",
+      "value": {
+        "code": "PATH_TIMEOUT",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry PATH_TIMEOUT",
+      "type": "AppError",
+      "value": {
+        "code": "PATH_TIMEOUT",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: PATH_QUEUE_BUSY",
+      "type": "AppError",
+      "value": {
+        "code": "PATH_QUEUE_BUSY",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry PATH_QUEUE_BUSY",
+      "type": "AppError",
+      "value": {
+        "code": "PATH_QUEUE_BUSY",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: UNSUPPORTED_TARGET",
+      "type": "AppError",
+      "value": {
+        "code": "UNSUPPORTED_TARGET",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry UNSUPPORTED_TARGET",
+      "type": "AppError",
+      "value": {
+        "code": "UNSUPPORTED_TARGET",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: WINDOW_NOT_FOUND",
+      "type": "AppError",
+      "value": {
+        "code": "WINDOW_NOT_FOUND",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry WINDOW_NOT_FOUND",
+      "type": "AppError",
+      "value": {
+        "code": "WINDOW_NOT_FOUND",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: FOREGROUND_DENIED",
+      "type": "AppError",
+      "value": {
+        "code": "FOREGROUND_DENIED",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry FOREGROUND_DENIED",
+      "type": "AppError",
+      "value": {
+        "code": "FOREGROUND_DENIED",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: LAUNCH_FAILED",
+      "type": "AppError",
+      "value": {
+        "code": "LAUNCH_FAILED",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry LAUNCH_FAILED",
+      "type": "AppError",
+      "value": {
+        "code": "LAUNCH_FAILED",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: PDF_RANGE_INVALID",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_RANGE_INVALID",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry PDF_RANGE_INVALID",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_RANGE_INVALID",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: PDF_NOT_ALLOWED",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_NOT_ALLOWED",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry PDF_NOT_ALLOWED",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_NOT_ALLOWED",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: PDF_NOT_READABLE",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_NOT_READABLE",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry PDF_NOT_READABLE",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_NOT_READABLE",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: PDF_PASSWORD_REQUIRED",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_PASSWORD_REQUIRED",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry PDF_PASSWORD_REQUIRED",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_PASSWORD_REQUIRED",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: PDF_CORRUPT",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_CORRUPT",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry PDF_CORRUPT",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_CORRUPT",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: PDF_FALLBACK_TOO_LARGE",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_FALLBACK_TOO_LARGE",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry PDF_FALLBACK_TOO_LARGE",
+      "type": "AppError",
+      "value": {
+        "code": "PDF_FALLBACK_TOO_LARGE",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: INTERNAL_ERROR",
+      "type": "AppError",
+      "value": {
+        "code": "INTERNAL_ERROR",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": false
+      },
+      "valid": true
+    },
+    {
+      "name": "AppError: wrong retry INTERNAL_ERROR",
+      "type": "AppError",
+      "value": {
+        "code": "INTERNAL_ERROR",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: code=\"UNKNOWN\"",
+      "type": "AppError",
+      "value": {
+        "code": "UNKNOWN",
+        "message": "操作を完了できませんでした。",
+        "material_id": null,
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "LaunchResponse: activated",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "activated",
+        "error": null
+      },
+      "valid": true
+    },
+    {
+      "name": "LaunchResponse: launched",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "launched",
+        "error": null
+      },
+      "valid": true
+    },
+    {
+      "name": "LaunchResponse: not_trackable",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "not_trackable",
+        "error": null
+      },
+      "valid": true
+    },
+    {
+      "name": "LaunchResponse: foreground_denied",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "foreground_denied",
+        "error": {
+          "code": "LAUNCH_FAILED",
+          "message": "操作を完了できませんでした。",
+          "material_id": "m1",
+          "retryable": true
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "LaunchResponse: not_found",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "not_found",
+        "error": {
+          "code": "LAUNCH_FAILED",
+          "message": "操作を完了できませんでした。",
+          "material_id": "m1",
+          "retryable": true
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "LaunchResponse: failed",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "failed",
+        "error": {
+          "code": "LAUNCH_FAILED",
+          "message": "操作を完了できませんでした。",
+          "material_id": "m1",
+          "retryable": true
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "LaunchResponse: outcome=\"unknown\"",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "unknown",
+        "error": null
+      },
+      "valid": false
+    },
+    {
+      "name": "LaunchResponse: outcome=\"failed\"",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "failed",
+        "error": null
+      },
+      "valid": false
+    },
+    {
+      "name": "LaunchResponse: error={\"code\":\"LAUNCH_FAILED\",\"message\":\"操作を完了できませんでした。\",\"material_id\":null,\"retryable\":true}",
+      "type": "LaunchResponse",
+      "value": {
+        "material_id": "m1",
+        "outcome": "launched",
+        "error": {
+          "code": "LAUNCH_FAILED",
+          "message": "操作を完了できませんでした。",
+          "material_id": null,
+          "retryable": true
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "AppError: material_id=\"m1\"",
+      "type": "AppError",
+      "value": {
+        "code": "CONFIG_IO",
+        "message": "操作を完了できませんでした。",
+        "material_id": "m1",
+        "retryable": true
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialStatusResult: detail=\"状態を確認できません。\"",
+      "type": "MaterialStatusResult",
+      "value": {
+        "material_id": "m1",
+        "open_state": "unknown",
+        "confidence": "unknown",
+        "path_state": "unchecked",
+        "detail": "状態を確認できません。"
+      },
+      "valid": true
+    },
+    {
+      "name": "SettingsCandidate: revision=9007199254740991",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "kind": "backup",
+        "revision": 9007199254740991,
+        "last_updated": null
+      },
+      "valid": true
+    },
+    {
+      "name": "SettingsCandidate: last_updated=\"2026-09-19T08:35:00Z\"",
+      "type": "SettingsCandidate",
+      "value": {
+        "candidate_id": "backup1",
+        "kind": "backup",
+        "revision": null,
+        "last_updated": "2026-09-19T08:35:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "GroupItem: parent_id=\"parent1\"",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": "parent1",
+        "name": "会議",
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "GroupItem: order=4294967295",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": null,
+        "name": "会議",
+        "order": 4294967295
+      },
+      "valid": true
+    },
+    {
+      "name": "GroupItem: order=-1",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": null,
+        "name": "会議",
+        "order": -1
+      },
+      "valid": false
+    },
+    {
+      "name": "GroupItem: order=1.5",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": null,
+        "name": "会議",
+        "order": 1.5
+      },
+      "valid": false
+    },
+    {
+      "name": "GroupItem: order=4294967296",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": null,
+        "name": "会議",
+        "order": 4294967296
+      },
+      "valid": false
+    },
+    {
+      "name": "GroupItem: order=\"1\"",
+      "type": "GroupItem",
+      "value": {
+        "id": "g1",
+        "parent_id": null,
+        "name": "会議",
+        "order": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: order=4294967295",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 4294967295
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialItem: order=-1",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": -1
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: order=1.5",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1.5
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: order=4294967296",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 4294967296
+      },
+      "valid": false
+    },
+    {
+      "name": "MaterialItem: order=\"1\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "Resolve: restore_candidate",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "action": "restore_candidate",
+        "candidate_id": "backup1"
+      },
+      "valid": true
+    },
+    {
+      "name": "Resolve: import_legacy",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "action": "import_legacy",
+        "candidate_id": "backup1"
+      },
+      "valid": true
+    },
+    {
+      "name": "Resolve: initialize_empty",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "action": "initialize_empty",
+        "candidate_id": null
+      },
+      "valid": true
+    },
+    {
+      "name": "Resolve: open_read_only",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "action": "open_read_only",
+        "candidate_id": null
+      },
+      "valid": true
+    },
+    {
+      "name": "ResolveSettingsIssueRequest: action=\"unknown\"",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "action": "unknown",
+        "candidate_id": null
+      },
+      "valid": false
+    },
+    {
+      "name": "ResolveSettingsIssueRequest: action=\"restore_candidate\"",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "action": "restore_candidate",
+        "candidate_id": null
+      },
+      "valid": false
+    },
+    {
+      "name": "ResolveSettingsIssueRequest: candidate_id=\"backup1\"",
+      "type": "ResolveSettingsIssueRequest",
+      "value": {
+        "action": "initialize_empty",
+        "candidate_id": "backup1"
+      },
+      "valid": false
+    },
+    {
+      "name": "Settings: ready",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "ready",
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "source_schema_version": 3,
+        "candidates": [],
+        "notice_code": null
+      },
+      "valid": true
+    },
+    {
+      "name": "Settings: migration_required",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "migration_required",
+        "config": null,
+        "source_schema_version": 3,
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "legacy",
+            "revision": null,
+            "last_updated": null
+          }
+        ],
+        "notice_code": null
+      },
+      "valid": true
+    },
+    {
+      "name": "Settings: recovery_required",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "recovery_required",
+        "config": null,
+        "source_schema_version": 3,
+        "candidates": [],
+        "notice_code": null
+      },
+      "valid": true
+    },
+    {
+      "name": "Settings: read_only_future_schema",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "read_only_future_schema",
+        "config": null,
+        "source_schema_version": 4,
+        "candidates": [],
+        "notice_code": null
+      },
+      "valid": true
+    },
+    {
+      "name": "Settings: read_only_unavailable",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "read_only_unavailable",
+        "config": null,
+        "source_schema_version": 3,
+        "candidates": [],
+        "notice_code": null
+      },
+      "valid": true
+    },
+    {
+      "name": "SettingsLoadResponse: mode=\"unknown\"",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "unknown",
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "source_schema_version": 3,
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "backup",
+            "revision": null,
+            "last_updated": null
+          }
+        ],
+        "notice_code": null
+      },
+      "valid": false
+    },
+    {
+      "name": "SettingsLoadResponse: mode=\"read_only_future_schema\"",
+      "type": "SettingsLoadResponse",
+      "value": {
+        "mode": "read_only_future_schema",
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "source_schema_version": 3,
+        "candidates": [
+          {
+            "candidate_id": "backup1",
+            "kind": "backup",
+            "revision": null,
+            "last_updated": null
+          }
+        ],
+        "notice_code": null
+      },
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: material_id=\"\"",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": ""
+      },
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: material_id=\"a/b\"",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": "a/b"
+      },
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: material_id=\"日本語\"",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": "日本語"
+      },
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: material_id=\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: material_id=\"a\\n\"",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": "a\n"
+      },
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: material_id=\"..\"",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": ".."
+      },
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: material_id=\"a.b\"",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": "a.b"
+      },
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: material_id=1",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "ActivateOrLaunchRequest: material_id=\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "valid": true
+    },
+    {
+      "name": "ActivateOrLaunchRequest: path=\"C:\\\\secret\"",
+      "type": "ActivateOrLaunchRequest",
+      "value": {
+        "material_id": "m1",
+        "path": "C:\\secret"
+      },
+      "valid": false
+    },
+    {
+      "name": "BatchLaunchRequest: url=\"https://example.com\"",
+      "type": "BatchLaunchRequest",
+      "value": {
+        "group_id": "g1",
+        "url": "https://example.com"
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: request_id=\"\"",
+      "type": "SyncStatusesRequest",
+      "value": {
+        "material_ids": [
+          "m1"
+        ],
+        "request_id": ""
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: request_id=\"12345678-1234-3234-8234-123456789abc\"",
+      "type": "SyncStatusesRequest",
+      "value": {
+        "material_ids": [
+          "m1"
+        ],
+        "request_id": "12345678-1234-3234-8234-123456789abc"
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: request_id=\"12345678-1234-4234-7234-123456789abc\"",
+      "type": "SyncStatusesRequest",
+      "value": {
+        "material_ids": [
+          "m1"
+        ],
+        "request_id": "12345678-1234-4234-7234-123456789abc"
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: request_id=1",
+      "type": "SyncStatusesRequest",
+      "value": {
+        "material_ids": [
+          "m1"
+        ],
+        "request_id": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "SyncStatusesRequest: request_id=\"12345678-1234-4234-8234-123456789ABC\"",
+      "type": "SyncStatusesRequest",
+      "value": {
+        "material_ids": [
+          "m1"
+        ],
+        "request_id": "12345678-1234-4234-8234-123456789ABC"
+      },
+      "valid": true
+    },
+    {
+      "name": "SaveSettingsResponse: revision=-1",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": -1,
+        "last_updated": "2026-09-19T08:35:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: revision=1.5",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 1.5,
+        "last_updated": "2026-09-19T08:35:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: revision=9007199254740992",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 9007199254740992,
+        "last_updated": "2026-09-19T08:35:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: revision=\"12\"",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": "12",
+        "last_updated": "2026-09-19T08:35:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: revision=0",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 0,
+        "last_updated": "2026-09-19T08:35:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "SaveSettingsResponse: revision=9007199254740991",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 9007199254740991,
+        "last_updated": "2026-09-19T08:35:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "SaveSettingsRequest: expected_revision=11",
+      "type": "SaveSettingsRequest",
+      "value": {
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 12,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "expected_revision": 11
+      },
+      "valid": false
+    },
+    {
+      "name": "save revision exhausted",
+      "type": "SaveSettingsRequest",
+      "value": {
+        "config": {
+          "schema_version": 3,
+          "app_version": "0.1.0",
+          "revision": 9007199254740991,
+          "last_updated": "2026-09-19T08:35:00Z",
+          "groups": [
+            {
+              "id": "g1",
+              "parent_id": null,
+              "name": "会議",
+              "order": 1
+            }
+          ],
+          "materials": [
+            {
+              "id": "m1",
+              "group_id": "g1",
+              "name": "資料",
+              "role": "main",
+              "target_type": "file",
+              "path": "C:\\Fixtures\\資料.pdf",
+              "window_match_pattern": null,
+              "order": 1
+            }
+          ]
+        },
+        "expected_revision": 9007199254740991
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: last_updated=\"2026-02-29T00:00:00Z\"",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": "2026-02-29T00:00:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: last_updated=\"2026-09-19T24:00:00Z\"",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": "2026-09-19T24:00:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: last_updated=\"2026-09-19T08:35:00+09:00\"",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": "2026-09-19T08:35:00+09:00"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: last_updated=\"2026-09-19\"",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": "2026-09-19"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: last_updated=\"2026-09-19T08:35:00.Z\"",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": "2026-09-19T08:35:00.Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "SaveSettingsResponse: last_updated=\"2024-02-29T00:00:00.123Z\"",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": "2024-02-29T00:00:00.123Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "SaveSettingsResponse: last_updated=\"2026-09-19t08:35:00z\"",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": "2026-09-19t08:35:00z"
+      },
+      "valid": true
+    },
+    {
+      "name": "SaveSettingsResponse: last_updated=\"2026-09-19T08:35:00+00:00\"",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": "2026-09-19T08:35:00+00:00"
+      },
+      "valid": true
+    },
+    {
+      "name": "SaveSettingsResponse: last_updated=\"2016-12-31T23:59:60Z\"",
+      "type": "SaveSettingsResponse",
+      "value": {
+        "revision": 13,
+        "last_updated": "2016-12-31T23:59:60Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "URL rejected \"http://example.com\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "http://example.com",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "URL rejected \"javascript:alert(1)\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "javascript:alert(1)",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "URL rejected \"file:///x\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "file:///x",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "URL rejected \"data:text/plain,x\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "data:text/plain,x",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "URL rejected \"https://\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "https://",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "URL rejected \"https://a\\nb\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "https://a\nb",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "URL rejected \"https://a\\\\b\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "https://a\\b",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "URL rejected \"https://a b\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "https://a b",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "URL rejected \"https://example.com/\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "https://example.com/",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "URL rejected \"https://example.com/﻿\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "https://example.com/﻿",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "URL allowed https://example.com/a?q=1",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "https://example.com/a?q=1",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "URL allowed HTTPS://example.com",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "HTTPS://example.com",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "URL allowed https://例え.jp/資料",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "url",
+        "path": "https://例え.jp/資料",
+        "window_match_pattern": null,
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialItem: window_match_pattern=\"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+        "order": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "MaterialItem: window_match_pattern=\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "order": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "empty hint normalized",
+      "type": "MaterialItem",
+      "value": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": "",
+        "order": 1
+      },
+      "valid": true,
+      "normalized": {
+        "id": "m1",
+        "group_id": "g1",
+        "name": "資料",
+        "role": "main",
+        "target_type": "file",
+        "path": "C:\\Fixtures\\資料.pdf",
+        "window_match_pattern": null,
+        "order": 1
+      }
+    },
+    {
+      "name": "schema discriminator 1",
+      "type": "ConfigDocument",
+      "value": {
+        "schema_version": 1,
+        "future": {
+          "incompatible": true
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "schema discriminator 2",
+      "type": "ConfigDocument",
+      "value": {
+        "schema_version": 2,
+        "future": {
+          "incompatible": true
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "schema discriminator 4",
+      "type": "ConfigDocument",
+      "value": {
+        "schema_version": 4,
+        "future": {
+          "incompatible": true
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "schema discriminator 4294967295",
+      "type": "ConfigDocument",
+      "value": {
+        "schema_version": 4294967295,
+        "future": {
+          "incompatible": true
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "schema 3 strict",
+      "type": "ConfigDocument",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ],
+        "future": true
+      },
+      "valid": false
+    },
+    {
+      "name": "schema 3 valid",
+      "type": "ConfigDocument",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "invalid schema null",
+      "type": "ConfigDocument",
+      "value": {
+        "schema_version": null
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid schema 4",
+      "type": "ConfigDocument",
+      "value": {
+        "schema_version": "4"
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid schema -1",
+      "type": "ConfigDocument",
+      "value": {
+        "schema_version": -1
+      },
+      "valid": false
+    },
+    {
+      "name": "invalid schema 4294967296",
+      "type": "ConfigDocument",
+      "value": {
+        "schema_version": 4294967296
+      },
+      "valid": false
+    },
+    {
+      "name": "schema 4 not AppConfig",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 4,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "nested unknown",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1,
+            "extra": true
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "nested positional struct rejected",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          [
+            "g1",
+            null,
+            "会議",
+            1
+          ]
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "window_match_pattern": null,
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "nested missing null",
+      "type": "AppConfig",
+      "value": {
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 12,
+        "last_updated": "2026-09-19T08:35:00Z",
+        "groups": [
+          {
+            "id": "g1",
+            "parent_id": null,
+            "name": "会議",
+            "order": 1
+          }
+        ],
+        "materials": [
+          {
+            "id": "m1",
+            "group_id": "g1",
+            "name": "資料",
+            "role": "main",
+            "target_type": "file",
+            "path": "C:\\Fixtures\\資料.pdf",
+            "order": 1
+          }
+        ]
+      },
+      "valid": false
+    }
+  ]
+}

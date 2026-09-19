@@ -1,12 +1,6 @@
-use serde::Serialize;
+pub mod contracts;
+use contracts::AppError;
 use tauri::Manager;
-
-#[derive(Debug, Serialize)]
-struct AppError {
-    code: String,
-    message: String,
-    retryable: bool,
-}
 
 #[tauri::command]
 fn health_check() -> Result<String, AppError> {

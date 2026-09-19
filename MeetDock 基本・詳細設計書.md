@@ -257,7 +257,7 @@ async fn batch_launch_main(
 
 // 親フォルダをExplorerで開く
 #[tauri::command]
-async fn open_containing_folder(request: OpenContainingFolderRequest) -> Result<(), AppError>;
+async fn open_containing_folder(request: OpenContainingFolderRequest) -> Result<EmptyResponse, AppError>;
 
 ```
 
@@ -1866,7 +1866,7 @@ void initialize();
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppError {
-    pub code: String,
+    pub code: ErrorCode,
     pub message: String,
     pub material_id: Option<String>,
     pub retryable: bool,
@@ -1881,9 +1881,9 @@ pub struct SaveSettingsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MaterialStatusResult {
     pub material_id: String,
-    pub open_state: String, // "open" | "not_detected" | "unknown" | "not_trackable"
-    pub confidence: String, // "exact" | "estimated" | "unknown"
-    pub path_state: String, // "exists" | "missing" | "timeout" | "access_denied" | "unchecked" | "error"
+    pub open_state: OpenState,
+    pub confidence: Confidence,
+    pub path_state: PathState,
     pub detail: Option<String>,
 }
 
@@ -1896,7 +1896,7 @@ pub struct SyncStatusesResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LaunchResponse {
     pub material_id: String,
-    pub outcome: String, // "activated" | "launched" | "not_trackable" | "foreground_denied" | "not_found" | "failed"
+    pub outcome: LaunchOutcome,
     pub error: Option<AppError>,
 }
 
