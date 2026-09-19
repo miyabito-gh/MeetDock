@@ -68,9 +68,10 @@ test('material rows expose a persistent PDF preview action and current-row state
   assert.ok(source.includes("if(isPdf(item))add('アプリ内でPDF表示','pdf')"));
   assert.ok(source.includes('pdf-preview-button'));
   assert.ok(source.includes("r.setAttribute('aria-current','true')"));
-  assert.ok(source.includes("icon=el('span','file-icon')"));
-  assert.ok(source.includes("acts.append(open,pdfPreview,more)"));
-  assert.ok(source.includes("add('開く','activate')"));
+  assert.ok(source.includes("icon=button('','activate','file-icon')"));
+  assert.ok(source.includes("acts.append(pdfPreview,more)"));
+  assert.ok(source.includes('開いていない場合は外部アプリで開きます'));
+  assert.ok(source.includes("add('外部で開く','activate')"));
   assert.doesNotMatch(source, /button\('開く','activate','primary'\)/);
   const styles = readFileSync(new URL('../src/visibility.css', import.meta.url), 'utf8');
   assert.match(styles, /\[hidden\][^{]*\{\s*display:\s*none\s*!important/);
@@ -127,7 +128,10 @@ test('toolbar groups remain stable and material status is lightweight', () => {
   assert.ok(source.includes("p.state.setAttribute('aria-label',`状態: ${stateLabel}`)"));
   const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
   assert.match(styles,/\.status\[data-tone="available"\] \.status-mark/);
-  assert.match(styles,/grid-template-columns:30px 38px 30px/);
+  assert.match(styles,/\.row-actions\{width:auto;display:flex;align-items:center;justify-content:flex-end/);
+  assert.match(styles,/grid-template-columns:minmax\(240px,1fr\) 116px 72px/);
+  assert.match(styles,/\.material-row \.row-actions\{position:absolute;right:12px;top:50%;transform:translateY\(-50%\)\}/);
+  assert.doesNotMatch(styles,/\.pdf-preview-button\[hidden\]\{display:block/);
 });
 
 test('DnD confirmation and PDF external fallback are explicit UI actions', () => {
