@@ -36,6 +36,7 @@ MeetDockは、会議・定例会・案件対応で使用するローカルファ
 - Phase 4の実装・自動試験結果は`PHASE_4_IMPLEMENTATION.md`。PATH-03～05のWindows/SMB実機受入は未実施
 - Phase 5第一段: ID-only strict IPCの`activate_or_launch` / `batch_launch_main` / `open_containing_folder`、https/file/folder起動port、リテラルタイトル照合、制約付き前面化、一括継続を実装
 - Phase 5の結果と未完了項目は`PHASE_5_IMPLEMENTATION.md`。WIN-04～06モック試験は実装済みだが、Office ROT、Restart Manager、WIN-01～03および実アプリ受入は未実装/未検証であり、Phase 5全体は未完了
+- Office ROT／Restart Managerは対応環境確保後へ延期するユーザー判断。次の実装対象はPhase 6のPDF protocol／PDF.jsとし、延期項目を合格扱いにしない
 
 ### 未実装
 
