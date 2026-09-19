@@ -69,6 +69,8 @@ MeetDockは、会議・定例会・案件対応で使用するローカルファ
 
 ## 4. 開発コマンド
 
+Phase 3後の手動確認は`MANUAL_VERIFICATION_HANDOFF.md`を参照。まず`.\run.ps1 dev`で疎通確認し、続いて`.\run.ps1 build`でローカル確認用exeを生成する。buildは`--no-bundle`を使用し、インストーラーを生成しない。
+
 プロジェクトルートで実行します。
 
 ```powershell
