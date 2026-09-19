@@ -52,18 +52,61 @@ export function timestamp(v) {
 function material(v) {
   object(v, { id, group_id: id, name: string, role: member(enums.role), target_type: member(enums.target_type),
     path: string, window_match_pattern: nullable(string), order: u32 });
+  requireValue(nonblank(v.name) && v.order > 0);
   requireValue(v.window_match_pattern === null || [...v.window_match_pattern].length <= 128);
   requireValue(!/[\x00-\x1f\x7f]/.test(v.path));
   if (v.target_type === 'url') {
     requireValue(/^https:\/\//i.test(v.path) && !/[\p{White_Space}\uFEFF\\]/u.test(v.path));
     let url; try { url = new URL(v.path); } catch { requireValue(false); }
     requireValue(url.protocol === 'https:' && url.hostname.length > 0);
-  }
+  } else requireValue(windowsAbsolutePath(v.path));
 }
-const group = v => object(v, { id, parent_id: nullable(id), name: string, order: u32 });
+const nonblank = s => /[^\p{White_Space}\uFEFF]/u.test(s);
+function windowsAbsolutePath(path) {
+  let p = path.replaceAll('/', '\\');
+  const extended = p.startsWith('\\\\?\\');
+  if (extended) p = p.slice(4);
+  const unc = extended ? p.startsWith('UNC\\') : p.startsWith('\\\\');
+  let tail;
+  if (unc) {
+    tail = p.slice(extended ? 4 : 2);
+    const parts = tail.split('\\');
+    if (parts.length < 2 || !parts[0] || !parts[1]) return false;
+  } else {
+    if (!/^[A-Za-z]:\\/.test(p)) return false;
+    tail = p.slice(3);
+  }
+  if (tail.endsWith('\\')) tail = tail.slice(0, -1);
+  return !tail || tail.split('\\').every(c => c && c !== '.' && c !== '..' &&
+    !/[. ]$/.test(c) && !/[\x00-\x1f\x7f<>:"|?*]/.test(c) &&
+    !/^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])$/i.test(c.split('.')[0]));
+}
+const group = v => {
+  object(v, { id, parent_id: nullable(id), name: string, order: u32 });
+  requireValue(nonblank(v.name) && v.order > 0 && v.parent_id !== v.id);
+};
 function config(v) {
   object(v, { schema_version: member([3]), app_version: string, revision: safe,
     last_updated: timestamp, groups: array(group), materials: array(material) });
+  const groups = new Map(), materials = new Set(), orders = new Map();
+  const addOrder = (scope, order) => { const key = JSON.stringify(scope); if (!orders.has(key)) orders.set(key, []); orders.get(key).push(order); };
+  for (const g of v.groups) {
+    requireValue(!groups.has(g.id)); groups.set(g.id, g.parent_id);
+    addOrder([g.parent_id, null], g.order);
+  }
+  const complete = new Set();
+  for (const start of groups.keys()) {
+    const chain = new Set(); let current = start;
+    while (current !== null && !complete.has(current)) {
+      requireValue(groups.has(current) && !chain.has(current)); chain.add(current); current = groups.get(current);
+    }
+    for (const id of chain) complete.add(id);
+  }
+  for (const m of v.materials) {
+    requireValue(!materials.has(m.id) && groups.has(m.group_id)); materials.add(m.id);
+    addOrder([m.group_id, m.role], m.order);
+  }
+  for (const values of orders.values()) requireValue(values.sort((a, b) => a - b).every((order, i) => order === i + 1));
 }
 const candidate = v => object(v, { candidate_id: id, kind: member(enums.kind), revision: nullable(safe), last_updated: nullable(timestamp) });
 function settings(v) {

@@ -2,6 +2,7 @@
 //! before using a DTO; execution ports resolve IDs from saved configuration.
 use serde::{de::DeserializeOwned, Deserialize, Deserializer, Serialize};
 use serde_json::Value;
+use std::collections::{HashMap, HashSet};
 
 pub const MAX_SAFE: u64 = 9_007_199_254_740_991;
 macro_rules! enumeration {
@@ -305,7 +306,6 @@ macro_rules! structural {
     ($($t:ty),+) => { $(impl Validate for $t { fn validate(&mut self) -> Result<(), AppError> { Ok(()) } })+ };
 }
 structural!(
-    GroupItem,
     SettingsCandidate,
     LoadSettingsRequest,
     EmptyResponse,
@@ -317,8 +317,66 @@ structural!(
     BatchLaunchRequest,
     MaterialStatusResult
 );
+fn nonblank(s: &str) -> bool {
+    s.chars().any(|c| !c.is_whitespace() && c != '\u{feff}')
+}
+impl Validate for GroupItem {
+    fn validate(&mut self) -> Result<(), AppError> {
+        ensure(nonblank(&self.name) && self.order > 0 && self.parent_id.as_ref() != Some(&self.id))
+    }
+}
+// Lexical only: never probes a drive or UNC share. Device namespaces/ADS and
+// ambiguous Win32 components are not document paths.
+pub fn windows_absolute_path(path: &str) -> bool {
+    let p = path.replace('/', "\\");
+    let extended = p.starts_with("\\\\?\\");
+    let p = p.strip_prefix("\\\\?\\").unwrap_or(&p);
+    let unc = if extended {
+        p.strip_prefix("UNC\\")
+    } else {
+        p.strip_prefix("\\\\")
+    };
+    let tail = if let Some(unc) = unc {
+        let parts: Vec<_> = unc.split('\\').collect();
+        if parts.len() < 2 || parts[0].is_empty() || parts[1].is_empty() {
+            return false;
+        }
+        unc
+    } else {
+        let b = p.as_bytes();
+        if b.len() < 3 || !b[0].is_ascii_alphabetic() || b[1] != b':' || b[2] != b'\\' {
+            return false;
+        }
+        &p[3..]
+    };
+    let tail = tail.strip_suffix('\\').unwrap_or(tail);
+    tail.is_empty()
+        || tail.split('\\').all(|c| {
+            let stem = c.split('.').next().unwrap_or("").to_ascii_uppercase();
+            !c.is_empty()
+                && c != "."
+                && c != ".."
+                && !c.ends_with(['.', ' '])
+                && !c
+                    .chars()
+                    .any(|ch| ch <= '\u{1f}' || ch == '\u{7f}' || "<>:\"|?*".contains(ch))
+                && !matches!(
+                    stem.as_str(),
+                    "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+                )
+                && !(stem.starts_with("COM") || stem.starts_with("LPT"))
+                    .then(|| {
+                        matches!(
+                            &stem[3..],
+                            "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+                        )
+                    })
+                    .unwrap_or(false)
+        })
+}
 impl Validate for MaterialItem {
     fn validate(&mut self) -> Result<(), AppError> {
+        ensure(nonblank(&self.name) && self.order > 0)?;
         ensure(
             self.window_match_pattern
                 .as_ref()
@@ -341,6 +399,8 @@ impl Validate for MaterialItem {
             ensure(tauri::Url::parse(&self.path).is_ok_and(|u| {
                 u.scheme() == "https" && u.host_str().is_some_and(|h| !h.is_empty())
             }))?;
+        } else {
+            ensure(windows_absolute_path(&self.path))?;
         }
         Ok(())
     }
@@ -348,8 +408,59 @@ impl Validate for MaterialItem {
 impl Validate for AppConfig {
     fn validate(&mut self) -> Result<(), AppError> {
         ensure(self.schema_version == 3)?;
+        let mut groups = HashMap::new();
+        let mut orders: HashMap<(Option<String>, Option<String>), Vec<u32>> = HashMap::new();
+        for g in &mut self.groups {
+            g.validate()?;
+            ensure(
+                groups
+                    .insert(
+                        g.id.as_str().to_owned(),
+                        g.parent_id.as_ref().map(|p| p.as_str().to_owned()),
+                    )
+                    .is_none(),
+            )?;
+            orders
+                .entry((g.parent_id.as_ref().map(|p| p.as_str().to_owned()), None))
+                .or_default()
+                .push(g.order);
+        }
+        // Iterative traversal avoids stack overflow for deeply nested input.
+        let mut complete = HashSet::new();
+        for start in groups.keys() {
+            let mut chain = HashSet::new();
+            let mut current = Some(start.as_str());
+            while let Some(id) = current {
+                if complete.contains(id) {
+                    break;
+                }
+                ensure(chain.insert(id.to_owned()))?;
+                current = groups
+                    .get(id)
+                    .ok_or_else(|| AppError::new(ErrorCode::ValidationError, None))?
+                    .as_deref();
+            }
+            complete.extend(chain);
+        }
+        let mut materials = HashSet::new();
         for m in &mut self.materials {
             m.validate()?;
+            ensure(
+                materials.insert(m.id.as_str().to_owned())
+                    && groups.contains_key(m.group_id.as_str()),
+            )?;
+            let role = match m.role {
+                MaterialRole::Main => "main",
+                MaterialRole::Reference => "reference",
+            };
+            orders
+                .entry((Some(m.group_id.as_str().to_owned()), Some(role.into())))
+                .or_default()
+                .push(m.order);
+        }
+        for values in orders.values_mut() {
+            values.sort_unstable();
+            ensure(values.iter().enumerate().all(|(i, v)| *v as usize == i + 1))?;
         }
         Ok(())
     }

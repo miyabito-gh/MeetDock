@@ -106,4 +106,30 @@ add('schema 4 not AppConfig', 'AppConfig', { ...config, schema_version: 4 }, fal
 add('nested unknown', 'AppConfig', { ...config, groups: [{ ...group, extra: true }] }, false);
 add('nested positional struct rejected', 'AppConfig', { ...config, groups: [['g1', null, '会議', 1]] }, false);
 add('nested missing null', 'AppConfig', { ...config, materials: [{ ...material, window_match_pattern: undefined }] }, false);
+for (const type of ['GroupItem', 'MaterialItem']) {
+  for (const name of ['', ' \t\n', '\u0085\uFEFF']) change(type, 'name', name, false);
+  change(type, 'order', 0, false);
+}
+change('GroupItem', 'parent_id', 'g1', false);
+for (const path of ['relative.pdf', 'C:relative.pdf', '\\rooted', '/rooted', 'UNC\\host\\share', '\\\\host', '\\\\.\\pipe\\x', '\\\\?\\GLOBALROOT\\x', 'C:\\a:stream', 'C:\\a\\..\\x', 'C:\\a.\\x', 'C:\\a \\x', 'C:\\NUL.txt', 'C:\\COM¹', 'C:\\a*', 'C:\\a\u0000', 'C:\\\\a']) change('MaterialItem', 'path', path, false);
+for (const path of ['C:\\', 'D:/資料/a.pdf', '\\\\server\\share', '\\\\server\\share\\資料.pdf', '\\\\?\\C:\\資料.pdf', '\\\\?\\UNC\\server\\share\\資料.pdf']) change('MaterialItem', 'path', path, true);
+change('MaterialItem', 'window_match_pattern', '[]().*', true);
+function cfgCase(name, mutate, valid = false) { const c = structuredClone(config); mutate(c); add(name, 'AppConfig', c, valid); }
+cfgCase('duplicate group', c => c.groups.push({ ...group, order: 2 }));
+cfgCase('duplicate material', c => c.materials.push({ ...material, order: 2 }));
+cfgCase('orphan parent', c => c.groups[0].parent_id = 'absent');
+cfgCase('orphan material', c => c.materials[0].group_id = 'absent');
+for (const n of [1, 2, 100]) cfgCase(`CFG-03 cycle ${n}`, c => {
+  c.groups = Array.from({ length: n }, (_, i) => ({ ...group, id: `g${i + 1}`, parent_id: `g${(i + 1) % n + 1}` }));
+});
+cfgCase('valid deep tree', c => {
+  c.groups = Array.from({ length: 1000 }, (_, i) => ({ ...group, id: `g${i + 1}`, parent_id: i ? `g${i}` : null }));
+}, true);
+cfgCase('group order duplicate', c => c.groups.push({ ...group, id: 'g2' }));
+cfgCase('group order gap', c => c.groups[0].order = 2);
+cfgCase('material order duplicate', c => c.materials.push({ ...material, id: 'm2' }));
+cfgCase('material order gap', c => c.materials[0].order = 2);
+cfgCase('separate role order', c => c.materials.push({ ...material, id: 'm2', role: 'reference' }), true);
+cfgCase('separate ID namespaces', c => c.materials[0].id = 'g1', true);
+cfgCase('unordered array contiguous order', c => { c.materials[0].order = 2; c.materials.push({ ...material, id: 'm2' }); }, true);
 writeFileSync(new URL('./fixtures/contracts.json', import.meta.url), JSON.stringify({ seed: 'meetdock-contract-v1', fixtures }, null, 2) + '\n');

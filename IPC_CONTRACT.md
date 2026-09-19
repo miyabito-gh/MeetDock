@@ -47,6 +47,10 @@ MaterialItem {
 
 `window_match_pattern`はschema 3では正規表現ではなく、最大128文字の任意のリテラルタイトルヒントとして扱う。正規表現評価は行わない。空文字は`null`へ正規化する。
 
+Phase 3の業務検証では、group/materialそれぞれのID一意性、参照先存在、非循環、空白のみでない名称を必須とする。orderはgroupの同一parent内、materialの同一group/role内で1からの連番（配列自体の並び順は不問）。不正順序を保存時に黙って振り直さない。
+
+file/folderはドライブ絶対パスまたはserver/share付きUNC（対応する`\\?\`形式を含む）を字句検証する。区切り`/`も許可する。相対/ドライブ相対、device namespace、ADS、`.`/`..`、空の中間要素、末尾ドット/空白、Win32予約名・禁止文字を拒否する。パスの存在確認やUNC I/Oはこの検証では行わない。原文を保持し、実行時の比較用正規化は後続Phaseで行う。
+
 ## 起動時設定DTO
 
 ```text

@@ -123,7 +123,7 @@
       "target_type": "file",
       "path": "C:\\Work\\SNK-R\\Weekly\\システム構成資料.pdf",
       "window_match_pattern": null,
-      "order": 2
+      "order": 1
     },
     {
       "id": "mat_03",
@@ -133,7 +133,7 @@
       "target_type": "url",
       "path": "https://internal-wiki.example.com/snk-r",
       "window_match_pattern": null,
-      "order": 3
+      "order": 2
     }
   ]
 }
