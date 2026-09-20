@@ -283,7 +283,8 @@ dto!(BatchLaunchResponse { results: Vec<LaunchResponse> });
 dto!(PrepareDroppedFilesRequest { paths: Vec<String> });
 dto!(DroppedFileCandidate {
     name: String,
-    path: String
+    path: String,
+    target_type: TargetType
 });
 dto!(PrepareDroppedFilesResponse { candidates: Vec<DroppedFileCandidate> });
 dto!(MaterialStatusResult { material_id: Id, open_state: OpenState, confidence: Confidence, path_state: PathState,
@@ -324,9 +325,7 @@ structural!(
     ActivateOrLaunchRequest,
     OpenContainingFolderRequest,
     BatchLaunchRequest,
-    MaterialStatusResult,
-    DroppedFileCandidate,
-    PrepareDroppedFilesResponse
+    MaterialStatusResult
 );
 impl Validate for PrepareDroppedFilesRequest {
     fn validate(&mut self) -> Result<(), AppError> {
@@ -336,6 +335,25 @@ impl Validate for PrepareDroppedFilesRequest {
                 .iter()
                 .all(|path| !path.is_empty() && path.len() <= 32_767),
         )
+    }
+}
+impl Validate for DroppedFileCandidate {
+    fn validate(&mut self) -> Result<(), AppError> {
+        ensure(nonblank(&self.name))?;
+        ensure(matches!(
+            self.target_type,
+            TargetType::File | TargetType::Folder
+        ))?;
+        ensure(windows_absolute_path(&self.path))
+    }
+}
+impl Validate for PrepareDroppedFilesResponse {
+    fn validate(&mut self) -> Result<(), AppError> {
+        ensure(!self.candidates.is_empty() && self.candidates.len() <= 100)?;
+        for candidate in &mut self.candidates {
+            candidate.validate()?;
+        }
+        Ok(())
     }
 }
 fn nonblank(s: &str) -> bool {
@@ -394,6 +412,23 @@ pub fn windows_absolute_path(path: &str) -> bool {
                     })
                     .unwrap_or(false)
         })
+}
+
+pub fn windows_shell_path(path: &str) -> String {
+    let normalized = path.replace('/', "\\");
+    if normalized
+        .get(..8)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("\\\\?\\UNC\\"))
+    {
+        format!("\\\\{}", &normalized[8..])
+    } else if normalized
+        .get(..4)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("\\\\?\\"))
+    {
+        normalized[4..].to_owned()
+    } else {
+        normalized
+    }
 }
 impl Validate for MaterialItem {
     fn validate(&mut self) -> Result<(), AppError> {

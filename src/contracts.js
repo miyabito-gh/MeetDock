@@ -33,6 +33,7 @@ export const uuid = v => requireValue(typeof v === 'string' && /^[0-9a-f]{8}-[0-
 const member = values => v => requireValue(values.includes(v));
 const nullable = check => v => { if (v !== null) check(v); };
 const array = check => v => { requireValue(Array.isArray(v)); v.forEach(check); };
+const droppedCandidate = v => object(v, { name: string, path: string, target_type: member(['file', 'folder']) });
 function object(v, fields) {
   requireValue(v !== null && typeof v === 'object' && !Array.isArray(v));
   requireValue(Object.keys(v).length === Object.keys(fields).length);
@@ -147,8 +148,8 @@ export const validators = Object.freeze({
   BatchLaunchRequest: v => object(v, { group_id: id }),
   BatchLaunchResponse: v => object(v, { results: array(launch) }),
   PrepareDroppedFilesRequest: v => { object(v, { paths: array(string) }); requireValue(v.paths.length > 0 && v.paths.length <= 100 && v.paths.every(path => path.length > 0 && path.length <= 32767)); },
-  DroppedFileCandidate: v => object(v, { name: string, path: string }),
-  PrepareDroppedFilesResponse: v => object(v, { candidates: array(x => object(x, { name: string, path: string })) }),
+  DroppedFileCandidate: droppedCandidate,
+  PrepareDroppedFilesResponse: v => { object(v, { candidates: array(droppedCandidate) }); requireValue(v.candidates.length > 0 && v.candidates.length <= 100); },
 });
 export function validate(type, value) {
   requireValue(Object.hasOwn(validators, type)); validators[type](value);

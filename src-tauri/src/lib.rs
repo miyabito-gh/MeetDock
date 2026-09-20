@@ -108,7 +108,7 @@ mod ipc_tests {
     }
 
     #[test]
-    fn dropped_files_are_canonicalized_and_non_files_are_rejected() {
+    fn dropped_files_and_folders_are_canonicalized() {
         let directory = std::env::temp_dir().join(format!("meetdock-dnd-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
         let file = directory.join("sample.pdf");
@@ -117,14 +117,28 @@ mod ipc_tests {
             prepare_dropped_candidates(vec![file.to_string_lossy().into_owned()]).unwrap();
         assert_eq!(response.candidates.len(), 1);
         assert_eq!(response.candidates[0].name, "sample.pdf");
+        assert_eq!(
+            response.candidates[0].target_type,
+            contracts::TargetType::File
+        );
         assert!(contracts::windows_absolute_path(
             &response.candidates[0].path
         ));
+        let folder_response =
+            prepare_dropped_candidates(vec![directory.to_string_lossy().into_owned()]).unwrap();
+        assert_eq!(folder_response.candidates.len(), 1);
         assert_eq!(
-            prepare_dropped_candidates(vec![directory.to_string_lossy().into_owned()])
-                .unwrap_err()
-                .code,
-            ErrorCode::ValidationError
+            folder_response.candidates[0].target_type,
+            contracts::TargetType::Folder
+        );
+        assert!(!folder_response.candidates[0].path.starts_with("\\\\?\\"));
+        assert_eq!(
+            contracts::windows_shell_path("\\\\?\\UNC\\server\\share\\folder"),
+            "\\\\server\\share\\folder"
+        );
+        assert_eq!(
+            contracts::windows_shell_path("//?/unc/server/share/folder"),
+            "\\\\server\\share\\folder"
         );
         std::fs::remove_file(file).unwrap();
         std::fs::remove_dir(directory).unwrap();
@@ -263,10 +277,14 @@ fn prepare_dropped_candidates(paths: Vec<String>) -> Result<PrepareDroppedFilesR
             .map_err(|_| AppError::new(ErrorCode::ValidationError, None))?;
         let metadata = std::fs::metadata(&path)
             .map_err(|_| AppError::new(ErrorCode::ValidationError, None))?;
-        if !metadata.is_file() {
+        let target_type = if metadata.is_file() {
+            contracts::TargetType::File
+        } else if metadata.is_dir() {
+            contracts::TargetType::Folder
+        } else {
             return Err(AppError::new(ErrorCode::ValidationError, None));
-        }
-        let normalized = path.to_string_lossy().into_owned();
+        };
+        let normalized = contracts::windows_shell_path(&path.to_string_lossy());
         if !contracts::windows_absolute_path(&normalized) || !seen.insert(normalized.to_lowercase())
         {
             return Err(AppError::new(ErrorCode::ValidationError, None));
@@ -275,11 +293,12 @@ fn prepare_dropped_candidates(paths: Vec<String>) -> Result<PrepareDroppedFilesR
             .file_name()
             .and_then(|value| value.to_str())
             .filter(|value| !value.is_empty())
-            .ok_or_else(|| AppError::new(ErrorCode::ValidationError, None))?
-            .to_owned();
+            .map(str::to_owned)
+            .unwrap_or_else(|| normalized.clone());
         candidates.push(DroppedFileCandidate {
             name,
             path: normalized,
+            target_type,
         });
     }
     Ok(PrepareDroppedFilesResponse { candidates })

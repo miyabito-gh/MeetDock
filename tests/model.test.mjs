@@ -293,12 +293,14 @@ test('Phase 7 CRUD keeps hierarchy and schema 3 order contiguous', () => {
 test('DnD is draft-only and execution effects remain ID-only', () => {
   const requested = run(ready(), Event.NativeFilesDropped, { group_id: 'g1', paths: ['C:\\Drop\\drop.pdf'] });
   assert.equal(requested.effects[0].type, Effect.PrepareDroppedFiles);
-  const prepared = run(requested.state, Event.DroppedFilesPrepared, { group_id: 'g1', response: { candidates: [{ name: 'drop.pdf', path: 'C:\\Drop\\drop.pdf' }] } });
-  assert.equal(prepared.state.edit, Edit.Clean); assert.equal(prepared.state.dropped_files.candidates.length, 1);
+  const prepared = run(requested.state, Event.DroppedFilesPrepared, { group_id: 'g1', response: { candidates: [{ name: 'drop.pdf', path: 'C:\\Drop\\drop.pdf', target_type: 'file' }, { name: 'Folder', path: 'C:\\Drop\\Folder', target_type: 'folder' }] } });
+  assert.equal(prepared.state.edit, Edit.Clean); assert.equal(prepared.state.dropped_files.candidates.length, 2);
   const dropped = run(prepared.state, Event.DroppedFilesConfirmed, { group_id: 'g1', role: 'main' });
   assert.equal(dropped.effects.length, 0); assert.equal(dropped.state.edit, Edit.Dirty);
   const added = dropped.state.draft.materials.find(m => m.path === 'C:\\Drop\\drop.pdf');
   assert.equal(added.role, 'main'); assert.equal(added.group_id, 'g1');
+  const addedFolder = dropped.state.draft.materials.find(m => m.path === 'C:\\Drop\\Folder');
+  assert.equal(addedFolder.target_type, 'folder');
   const unsavedOpen = run(dropped.state, Event.OpenContainingFolderRequested, { material_id: added.id });
   assert.equal(unsavedOpen.effects.length, 0, 'unsaved dropped paths cannot reach execution IPC');
   const open = run(dropped.state, Event.OpenContainingFolderRequested, { material_id: 'm1' });

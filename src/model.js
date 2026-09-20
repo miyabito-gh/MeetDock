@@ -168,7 +168,7 @@ export function transition(s, e) {
     case Event.DroppedFilesConfirmed: {
       if (!editable(s) || !s.dropped_files || !editableConfig(s)?.groups.some(g => g.id === e.group_id) || !['main', 'reference'].includes(e.role)) return deny();
       const config = editableConfig(s);
-      for (const entry of s.dropped_files.candidates) config.materials.push({ id: crypto.randomUUID(), group_id: e.group_id, name: entry.name, role: e.role, target_type: 'file', path: entry.path, order: Number.MAX_SAFE_INTEGER, window_match_pattern: null });
+      for (const entry of s.dropped_files.candidates) config.materials.push({ id: crypto.randomUUID(), group_id: e.group_id, name: entry.name, role: e.role, target_type: entry.target_type, path: entry.path, order: Number.MAX_SAFE_INTEGER, window_match_pattern: null });
       reorder(config.materials, m => `${m.group_id}\0${m.role}`); return result({ ...dirtyWith(s, config), dropped_files: null, selected_group_id: e.group_id });
     }
     case Event.SaveRequested: {

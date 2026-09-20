@@ -253,7 +253,8 @@ impl TargetLaunch for NativeTargetLaunch {
             core::PCWSTR,
             Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL},
         };
-        let target: Vec<u16> = material.path.encode_utf16().chain(Some(0)).collect();
+        let shell_path = crate::contracts::windows_shell_path(&material.path);
+        let target: Vec<u16> = shell_path.encode_utf16().chain(Some(0)).collect();
         let result = unsafe {
             ShellExecuteW(
                 None,
@@ -271,11 +272,12 @@ impl TargetLaunch for NativeTargetLaunch {
         }
     }
     fn reveal(&self, material: &MaterialItem) -> Result<(), ErrorCode> {
-        let path = Path::new(&material.path);
+        let shell_path = crate::contracts::windows_shell_path(&material.path);
+        let path = Path::new(&shell_path);
         let argument = if material.target_type == TargetType::Folder {
-            material.path.clone()
+            shell_path.clone()
         } else {
-            format!("/select,{}", material.path)
+            format!("/select,{shell_path}")
         };
         std::process::Command::new("explorer.exe")
             .arg(argument)

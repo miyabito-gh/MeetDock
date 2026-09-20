@@ -619,7 +619,7 @@ h1{margin:0;font-size:18px;letter-spacing:-.01em}
 
     <div class="workspace">
       <section class="content" id="mainContent">
-        <div class="drop-zone" id="dropZoneBanner">ファイルをドラッグ＆ドロップして追加</div>
+        <div class="drop-zone" id="dropZoneBanner">ファイルまたはフォルダーをドラッグ＆ドロップして追加</div>
         <div class="page-head">
           <div><h1 id="pageTitle">週次定例会議</h1></div>
           <div style="font-size:11px;color:var(--muted)" id="updatedAt">同期: 18:35</div>

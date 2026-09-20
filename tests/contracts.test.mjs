@@ -31,6 +31,24 @@ test('adapter rejects invalid request before I/O and sanitizes malformed errors/
   await assert.rejects(createIpcAdapter(async () => null).call('open_containing_folder', { material_id: 'm1' }), { code: 'INTERNAL_ERROR' });
   await assert.rejects(createIpcAdapter(async () => { throw appError('CONFIG_IO'); }).call('load_settings'), { code: 'CONFIG_IO' });
 });
+
+test('dropped file response accepts files and folders with explicit target types', async () => {
+  const response = { candidates: [
+    { name: 'sample.pdf', path: 'C:\\Drop\\sample.pdf', target_type: 'file' },
+    { name: 'Materials', path: 'C:\\Drop\\Materials', target_type: 'folder' },
+  ] };
+  const result = await createIpcAdapter(async () => response)
+    .call('prepare_dropped_files', { paths: response.candidates.map(candidate => candidate.path) });
+  assert.deepEqual(result, response);
+  for (const invalid of [
+    { candidates: [] },
+    { candidates: [{ name: 'URL', path: 'https://example.com', target_type: 'url' }] },
+    { candidates: [{ name: 'Missing type', path: 'C:\\Drop\\item' }] },
+  ]) await assert.rejects(
+    createIpcAdapter(async () => invalid).call('prepare_dropped_files', { paths: ['C:\\Drop\\item'] }),
+    { code: 'INTERNAL_ERROR' },
+  );
+});
 test('adapter checks response correlation and save revision increment', async () => {
   for (const [command, request, response] of [
     ['sync_material_statuses', base('SyncStatusesRequest'), { ...base('SyncStatusesResponse'), request_id: '12345678-1234-4234-8234-123456789abd' }],

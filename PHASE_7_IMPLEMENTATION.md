@@ -11,7 +11,7 @@
 - グループの新規／子追加、名前変更、空グループ削除、親子階層表示、マウス／キーボードコンテキストメニューを実装した。
 - 資料の追加／編集モーダル／削除、メイン・参考切替、file・folder・url変更、グループ移動を実装した。変更のたびに同一group/role内の`order`を1始まりの連番へ保つ。
 - 「保存場所を開く」は保存済み`material_id`だけを既存IPCへ渡す。未保存資料とDnDの実パスは実行系IPCへ渡さない。
-- Tauri `onDragDropEvent`でWindowsネイティブDnDを受け、専用IPCでRust側のcanonicalize・通常ファイル検証を通した候補だけを一括確認画面へ表示する。利用者が区分と登録先グループを確定した後に未保存draftへ追加し、保存時は既存schema 3検証を通る。
+- Tauri `onDragDropEvent`でWindowsネイティブDnDを受け、専用IPCでRust側のcanonicalizeと通常ファイル／フォルダ検証を通した候補だけを一括確認画面へ表示する。フォルダ配下は展開しない。利用者が区分と登録先グループを確定した後に未保存draftへ追加し、保存時は既存schema 3検証を通る。
 - PDFの前後ページ、拡大／縮小、幅合わせ、最大化、280～800 pxペインリサイズをPresenter→Mediator→Effect Runner→`PdfViewAdapter`へ接続した。既存のgeneration guardとcancel→Canvas初期化→cleanup→destroyを維持する。
 - サイドバー折りたたみ、180～450 px幅変更、PDF幅変更、window resize通知をMediatorへ統合した。
 - 破損設定のバックアップ選択、確認付き初期化、旧設定migration承認／拒否、将来schema／利用不能設定の読み取り専用表示を既存Phase 2～3状態遷移とEffectへ接続した。

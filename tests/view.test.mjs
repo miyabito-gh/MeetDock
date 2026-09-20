@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { batchSummary, materialIcon, noticeMessage, noticeTone, visibleMaterials } from '../src/view.js';
+import { batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, visibleMaterials } from '../src/view.js';
 
 const group = (id, name, order) => ({ id, parent_id: null, name, order });
 const material = (id, group_id, name, order) => ({ id, group_id, name, role: 'main', target_type: 'file', path: `C:\\docs\\${id}.pdf`, window_match_pattern: null, order });
@@ -17,6 +17,12 @@ test('UI-01 searches 2,000 materials with group context inside 100 ms', () => {
 test('failure, timeout, unknown and foreground denial never receive success tone', () => {
   for (const value of [{ code: 'CONFIG_IO' }, { code: 'PATH_TIMEOUT' }, { code: 'INTERNAL_ERROR' }, { outcome: 'foreground_denied' }]) assert.equal(noticeTone(value), 'warning');
   assert.equal(noticeTone('saved'), 'success');
+});
+
+test('Windows extended paths are normalized for display', () => {
+  assert.equal(displayPath('\\\\?\\C:\\資料\\folder'), 'C:\\資料\\folder');
+  assert.equal(displayPath('\\\\?\\unc\\server\\share\\folder'), '\\\\server\\share\\folder');
+  assert.equal(displayPath('D:/資料/folder'), 'D:\\資料\\folder');
 });
 
 test('notices use specific messages and never show a generic fallback', () => {
