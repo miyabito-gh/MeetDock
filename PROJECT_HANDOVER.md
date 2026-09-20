@@ -275,6 +275,8 @@ Rust側のConfigManager、Launcher、FileChecker、WindowManager、MaterialProto
 
 PID/HWND追跡は`NativeTargetLaunch`と`NativeWindowDetection`の共有揮発Stateとして実装済み。`ShellExecuteExW`のプロセスハンドルはRAIIで解放し、PID/HWNDは設定・DTO・IPCへ漏らさない。txt、PDF、フォルダ、HTMLファイルの手動確認は問題なし。Office文書は環境がなく未確認。COM/ROT、Restart Manager、タスクバー通知、診断ログは別チケットとして残す。
 
+設定保存については、保存後の再起動による設定復元と、編集中に`settings.json`の`revision`を外部変更した場合の競合検出を実機確認済み。競合時は「別の変更と競合しました。編集内容は保持されています。」と表示され、編集内容は保持された。残りは対応環境が整い次第の実機受入であり、現時点で追加実装へ進まない。
+
 直近のPDF操作改善として、Ctrl+ホイール拡大縮小、左ドラッグのパン、100%超でCanvasを表示幅へ縮小しないCSSを実装済み。フォーカス復帰時の2秒クールダウン付き自動同期、結果別通知、PDF WebView2表示修正も維持すること。
 
 ## 14. 2026-09-19 UI情報階層の更新

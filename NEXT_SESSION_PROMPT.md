@@ -6,8 +6,23 @@
 - PID/HWND/プロセス開始時刻/生存状態が一致する場合だけ前面化する。Explorer・子プロセスへの委譲、HWND未取得・消失、複数候補、終了、PID再利用の疑いは追跡不能として再度開く。
 - PID/HWNDは設定JSON、資料DTO、通常IPCレスポンスへ追加していない。`launcher::tests`、`cargo check`、`git diff --check`は合格した。
 - 手動確認済み: txt、PDF、フォルダ、HTMLファイル。Office文書は検証環境がなく未確認。URLは意図どおり追跡せず、毎回開く要求を出す。
+- 手動確認済み: 設定保存後の再起動による設定復元。
+- 手動確認済み: 編集中に`settings.json`の`revision`を外部変更した場合、保存時に「別の変更と競合しました。編集内容は保持されています。」となり、編集内容が保持される。
 
-## 次チャットの最優先実装：PID/HWNDセッション追跡
+## 次チャットの最優先作業：環境が整い次第の実機受入
+
+PID/HWNDセッション追跡の実装は完了している。次チャットで新規実装を開始せず、以下の実機確認を優先する。
+
+1. Microsoft 365 x64環境でExcel／Wordの新規起動、既存Officeプロセスへの委譲、複数文書、再前面化を確認する。
+2. Windows 11／WebView2でPDF表示、CSP、Canvas、パスワード、狭幅、表示倍率100%／200%、長い名称を確認する。
+3. ExplorerからのネイティブDnD、複数ファイル確認、保存、失敗時入力保持を確認する。
+4. SMB共有でUNCの正常、timeout、アクセス拒否、復旧、キュー上限を確認する。
+5. Windows/NTFSで設定保存、revision競合、バックアップ、temporary、原子的置換の障害注入を確認する。
+6. 前面化拒否、Explorer委譲、PID/HWND追跡不能を確認し、問題が出た場合だけ`BringWindowToTop`、COM/ROT、Restart Manager、多層照合の実装を再検討する。
+
+Office COM/ROT、Restart Manager、PID・実行ファイル名による多層照合、`BringWindowToTop`、タスクバー通知、診断ログは、現時点では実装保留とする。
+
+## PID/HWNDセッション追跡の実装方針（完了済み）
 
 設計差分監査で、フォルダ起動時だけでなく一般の外部アプリ起動についても、MeetDockが起動したプロセスをセッション中だけ追跡する方針を確定した。Explorer限定の機能として実装しない。
 
