@@ -128,7 +128,7 @@ MeetDockの本実装を、承認済み設計に沿って小さな段階に分け
 
 `launcher::tests`はPID/HWND PID不一致、HWND未取得・消失、複数候補、終了、PID再利用、委譲、Clone間の共有State、DTO/IPC非漏えいを含めて合格した。`cargo check`と`git diff --check`も合格。手動確認はtxt、PDF、フォルダ、HTMLファイルで完了し問題なし。Office文書は検証環境がないため未確認。COM/ROT、Restart Manager、タスクバー通知、診断ログは別差分のまま。
 
-設定保存の実機確認では、保存済み設定の再起動復元、および編集中に`settings.json`の`revision`を外部変更した場合の`CONFIG_CONFLICT`を確認済み。画面には「別の変更と競合しました。編集内容は保持されています。」と表示され、編集中の内容が保持された。残りはOffice、WebView2、DnD、UNC/SMB、Windows/NTFS障害注入など、対応環境が整い次第実施する実機受入である。
+設定保存の実機確認では、保存済み設定の再起動復元、および編集中に`settings.json`の`revision`を外部変更した場合の`CONFIG_CONFLICT`を確認済み。画面には「別の変更と競合しました。編集内容は保持されています。」と表示され、編集中の内容が保持された。txt、PDF、フォルダ、HTMLファイル、設定復元、revision競合は現時点で検証済み。未確認環境では、まず現行実装を検証し、実際に問題が発生した場合だけ追加実装を検討する。
 
 ### Phase 6: PDF protocolとPDF.js
 
