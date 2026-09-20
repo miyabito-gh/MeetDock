@@ -2,7 +2,10 @@
 use crate::contracts::{
     AppError, EmptyResponse, ErrorCode, LaunchOutcome, LaunchResponse, MaterialItem, TargetType,
 };
-use std::path::Path;
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Detection {
@@ -20,8 +23,75 @@ pub trait Foreground: Send + Sync + 'static {
     fn activate(&self, hwnd: isize) -> Result<(), ErrorCode>;
 }
 pub trait TargetLaunch: Send + Sync + 'static {
-    fn launch(&self, material: &MaterialItem) -> Result<(), ErrorCode>;
+    fn launch(&self, material: &MaterialItem) -> Result<LaunchReport, ErrorCode>;
     fn reveal(&self, material: &MaterialItem) -> Result<(), ErrorCode>;
+}
+
+/// Kept inside the launcher only.  It deliberately has no serde implementation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaunchReport {
+    Tracked,
+    NotTrackable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SessionEntry {
+    material_id: crate::contracts::Id,
+    pid: u32,
+    hwnd: isize,
+    process_started: u64,
+    target_type: TargetType,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct SessionSnapshot {
+    hwnd_exists: bool,
+    window_pid: u32,
+    process_alive: bool,
+    process_pid: u32,
+    process_started: u64,
+    candidate_count: usize,
+}
+
+fn session_matches(entry: &SessionEntry, snapshot: SessionSnapshot) -> bool {
+    snapshot.hwnd_exists
+        && snapshot.window_pid == entry.pid
+        && snapshot.process_alive
+        && snapshot.process_pid == entry.pid
+        && snapshot.process_started == entry.process_started
+        && snapshot.candidate_count == 1
+}
+
+#[derive(Default)]
+struct SessionState {
+    entries: Vec<SessionEntry>,
+}
+
+type SharedSessionState = Arc<Mutex<SessionState>>;
+
+fn replace_session(state: &SharedSessionState, entry: SessionEntry) {
+    let mut state = state.lock().expect("launcher session state poisoned");
+    state
+        .entries
+        .retain(|old| old.material_id != entry.material_id);
+    state.entries.push(entry);
+}
+
+fn take_session(state: &SharedSessionState, material: &MaterialItem) -> Option<SessionEntry> {
+    let state = state.lock().expect("launcher session state poisoned");
+    state
+        .entries
+        .iter()
+        .find(|entry| entry.material_id == material.id)
+        .cloned()
+}
+
+fn discard_session(state: &SharedSessionState, material: &MaterialItem) {
+    state
+        .lock()
+        .expect("launcher session state poisoned")
+        .entries
+        .retain(|entry| entry.material_id != material.id);
 }
 
 #[derive(Clone)]
@@ -49,7 +119,7 @@ impl<D: WindowDetection, F: Foreground, L: TargetLaunch> Launcher<D, F, L> {
         };
         if material.target_type == TargetType::Url {
             return match self.target.launch(&material) {
-                Ok(()) => LaunchResponse {
+                Ok(_) => LaunchResponse {
                     material_id: id,
                     outcome: LaunchOutcome::NotTrackable,
                     error: None,
@@ -77,7 +147,7 @@ impl<D: WindowDetection, F: Foreground, L: TargetLaunch> Launcher<D, F, L> {
             Detection::Unknown => failure(LaunchOutcome::Failed, ErrorCode::WindowNotFound),
             Detection::NotDetected | Detection::NotTrackable => match self.target.launch(&material)
             {
-                Ok(()) => LaunchResponse {
+                Ok(_) => LaunchResponse {
                     material_id: id,
                     outcome: LaunchOutcome::Launched,
                     error: None,
@@ -102,8 +172,10 @@ impl<D: WindowDetection, F: Foreground, L: TargetLaunch> Launcher<D, F, L> {
     }
 }
 
-#[derive(Clone, Copy, Default)]
-pub struct NativeWindowDetection;
+#[derive(Clone)]
+pub struct NativeWindowDetection {
+    state: SharedSessionState,
+}
 fn normalized_title(value: &str) -> String {
     value
         .replace('\0', "")
@@ -160,6 +232,15 @@ impl WindowDetection for NativeWindowDetection {
             }
             true.into()
         }
+        if let Some(entry) = take_session(&self.state, material) {
+            if let Some(hwnd) = validate_session(&entry) {
+                return Detection::Exact(hwnd);
+            }
+            // A dead window/process, a different PID, or a changed creation time is never
+            // allowed to fall through to title matching: that could activate another app.
+            discard_session(&self.state, material);
+            return Detection::NotTrackable;
+        }
         let mut entries: Vec<(isize, String)> = Vec::new();
         unsafe {
             let _ = EnumWindows(Some(collect), LPARAM(&mut entries as *mut _ as isize));
@@ -182,6 +263,69 @@ impl WindowDetection for NativeWindowDetection {
             },
             _ => Detection::Unknown,
         }
+    }
+}
+
+#[cfg(windows)]
+fn process_started(handle: windows::Win32::Foundation::HANDLE) -> Option<u64> {
+    use windows::Win32::{Foundation::FILETIME, System::Threading::GetProcessTimes};
+    unsafe {
+        let mut created = FILETIME::default();
+        let mut exit = FILETIME::default();
+        let mut kernel = FILETIME::default();
+        let mut user = FILETIME::default();
+        GetProcessTimes(handle, &mut created, &mut exit, &mut kernel, &mut user)
+            .ok()
+            .map(|_| ((created.dwHighDateTime as u64) << 32) | created.dwLowDateTime as u64)
+    }
+}
+
+#[cfg(windows)]
+fn validate_session(entry: &SessionEntry) -> Option<isize> {
+    use windows::Win32::{
+        Foundation::HWND,
+        System::Threading::{GetProcessId, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
+        UI::WindowsAndMessaging::{GetWindowThreadProcessId, IsWindow},
+    };
+    let hwnd = HWND(entry.hwnd as *mut _);
+    unsafe {
+        let hwnd_exists = IsWindow(Some(hwnd)).as_bool();
+        let window_pid = GetWindowThreadProcessId(hwnd, None);
+        if !hwnd_exists || window_pid != entry.pid {
+            return None;
+        }
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, entry.pid).ok()?;
+        struct Handle(windows::Win32::Foundation::HANDLE);
+        impl Drop for Handle {
+            fn drop(&mut self) {
+                unsafe {
+                    let _ = windows::Win32::Foundation::CloseHandle(self.0);
+                }
+            }
+        }
+        let handle = Handle(handle);
+        let process_pid = GetProcessId(handle.0);
+        let Some(process_started) = process_started(handle.0) else {
+            return None;
+        };
+        let mut exit_code = 0;
+        let process_alive = windows::Win32::System::Threading::GetExitCodeProcess(handle.0, &mut exit_code).is_ok()
+            // STILL_ACTIVE is the Win32-defined exit code (259).
+            && exit_code == 259;
+        if !session_matches(
+            entry,
+            SessionSnapshot {
+                hwnd_exists,
+                window_pid,
+                process_alive,
+                process_pid,
+                process_started,
+                candidate_count: 1,
+            },
+        ) {
+            return None;
+        }
+        Some(entry.hwnd)
     }
 }
 
@@ -244,31 +388,69 @@ impl Foreground for NativeForeground {
     }
 }
 
-#[derive(Clone, Copy, Default)]
-pub struct NativeTargetLaunch;
+#[derive(Clone)]
+pub struct NativeTargetLaunch {
+    state: SharedSessionState,
+}
 #[cfg(windows)]
 impl TargetLaunch for NativeTargetLaunch {
-    fn launch(&self, material: &MaterialItem) -> Result<(), ErrorCode> {
+    fn launch(&self, material: &MaterialItem) -> Result<LaunchReport, ErrorCode> {
         use windows::{
             core::PCWSTR,
-            Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL},
+            Win32::{
+                Foundation::CloseHandle,
+                System::Threading::GetProcessId,
+                UI::{
+                    Shell::{ShellExecuteExW, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW},
+                    WindowsAndMessaging::SW_SHOWNORMAL,
+                },
+            },
         };
         let shell_path = crate::contracts::windows_shell_path(&material.path);
         let target: Vec<u16> = shell_path.encode_utf16().chain(Some(0)).collect();
-        let result = unsafe {
-            ShellExecuteW(
-                None,
-                PCWSTR::null(),
-                PCWSTR(target.as_ptr()),
-                PCWSTR::null(),
-                PCWSTR::null(),
-                SW_SHOWNORMAL,
-            )
+        let mut execute = SHELLEXECUTEINFOW {
+            cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+            fMask: SEE_MASK_NOCLOSEPROCESS,
+            lpFile: PCWSTR(target.as_ptr()),
+            nShow: SW_SHOWNORMAL.0,
+            ..Default::default()
         };
-        if result.0 as isize <= 32 {
+        if unsafe { ShellExecuteExW(&mut execute) }.is_err() {
             Err(ErrorCode::LaunchFailed)
         } else {
-            Ok(())
+            struct ProcessHandle(windows::Win32::Foundation::HANDLE);
+            impl Drop for ProcessHandle {
+                fn drop(&mut self) {
+                    unsafe {
+                        let _ = CloseHandle(self.0);
+                    }
+                }
+            }
+            if execute.hProcess.is_invalid() {
+                return Ok(LaunchReport::NotTrackable);
+            }
+            let handle = ProcessHandle(execute.hProcess);
+            if material.target_type == TargetType::Url {
+                return Ok(LaunchReport::NotTrackable);
+            }
+            let pid = unsafe { GetProcessId(handle.0) };
+            let Some(started) = process_started(handle.0) else {
+                return Ok(LaunchReport::NotTrackable);
+            };
+            let Some(hwnd) = find_single_window_for_pid(pid) else {
+                return Ok(LaunchReport::NotTrackable);
+            };
+            replace_session(
+                &self.state,
+                SessionEntry {
+                    material_id: material.id.clone(),
+                    pid,
+                    hwnd,
+                    process_started: started,
+                    target_type: material.target_type,
+                },
+            );
+            Ok(LaunchReport::Tracked)
         }
     }
     fn reveal(&self, material: &MaterialItem) -> Result<(), ErrorCode> {
@@ -293,10 +475,59 @@ impl TargetLaunch for NativeTargetLaunch {
     }
 }
 
+#[cfg(windows)]
+fn find_single_window_for_pid(pid: u32) -> Option<isize> {
+    use windows::{
+        core::BOOL,
+        Win32::{
+            Foundation::{HWND, LPARAM},
+            UI::WindowsAndMessaging::{
+                EnumWindows, GetWindowThreadProcessId, IsWindow, IsWindowVisible,
+            },
+        },
+    };
+    unsafe extern "system" fn collect(hwnd: HWND, raw: LPARAM) -> BOOL {
+        if IsWindowVisible(hwnd).as_bool() && GetWindowThreadProcessId(hwnd, None) != 0 {
+            let entries = &mut *(raw.0 as *mut Vec<(isize, u32)>);
+            entries.push((hwnd.0 as isize, GetWindowThreadProcessId(hwnd, None)));
+        }
+        true.into()
+    }
+    for _ in 0..6 {
+        let mut entries: Vec<(isize, u32)> = Vec::new();
+        unsafe {
+            let _ = EnumWindows(Some(collect), LPARAM(&mut entries as *mut _ as isize));
+        }
+        let mut matches: Vec<_> = entries
+            .into_iter()
+            .filter_map(|(hwnd, owner)| (owner == pid).then_some(hwnd))
+            .collect();
+        matches.sort_unstable();
+        matches.dedup();
+        if let [hwnd] = matches.as_slice() {
+            if unsafe { IsWindow(Some(HWND(*hwnd as *mut _))).as_bool() } {
+                return Some(*hwnd);
+            }
+        }
+        if matches.len() > 1 {
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    None
+}
+
 pub type NativeLauncher = Launcher<NativeWindowDetection, NativeForeground, NativeTargetLaunch>;
 impl Default for NativeLauncher {
     fn default() -> Self {
-        Self::new(NativeWindowDetection, NativeForeground, NativeTargetLaunch)
+        let state = Arc::new(Mutex::new(SessionState::default()));
+        Self::new(
+            NativeWindowDetection {
+                state: state.clone(),
+            },
+            NativeForeground,
+            NativeTargetLaunch { state },
+        )
     }
 }
 
@@ -322,15 +553,15 @@ mod tests {
     #[derive(Clone)]
     struct Launch {
         calls: Arc<Mutex<Vec<String>>>,
-        result: Result<(), ErrorCode>,
+        result: Result<LaunchReport, ErrorCode>,
     }
     impl TargetLaunch for Launch {
-        fn launch(&self, m: &MaterialItem) -> Result<(), ErrorCode> {
+        fn launch(&self, m: &MaterialItem) -> Result<LaunchReport, ErrorCode> {
             self.calls.lock().unwrap().push(m.id.as_str().into());
             self.result
         }
         fn reveal(&self, _: &MaterialItem) -> Result<(), ErrorCode> {
-            self.result
+            self.result.map(|_| ())
         }
     }
     fn item(id: &str, kind: TargetType) -> MaterialItem {
@@ -360,7 +591,7 @@ mod tests {
             Front(Ok(())),
             Launch {
                 calls: calls.clone(),
-                result: Ok(()),
+                result: Ok(LaunchReport::NotTrackable),
             },
         );
         let r = l.activate_or_launch(item("m1", TargetType::File));
@@ -375,7 +606,7 @@ mod tests {
             Front(Ok(())),
             Launch {
                 calls: calls.clone(),
-                result: Ok(()),
+                result: Ok(LaunchReport::NotTrackable),
             },
         );
         let r = l.activate_or_launch(item("m1", TargetType::Url));
@@ -389,7 +620,7 @@ mod tests {
             Front(Err(ErrorCode::ForegroundDenied)),
             Launch {
                 calls: Default::default(),
-                result: Ok(()),
+                result: Ok(LaunchReport::NotTrackable),
             },
         );
         let r = l.activate_or_launch(item("m1", TargetType::File));
@@ -402,12 +633,12 @@ mod tests {
         #[derive(Clone)]
         struct Selective(Arc<Mutex<Vec<String>>>);
         impl TargetLaunch for Selective {
-            fn launch(&self, m: &MaterialItem) -> Result<(), ErrorCode> {
+            fn launch(&self, m: &MaterialItem) -> Result<LaunchReport, ErrorCode> {
                 self.0.lock().unwrap().push(m.id.as_str().into());
                 if m.id.as_str() == "m1" {
                     Err(ErrorCode::LaunchFailed)
                 } else {
-                    Ok(())
+                    Ok(LaunchReport::NotTrackable)
                 }
             }
             fn reveal(&self, _: &MaterialItem) -> Result<(), ErrorCode> {
@@ -427,5 +658,80 @@ mod tests {
         assert_eq!(results[0].outcome, LaunchOutcome::Failed);
         assert_eq!(results[1].outcome, LaunchOutcome::Launched);
         assert_eq!(&*calls.lock().unwrap(), &["m1", "m2"]);
+    }
+
+    fn session() -> SessionEntry {
+        SessionEntry {
+            material_id: Id::try_from("m1".to_owned()).unwrap(),
+            pid: 42,
+            hwnd: 101,
+            process_started: 77,
+            target_type: TargetType::File,
+        }
+    }
+    fn snapshot() -> SessionSnapshot {
+        SessionSnapshot {
+            hwnd_exists: true,
+            window_pid: 42,
+            process_alive: true,
+            process_pid: 42,
+            process_started: 77,
+            candidate_count: 1,
+        }
+    }
+
+    #[test]
+    fn session_validation_rejects_each_unsafe_observation() {
+        let entry = session();
+        assert!(session_matches(&entry, snapshot())); // PID/HWND PID match
+        let mut mismatch = snapshot();
+        mismatch.window_pid = 7;
+        assert!(!session_matches(&entry, mismatch)); // PID mismatch / delegated child
+        let mut no_hwnd = snapshot();
+        no_hwnd.hwnd_exists = false;
+        assert!(!session_matches(&entry, no_hwnd)); // no HWND or disappeared HWND
+        let mut many = snapshot();
+        many.candidate_count = 2;
+        assert!(!session_matches(&entry, many)); // ambiguous windows
+        let mut exited = snapshot();
+        exited.process_alive = false;
+        assert!(!session_matches(&entry, exited)); // process exit
+        let mut reused = snapshot();
+        reused.process_started = 78;
+        assert!(!session_matches(&entry, reused)); // PID reuse suspicion
+        let mut delegated = snapshot();
+        delegated.process_pid = 0;
+        assert!(!session_matches(&entry, delegated)); // Explorer/no process identity
+    }
+
+    #[test]
+    fn native_launcher_clones_share_only_in_memory_session_state() {
+        let launcher = NativeLauncher::default();
+        let clone = launcher.clone();
+        let material = item("m1", TargetType::File);
+        replace_session(&launcher.detection.state, session());
+        assert_eq!(
+            take_session(&clone.detection.state, &material),
+            Some(session())
+        );
+    }
+
+    #[test]
+    fn session_identifiers_do_not_leak_to_persisted_or_ipc_dtos() {
+        let material_json = serde_json::to_value(item("m1", TargetType::File)).unwrap();
+        assert!(material_json.get("pid").is_none());
+        assert!(material_json.get("hwnd").is_none());
+        let response = Launcher::new(
+            Detect(Detection::NotDetected),
+            Front(Ok(())),
+            Launch {
+                calls: Default::default(),
+                result: Ok(LaunchReport::Tracked),
+            },
+        )
+        .activate_or_launch(item("m1", TargetType::File));
+        let response_json = serde_json::to_value(response).unwrap();
+        assert!(response_json.get("pid").is_none());
+        assert!(response_json.get("hwnd").is_none());
     }
 }

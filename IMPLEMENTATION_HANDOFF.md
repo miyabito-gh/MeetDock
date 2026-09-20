@@ -122,6 +122,12 @@ MeetDockの本実装を、承認済み設計に沿って小さな段階に分け
 
 完了条件: WIN-04～06とWindows API分岐のモック試験が合格し、実機がなくても失敗結果を再現できる。
 
+#### Phase 5追加差分：PID/HWNDセッション追跡
+
+2026-09-20に`src-tauri/src/launcher.rs`へ実装済み。`ShellExecuteExW`と`SEE_MASK_NOCLOSEPROCESS`で取得可能なプロセスを対象に、PID、HWND、プロセス開始時刻を`Arc<Mutex<...>>`の揮発共有Stateへ保持する。ハンドルはRAIIで`CloseHandle`し、PID/HWND/開始時刻/生存状態を再検証してから前面化する。HWND未取得、複数候補、Explorerまたは子プロセスへの委譲、終了、HWND消失、PID再利用の疑いは追跡不能として扱う。PID/HWNDは設定JSON、永続DTO、通常IPCレスポンスへ追加していない。
+
+`launcher::tests`はPID/HWND PID不一致、HWND未取得・消失、複数候補、終了、PID再利用、委譲、Clone間の共有State、DTO/IPC非漏えいを含めて合格した。`cargo check`と`git diff --check`も合格。手動確認はtxt、PDF、フォルダ、HTMLファイルで完了し問題なし。Office文書は検証環境がないため未確認。COM/ROT、Restart Manager、タスクバー通知、診断ログは別差分のまま。
+
 ### Phase 6: PDF protocolとPDF.js
 
 1. `material://pdf/{material_id}`を現在の保存済み設定から毎回認可する。
