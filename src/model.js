@@ -339,8 +339,10 @@ export function transition(s, e) {
       return result({ ...s, layout: { ...s.layout, sidebar_collapsed: !s.layout.sidebar_collapsed } });
     case Event.SidebarWidthChanged:
       return Number.isFinite(e.value) ? result({ ...s, layout: { ...s.layout, sidebar_width: Math.min(450, Math.max(180, e.value)) } }) : deny();
-    case Event.PdfWidthChanged:
-      return Number.isFinite(e.value) ? result({ ...s, layout: { ...s.layout, pdf_width: Math.min(1200, Math.max(280, e.value)) } }) : deny();
+    case Event.PdfWidthChanged: {
+      const maximum = 1200 + (s.layout.sidebar_collapsed ? s.layout.sidebar_width : 0);
+      return Number.isFinite(e.value) ? result({ ...s, layout: { ...s.layout, pdf_width: Math.min(maximum, Math.max(280, e.value)) } }) : deny();
+    }
     case Event.GenerationResetRequested:
       // Only Root requests this once Effect Runner has no pending promises,
       // including superseded sync/PDF operations. Never wrap while an old result can arrive.

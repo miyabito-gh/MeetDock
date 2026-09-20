@@ -319,6 +319,8 @@ test('PDF fallback opens only its saved material ID through Activate', () => {
 test('layout boundaries and PDF controls are mediated', () => {
   let state = ready(); state = run(state, Event.SidebarWidthChanged, { value: 5 }).state; assert.equal(state.layout.sidebar_width, 180);
   state = run(state, Event.PdfWidthChanged, { value: 9999 }).state; assert.equal(state.layout.pdf_width, 1200);
+  state = run(state, Event.SidebarToggled).state;
+  state = run(state, Event.PdfWidthChanged, { value: 9999 }).state; assert.equal(state.layout.pdf_width, 1380);
   const pdf = viewing(); assert.equal(run(pdf, Event.PdfNextRequested).effects[0].type, Effect.PdfNext);
   assert.equal(run(pdf, Event.PdfFitRequested, { viewport_width: 400 }).effects[0].request.viewport_width, 400);
 });

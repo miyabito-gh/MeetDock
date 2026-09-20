@@ -13,6 +13,11 @@ body > [hidden] {
   touch-action: none;
 }
 
+.canvas-wrap:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
 .canvas-wrap canvas {
   display: block;
   width: auto;

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, visibleMaterials } from '../src/view.js';
+import { batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, visibleMaterials } from '../src/view.js';
 
 const group = (id, name, order) => ({ id, parent_id: null, name, order });
 const material = (id, group_id, name, order) => ({ id, group_id, name, role: 'main', target_type: 'file', path: `C:\\docs\\${id}.pdf`, window_match_pattern: null, order });
@@ -51,6 +51,23 @@ test('PDF preview supports Ctrl-wheel zoom and pointer drag panning', () => {
   assert.match(styles, /\.canvas-wrap canvas\s*\{[^}]*max-width:\s*none/s);
 });
 
+test('PDF preview keyboard paging maps supported keys and ignores unsafe key events', () => {
+  assert.equal(pdfPageKeyDirection({ key: 'PageUp' }), -1);
+  assert.equal(pdfPageKeyDirection({ key: 'PageDown' }), 1);
+  for (const key of ['ArrowUp', 'ArrowDown', ' ']) assert.equal(pdfPageKeyDirection({ key }), 0);
+  assert.equal(pdfArrowBoundaryDirection({ key: 'ArrowUp' }, 0, 300, 900), -1);
+  assert.equal(pdfArrowBoundaryDirection({ key: 'ArrowDown' }, 600, 300, 900), 1);
+  assert.equal(pdfArrowBoundaryDirection({ key: 'ArrowDown' }, 598, 300, 900), 0);
+  assert.equal(pdfArrowBoundaryDirection({ key: 'ArrowDown', repeat: true }, 600, 300, 900), 0);
+  for (const blocked of ['repeat', 'isComposing', 'ctrlKey', 'metaKey', 'altKey']) assert.equal(pdfPageKeyDirection({ key: 'PageDown', [blocked]: true }), 0);
+  assert.equal(pdfPageKeyDirection({ key: 'PageDown', keyCode: 229 }), 0);
+  assert.equal(pdfPageKeyDirection({ key: 'Home' }), 0);
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  for (const token of ["wrap.tabIndex=0", "'PDFプレビュー本文'", "'aria-describedby'", "'aria-live','polite'", "interactive=e.target.closest?.('input,textarea,select,button,[contenteditable]", 'dialog.open||issue.open||dndDialog.open', '!menu.hidden||panning||resizing', "emit('pdfPrevious')", "emit('pdfNext')", 'wrap.focus({preventScroll:true})', "pendingPdfScrollPosition='end'", "pendingPdfScrollPosition='start'", "wrap.scrollTop=pendingPdfScrollPosition==='end'?wrap.scrollHeight:0"]) assert.ok(source.includes(token));
+  const styles = readFileSync(new URL('../src/visibility.css', import.meta.url), 'utf8');
+  assert.match(styles, /\.canvas-wrap:focus-visible\s*\{[^}]*outline:/s);
+});
+
 test('batch summary exposes success and failure counts', () => {
   assert.equal(batchSummary([{ error: null }, { error: { code: 'LAUNCH_FAILED' } }]), '一括起動: 成功 1件 / 失敗 1件');
 });
@@ -77,7 +94,8 @@ test('PDF toolbar exposes submitted text search, match navigation, counts, and P
 test('PDF controls reflow against the resizable preview width without overflowing labels', () => {
   const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
   assert.match(styles, /\.preview\{container:pdf-preview \/ inline-size/);
-  assert.match(styles, /@container pdf-preview \(max-width:420px\)/);
+  assert.match(styles, /\.app-shell\.sidebar-collapsed \.preview\{max-width:calc\(1200px \+ var\(--sidebar-w,250px\)\)\}/);
+  assert.match(styles, /@container pdf-preview \(max-width:520px\)/);
   assert.match(styles, /\.preview-head\{[^}]*flex-wrap:wrap/);
   assert.match(styles, /\.viewer-toolbar\{[^}]*flex-wrap:wrap/);
   assert.match(styles, /\.pdf-search\{display:grid;grid-template-columns:minmax\(0,1fr\) repeat\(4,auto\)\}/);
