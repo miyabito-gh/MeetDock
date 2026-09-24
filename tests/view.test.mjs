@@ -295,6 +295,17 @@ test('toolbar groups remain stable and material status is lightweight', () => {
   assert.doesNotMatch(styles,/\.pdf-preview-button\[hidden\]\{display:block/);
 });
 
+test('Explorer opening mode remains internal and is not exposed as a UI setting', () => {
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  assert.doesNotMatch(source,/button\('Explorerの開き方'/);
+  assert.doesNotMatch(source,/group-explorer-mode/);
+  assert.match(source,/button\('全体をエクスポート'/);
+  assert.match(source,/button\('選択グループをエクスポート'/);
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  assert.match(styles,/\.toolbar-more-panel\{width:max-content;min-width:180px/);
+  assert.match(styles,/\.toolbar-menu-button\{white-space:nowrap\}/);
+});
+
 test('empty search results provide a clear recovery action', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   assert.ok(source.includes("'empty-state'"));
