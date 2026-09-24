@@ -209,7 +209,8 @@ test('material pointer reorder can move across roles at an explicit position or 
   const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
   for (const token of ["s.dataset.role=role", "closest('.role-section')", "beforeId:before?.dataset.materialId??null", "emit('moveMaterial',sourceId,target.groupId,target.role,target.beforeId)", "'drop-tail'"])
     assert.ok(source.includes(token), token);
-  assert.match(styles,/\.reorder-mode \.materials\{[^}]*min-height:24px;[^}]*padding-bottom:24px/);
+  assert.ok(source.includes("ratio=index===candidates.length-1 ? .35 : .5"));
+  assert.doesNotMatch(styles,/\.reorder-mode \.materials\{[^}]*padding-bottom/);
 });
 
 test('unsaved state uses a title indicator and toolbar actions without a floating popup', () => {
@@ -267,6 +268,7 @@ test('group and material operations use an accessible in-app dialog with explici
   assert.doesNotMatch(source,/prompt\('(新しいグループ名|子グループ名|グループ名)'/);
   assert.doesNotMatch(source,/confirm\('(未保存の変更|空のグループ|資料を削除)/);
   assert.match(styles,/\.operation-dialog-text\{[^}]*line-height:1\.6/);
+  assert.match(styles,/\.operation-dialog \.field\[hidden\]\{display:none!important\}/);
   assert.match(styles,/\.danger-button\{[^}]*background:var\(--danger\)/);
 });
 
