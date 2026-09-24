@@ -38,6 +38,12 @@ struct EnumeratedWindow {
     full_path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ExcelDocumentObservation {
+    hwnd: isize,
+    document_path: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SnapshotRestorability {
@@ -196,7 +202,9 @@ impl WindowService {
         let mut items = Vec::new();
         let mut excluded_count = 0;
         let explorer_paths = explorer_window_paths();
-        for entry in enumerate_native_windows().into_iter().take(MAX_WINDOWS) {
+        let windows = enumerate_native_windows();
+        let excel_paths = excel_window_paths(&windows);
+        for entry in windows.into_iter().take(MAX_WINDOWS) {
             let association = associations.iter().find(|association| {
                 association.hwnd == entry.window.identity.hwnd
                     && association.pid == entry.window.identity.pid
@@ -213,7 +221,18 @@ impl WindowService {
             } else {
                 None
             };
-            let item = snapshot_item(entry, &exclusions, association, explorer_path);
+            let excel_path = if entry
+                .window
+                .executable_name
+                .eq_ignore_ascii_case("excel.exe")
+            {
+                excel_paths
+                    .get(&entry.window.identity.hwnd)
+                    .map(String::as_str)
+            } else {
+                None
+            };
+            let item = snapshot_item(entry, &exclusions, association, explorer_path, excel_path);
             if item.restorability == SnapshotRestorability::Excluded {
                 excluded_count += 1;
                 if let Some(reason) = &item.reason {
@@ -415,6 +434,7 @@ fn snapshot_item(
     exclusions: &[String],
     association: Option<&LaunchAssociation>,
     explorer_path: Option<&str>,
+    excel_path: Option<&str>,
 ) -> SnapshotItem {
     let excluded = is_excluded(&entry.window, exclusions);
     let path = Path::new(&entry.full_path);
@@ -441,7 +461,8 @@ fn snapshot_item(
         material_id: association.map(|value| value.material_id.clone()),
         document_path: association
             .map(|value| value.material_path.clone())
-            .or_else(|| explorer_path.map(str::to_owned)),
+            .or_else(|| explorer_path.map(str::to_owned))
+            .or_else(|| excel_path.map(str::to_owned)),
         app_name: entry.window.app_name,
         title: entry.window.title,
         executable_name: entry.window.executable_name,
@@ -449,6 +470,58 @@ fn snapshot_item(
         restorability,
         reason,
     }
+}
+
+fn resolve_excel_window_paths(
+    windows: &[EnumeratedWindow],
+    observations: impl IntoIterator<Item = ExcelDocumentObservation>,
+) -> HashMap<isize, String> {
+    let mut excel_by_pid: HashMap<u32, Vec<isize>> = HashMap::new();
+    for entry in windows.iter().filter(|entry| {
+        entry
+            .window
+            .executable_name
+            .eq_ignore_ascii_case("excel.exe")
+    }) {
+        excel_by_pid
+            .entry(entry.window.identity.pid)
+            .or_default()
+            .push(entry.window.identity.hwnd);
+    }
+
+    let mut resolved = HashMap::new();
+    let mut ambiguous = HashSet::new();
+    for observation in observations {
+        let Some(entry) = windows.iter().find(|entry| {
+            entry.window.identity.hwnd == observation.hwnd
+                && entry
+                    .window
+                    .executable_name
+                    .eq_ignore_ascii_case("excel.exe")
+        }) else {
+            continue;
+        };
+        if excel_by_pid
+            .get(&entry.window.identity.pid)
+            .is_none_or(|values| values.len() != 1)
+        {
+            continue;
+        }
+        let hwnd = entry.window.identity.hwnd;
+        if ambiguous.contains(&hwnd) {
+            continue;
+        }
+        if resolved
+            .get(&hwnd)
+            .is_some_and(|existing| existing != &observation.document_path)
+        {
+            resolved.remove(&hwnd);
+            ambiguous.insert(hwnd);
+        } else {
+            resolved.insert(hwnd, observation.document_path);
+        }
+    }
+    resolved
 }
 
 fn load_snapshot_file(path: &Path) -> Result<Option<WindowSnapshot>, AppError> {
@@ -669,6 +742,142 @@ fn explorer_file_url_to_path(url: &str) -> Option<String> {
         normalized
     };
     (!path.is_empty() && Path::new(&path).is_absolute()).then_some(path)
+}
+
+#[cfg(windows)]
+fn excel_window_paths(windows: &[EnumeratedWindow]) -> HashMap<isize, String> {
+    resolve_excel_window_paths(windows, excel_document_observations())
+}
+
+#[cfg(not(windows))]
+fn excel_window_paths(_: &[EnumeratedWindow]) -> HashMap<isize, String> {
+    HashMap::new()
+}
+
+#[cfg(windows)]
+fn excel_document_observations() -> Vec<ExcelDocumentObservation> {
+    use windows::{
+        core::{IUnknown, Interface, BSTR, GUID, PCWSTR},
+        Win32::System::{
+            Com::{
+                CLSIDFromProgID, CoInitializeEx, CoUninitialize, IDispatch,
+                COINIT_APARTMENTTHREADED, DISPATCH_METHOD, DISPATCH_PROPERTYGET, DISPPARAMS,
+            },
+            Ole::GetActiveObject,
+            Variant::VARIANT,
+        },
+    };
+
+    struct ComApartment;
+    impl Drop for ComApartment {
+        fn drop(&mut self) {
+            unsafe { CoUninitialize() }
+        }
+    }
+
+    fn invoke(
+        dispatch: &IDispatch,
+        name: &str,
+        flags: windows::Win32::System::Com::DISPATCH_FLAGS,
+        arguments: &mut [VARIANT],
+    ) -> Option<VARIANT> {
+        let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        let name = PCWSTR(wide.as_ptr());
+        let mut id = 0;
+        unsafe {
+            dispatch
+                .GetIDsOfNames(&GUID::zeroed(), &name, 1, 0, &mut id)
+                .ok()?;
+        }
+        let parameters = DISPPARAMS {
+            rgvarg: arguments.as_mut_ptr(),
+            cArgs: arguments.len() as u32,
+            ..Default::default()
+        };
+        let mut result = VARIANT::default();
+        unsafe {
+            dispatch
+                .Invoke(
+                    id,
+                    &GUID::zeroed(),
+                    0,
+                    flags,
+                    &parameters,
+                    Some(&mut result),
+                    None,
+                    None,
+                )
+                .ok()?;
+        }
+        Some(result)
+    }
+
+    fn property(dispatch: &IDispatch, name: &str) -> Option<VARIANT> {
+        invoke(dispatch, name, DISPATCH_PROPERTYGET, &mut [])
+    }
+
+    fn dispatch_property(dispatch: &IDispatch, name: &str) -> Option<IDispatch> {
+        IDispatch::try_from(&property(dispatch, name)?).ok()
+    }
+
+    fn integer_property(dispatch: &IDispatch, name: &str) -> Option<i32> {
+        i32::try_from(&property(dispatch, name)?).ok()
+    }
+
+    fn string_property(dispatch: &IDispatch, name: &str) -> Option<String> {
+        let value = property(dispatch, name)?;
+        if value.vt() != windows::Win32::System::Variant::VT_BSTR {
+            return None;
+        }
+        let value: &BSTR =
+            unsafe { std::mem::transmute(&value.Anonymous.Anonymous.Anonymous.bstrVal) };
+        Some(value.to_string())
+    }
+
+    if unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_err() {
+        return Vec::new();
+    }
+    let _apartment = ComApartment;
+    let Ok(clsid) = (unsafe { CLSIDFromProgID(windows::core::w!("Excel.Application")) }) else {
+        return Vec::new();
+    };
+    let mut unknown: Option<IUnknown> = None;
+    if unsafe { GetActiveObject(&clsid, None, &mut unknown) }.is_err() {
+        return Vec::new();
+    }
+    let Some(application) = unknown.and_then(|value| value.cast::<IDispatch>().ok()) else {
+        return Vec::new();
+    };
+    let (Some(hwnd), Some(workbooks)) = (
+        integer_property(&application, "Hwnd"),
+        dispatch_property(&application, "Workbooks"),
+    ) else {
+        return Vec::new();
+    };
+    if integer_property(&workbooks, "Count") != Some(1) {
+        return Vec::new();
+    }
+    let mut index = [VARIANT::from(1i32)];
+    let Some(workbook) = invoke(
+        &workbooks,
+        "Item",
+        DISPATCH_PROPERTYGET | DISPATCH_METHOD,
+        &mut index,
+    )
+    .and_then(|value| IDispatch::try_from(&value).ok()) else {
+        return Vec::new();
+    };
+    let Some(path) = string_property(&workbook, "FullName") else {
+        return Vec::new();
+    };
+    let path = crate::contracts::windows_shell_path(&path);
+    if !crate::contracts::windows_absolute_path(&path) || !Path::new(&path).is_file() {
+        return Vec::new();
+    }
+    vec![ExcelDocumentObservation {
+        hwnd: hwnd as isize,
+        document_path: path,
+    }]
 }
 
 #[cfg(windows)]
@@ -1050,6 +1259,7 @@ mod tests {
             &[],
             None,
             None,
+            None,
         );
         assert_eq!(restorable.restorability, SnapshotRestorability::Restorable);
         assert_eq!(restorable.reason, None);
@@ -1062,7 +1272,7 @@ mod tests {
             pid: associated_window.window.identity.pid,
             process_started: associated_window.window.identity.process_started,
         };
-        let associated = snapshot_item(associated_window, &[], Some(&association), None);
+        let associated = snapshot_item(associated_window, &[], Some(&association), None, None);
         assert_eq!(
             associated.material_id.as_ref().map(Id::as_str),
             Some("material-1")
@@ -1072,6 +1282,7 @@ mod tests {
         let conditional = snapshot_item(
             test_window(directory.join("missing.exe").to_string_lossy().into_owned()),
             &[],
+            None,
             None,
             None,
         );
@@ -1084,6 +1295,7 @@ mod tests {
         let excluded = snapshot_item(
             test_window(executable.to_string_lossy().into_owned()),
             &["test.exe".into()],
+            None,
             None,
             None,
         );
@@ -1114,6 +1326,7 @@ mod tests {
             &[],
             None,
             Some(path),
+            None,
         );
         assert_eq!(item.material_id, None);
         assert_eq!(item.document_path.as_deref(), Some(path));
@@ -1123,6 +1336,83 @@ mod tests {
             items: vec![item],
         })
         .is_ok());
+    }
+
+    fn excel_window(hwnd: isize, pid: u32) -> EnumeratedWindow {
+        let mut entry = test_window(r"C:\Program Files\Microsoft Office\EXCEL.EXE".into());
+        entry.window.identity.hwnd = hwnd;
+        entry.window.identity.pid = pid;
+        entry.window.executable_name = "EXCEL.EXE".into();
+        entry.window.app_name = "Microsoft Excel".into();
+        entry
+    }
+
+    #[test]
+    fn excel_document_path_requires_a_unique_hwnd_and_workbook_mapping() {
+        let single = excel_window(101, 42);
+        let resolved = resolve_excel_window_paths(
+            std::slice::from_ref(&single),
+            [ExcelDocumentObservation {
+                hwnd: 101,
+                document_path: r"C:\Meetings\agenda.xlsx".into(),
+            }],
+        );
+        assert_eq!(
+            resolved.get(&101).map(String::as_str),
+            Some(r"C:\Meetings\agenda.xlsx")
+        );
+
+        let mut second = single.clone();
+        second.window.identity.hwnd = 102;
+        assert!(resolve_excel_window_paths(
+            &[single.clone(), second],
+            [ExcelDocumentObservation {
+                hwnd: 101,
+                document_path: r"C:\Meetings\agenda.xlsx".into(),
+            }],
+        )
+        .is_empty());
+
+        assert!(resolve_excel_window_paths(
+            std::slice::from_ref(&single),
+            [
+                ExcelDocumentObservation {
+                    hwnd: 101,
+                    document_path: r"C:\Meetings\agenda.xlsx".into(),
+                },
+                ExcelDocumentObservation {
+                    hwnd: 101,
+                    document_path: r"C:\Meetings\other.xlsx".into(),
+                },
+            ],
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn snapshot_uses_excel_path_only_as_the_last_fallback() {
+        let excel_path = r"C:\Meetings\external.xlsx";
+        let item = snapshot_item(excel_window(101, 42), &[], None, None, Some(excel_path));
+        assert_eq!(item.document_path.as_deref(), Some(excel_path));
+
+        let association = LaunchAssociation {
+            material_id: Id::try_from("material-1".to_owned()).unwrap(),
+            material_path: r"C:\Meetings\registered.xlsx".into(),
+            hwnd: 101,
+            pid: 42,
+            process_started: 3,
+        };
+        let associated = snapshot_item(
+            excel_window(101, 42),
+            &[],
+            Some(&association),
+            None,
+            Some(excel_path),
+        );
+        assert_eq!(
+            associated.document_path.as_deref(),
+            Some(r"C:\Meetings\registered.xlsx")
+        );
     }
 
     #[test]
