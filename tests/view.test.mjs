@@ -70,7 +70,10 @@ test('window inventory dialog balances context and workspace while keeping setti
 });
 test('saved windows appear as a sidebar group with launch and registration actions',()=>{
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  for(const token of ["button('すべて起動','launch-all-window-snapshot','primary')","'一時保存したウィンドウ'","openMenu({kind:'snapshot'","add('グループへ登録','register-window-snapshot')","renderSnapshotMaterials(next)","emit('launchAllWindowSnapshot')","emit('registerWindowSnapshot')","emit('launchWindowSnapshot',index)"])assert.ok(source.includes(token));
+  for(const token of ["'一時保存したウィンドウ'","openMenu({kind:'snapshot'","add('グループへ登録','register-window-snapshot')","renderSnapshotMaterials(next)","emit('launchAllWindowSnapshot')","emit('registerWindowSnapshot')","emit('launchWindowSnapshot',index)"])assert.ok(source.includes(token));
+  assert.ok(source.includes("button('現在を一時保存','save-window-snapshot','secondary')"));
+  assert.ok(source.includes('windowsHeadActions.insertBefore(snapshotSave,windowsRefresh)'));
+  for(const duplicate of ['window-snapshot-list','window-snapshot-row','保存一覧を表示',"'launch-all-window-snapshot'"])assert.ok(!source.includes(duplicate));
 });
 
 test('window inventory groups applications and sorts groups and titles without usage history', () => {
