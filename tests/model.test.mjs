@@ -288,11 +288,55 @@ test('Phase 7 CRUD keeps hierarchy and schema 3 order contiguous', () => {
   assert.deepEqual(state.draft.materials.filter(m => m.group_id === 'child').map(m => m.order), [1]);
   state = run(state, Event.MaterialUpdated, { material: { ...state.draft.materials.find(m => m.id === 'm3'), group_id: 'g1', role: 'main' } }).state;
   assert.deepEqual(state.draft.materials.filter(m => m.group_id === 'g1' && m.role === 'main').map(m => m.order).sort(), [1, 2]);
-  const blocked = run(state, Event.GroupDeleted, { group_id: 'g1', confirmed: true });
-  assert.equal(blocked.state, state); assert.equal(blocked.notice.code, 'VALIDATION_ERROR');
-  state = run(state, Event.MaterialDeleted, { material_id: 'm3', confirmed: true }).state;
-  state = run(state, Event.GroupDeleted, { group_id: 'child', confirmed: true }).state;
-  assert.ok(!state.draft.groups.some(g => g.id === 'child'));
+  state = run(state, Event.GroupDeleted, { group_id: 'g1', confirmed: true }).state;
+  assert.ok(!state.draft.groups.some(g => ['g1', 'child'].includes(g.id)));
+  assert.ok(!state.draft.materials.some(m => ['m1', 'm3'].includes(m.id)));
+});
+
+test('group duplication deep-copies descendants and registrations with fresh IDs', () => {
+  const state = ready(), source = structuredClone(state.saved_config);
+  source.groups.push({ id: 'child', parent_id: 'g1', name: '子', order: 1 });
+  source.materials.push({ ...source.materials[0], id: 'm3', group_id: 'child', name: '子資料' });
+  const result = run({ ...state, saved_config: source }, Event.GroupDuplicated, { group_id: 'g1' }).state;
+  const copiedRoot = result.draft.groups.find(g => g.name === '会議（コピー）');
+  const copiedChild = result.draft.groups.find(g => g.parent_id === copiedRoot.id);
+  assert.ok(copiedRoot); assert.equal(copiedRoot.parent_id, null); assert.equal(copiedRoot.order, 3);
+  assert.equal(copiedChild.name, '子'); assert.notEqual(copiedChild.id, 'child');
+  const copiedMaterials = result.draft.materials.filter(m => [copiedRoot.id, copiedChild.id].includes(m.group_id));
+  assert.equal(copiedMaterials.length, 3);
+  assert.ok(copiedMaterials.every(m => !['m1', 'm3'].includes(m.id)));
+  assert.deepEqual(copiedMaterials.map(m => m.path).sort(), source.materials.filter(m => ['g1', 'child'].includes(m.group_id)).map(m => m.path).sort());
+});
+
+test('groups move to root or child tail and reject descendant cycles', () => {
+  const state = ready(), source = structuredClone(state.saved_config);
+  source.groups.push({ id: 'child', parent_id: 'g1', name: '子', order: 1 }, { id: 'peer', parent_id: 'g1', name: '同階層', order: 2 });
+  let moved = run({ ...state, saved_config: source }, Event.GroupMoved, { group_id: 'g2', parent_id: 'g1' }).state;
+  assert.deepEqual(moved.draft.groups.filter(g => g.parent_id === 'g1').sort((a,b)=>a.order-b.order).map(g=>g.id), ['child', 'peer', 'g2']);
+  const blocked = run(moved, Event.GroupMoved, { group_id: 'g1', parent_id: 'child' });
+  assert.equal(blocked.state, moved);
+  moved = run(moved, Event.GroupMoved, { group_id: 'child', parent_id: null }).state;
+  assert.equal(moved.draft.groups.find(g => g.id === 'child').order, 2);
+});
+
+test('materials move across roles at menu tail or an explicit drop position', () => {
+  const state = ready(), source = structuredClone(state.saved_config);
+  source.materials.push({ ...source.materials[0], id: 'm3', role: 'reference', order: 2 });
+  let moved = run({ ...state, saved_config: source }, Event.MaterialMoved, { material_id: 'm1', group_id: 'g1', role: 'reference' }).state;
+  assert.deepEqual(moved.draft.materials.filter(m => m.group_id === 'g1' && m.role === 'reference').sort((a,b)=>a.order-b.order).map(m=>m.id), ['m2', 'm3', 'm1']);
+  moved = run(moved, Event.MaterialMoved, { material_id: 'm1', group_id: 'g1', role: 'reference', before_material_id: 'm3' }).state;
+  assert.deepEqual(moved.draft.materials.filter(m => m.group_id === 'g1' && m.role === 'reference').sort((a,b)=>a.order-b.order).map(m=>m.id), ['m2', 'm1', 'm3']);
+});
+
+test('Saving rejects every config edit event', () => {
+  const state = saving();
+  for (const [type, fields] of [
+    [Event.DraftChanged, { config }], [Event.GroupAdded, { group: { id: 'g3', parent_id: null, name: '追加' } }],
+    [Event.GroupRenamed, { group_id: 'g1', name: '変更' }], [Event.GroupDuplicated, { group_id: 'g1' }],
+    [Event.GroupMoved, { group_id: 'g1', parent_id: 'g2' }], [Event.GroupDeleted, { group_id: 'g1', confirmed: true }],
+    [Event.MaterialAdded, { material: { ...config.materials[0], id: 'm3' } }], [Event.MaterialUpdated, { material: config.materials[0] }],
+    [Event.MaterialMoved, { material_id: 'm1', group_id: 'g1', role: 'reference' }], [Event.MaterialDeleted, { material_id: 'm1', confirmed: true }],
+  ]) assert.equal(run(state, type, fields).state, state, type);
 });
 
 test('DnD is draft-only and execution effects remain ID-only', () => {

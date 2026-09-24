@@ -4,7 +4,7 @@ const enumeration = names => Object.freeze(Object.fromEntries(names.split(' ').m
 export const Lifecycle = enumeration('Booting Ready ReadOnly RecoveryPending MigrationPending FatalError');
 export const Edit = enumeration('Clean Dirty Saving Conflict');
 export const Pdf = enumeration('Closed Loading Viewing PasswordRequired Failed');
-export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
+export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDuplicated GroupMoved GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialMoved MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
 export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses SyncWindows ActivateWindow RequestWindowClose SaveWindowExclusions Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit PdfSearch PdfSearchPrevious PdfSearchNext CloseWindow');
 
 export function initialState() {
@@ -26,7 +26,7 @@ const pdfMaterials = s => {
     (query ? `${m.name} ${names.get(m.group_id) ?? ''}`.toLocaleLowerCase('ja').includes(query) : m.group_id === s.selected_group_id))
     .sort((a, b) => (a.role === b.role ? a.order - b.order : a.role === 'main' ? -1 : 1));
 };
-const editable = s => s.lifecycle === Lifecycle.Ready && !s.resolution;
+const editable = s => s.lifecycle === Lifecycle.Ready && s.edit !== Edit.Saving && !s.resolution;
 const busy = s => s.edit === Edit.Saving || s.sync.kind === 'Running' || s.launch.running.length || s.launch.batch || s.pdf.kind === Pdf.Loading || s.resolution;
 const editableConfig = s => structuredClone(s.draft ?? s.saved_config);
 const reorder = (items, key) => {
@@ -118,11 +118,54 @@ export function transition(s, e) {
       const config = editableConfig(s), item = config?.groups.find(g => g.id === e.group_id); if (!item) return deny();
       item.name = e.name; return result(dirtyWith(s, config));
     }
+    case Event.GroupDuplicated: {
+      if (!editable(s)) return deny();
+      const config = editableConfig(s), source = config?.groups.find(g => g.id === e.group_id);
+      if (!source) return deny();
+      const descendants = new Set([source.id]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const item of config.groups) if (item.parent_id !== null && descendants.has(item.parent_id) && !descendants.has(item.id)) {
+          descendants.add(item.id); changed = true;
+        }
+      }
+      const idMap = new Map([...descendants].map(id => [id, crypto.randomUUID()]));
+      const copies = config.groups.filter(g => descendants.has(g.id)).map(g => ({ ...structuredClone(g), id: idMap.get(g.id),
+        parent_id: g.id === source.id ? source.parent_id : idMap.get(g.parent_id), name: g.id === source.id ? `${g.name}（コピー）` : g.name,
+        order: g.id === source.id ? Number.MAX_SAFE_INTEGER : g.order }));
+      const materialCopies = config.materials.filter(m => descendants.has(m.group_id)).map(m => ({ ...structuredClone(m), id: crypto.randomUUID(), group_id: idMap.get(m.group_id) }));
+      config.groups.push(...copies); config.materials.push(...materialCopies);
+      reorder(config.groups, g => g.parent_id ?? 'root'); reorder(config.materials, m => `${m.group_id}\0${m.role}`);
+      return result({ ...dirtyWith(s, config), selected_group_id: idMap.get(source.id) });
+    }
+    case Event.GroupMoved: {
+      if (!editable(s) || !Object.hasOwn(e, 'parent_id')) return deny();
+      const config = editableConfig(s), moving = config?.groups.find(g => g.id === e.group_id);
+      if (!moving || (e.parent_id !== null && !config.groups.some(g => g.id === e.parent_id)) || moving.id === e.parent_id) return deny();
+      let ancestor = e.parent_id;
+      while (ancestor !== null) {
+        if (ancestor === moving.id) return deny();
+        ancestor = config.groups.find(g => g.id === ancestor)?.parent_id ?? null;
+      }
+      moving.parent_id = e.parent_id; moving.order = Number.MAX_SAFE_INTEGER;
+      reorder(config.groups, g => g.parent_id ?? 'root');
+      return result(dirtyWith(s, config));
+    }
     case Event.GroupDeleted: {
       if (!editable(s) || e.confirmed !== true) return deny();
       const config = editableConfig(s), item = config?.groups.find(g => g.id === e.group_id);
-      if (!item || config.groups.some(g => g.parent_id === item.id) || config.materials.some(m => m.group_id === item.id)) return result(s, [], appError('VALIDATION_ERROR'));
-      config.groups = config.groups.filter(g => g.id !== item.id); reorder(config.groups, g => g.parent_id ?? 'root');
+      if (!item) return deny();
+      const deleted = new Set([item.id]);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const child of config.groups) if (child.parent_id !== null && deleted.has(child.parent_id) && !deleted.has(child.id)) {
+          deleted.add(child.id); changed = true;
+        }
+      }
+      config.groups = config.groups.filter(g => !deleted.has(g.id)); config.materials = config.materials.filter(m => !deleted.has(m.group_id));
+      reorder(config.groups, g => g.parent_id ?? 'root'); reorder(config.materials, m => `${m.group_id}\0${m.role}`);
       return result({ ...dirtyWith(s, config), selected_group_id: item.parent_id ?? config.groups[0]?.id ?? null });
     }
     case Event.GroupReordered: {
@@ -144,6 +187,19 @@ export function transition(s, e) {
       if (index < 0 || !config.groups.some(g => g.id === e.material.group_id)) return deny();
       config.materials[index] = { ...structuredClone(e.material), order: config.materials[index].order, window_match_pattern: e.material.window_match_pattern ?? null };
       reorder(config.materials, m => `${m.group_id}\0${m.role}`); return result(dirtyWith(s, config));
+    }
+    case Event.MaterialMoved: {
+      if (!editable(s) || !['main', 'reference'].includes(e.role)) return deny();
+      const config = editableConfig(s), moving = config?.materials.find(m => m.id === e.material_id);
+      if (!moving || !config.groups.some(g => g.id === e.group_id) || e.before_material_id === moving.id) return deny();
+      const before = e.before_material_id == null ? null : config.materials.find(m => m.id === e.before_material_id);
+      if (e.before_material_id != null && (!before || before.group_id !== e.group_id || before.role !== e.role)) return deny();
+      moving.group_id = e.group_id; moving.role = e.role;
+      const peers = config.materials.filter(m => m.group_id === e.group_id && m.role === e.role && m.id !== moving.id).sort((a,b)=>a.order-b.order);
+      const index = before ? peers.findIndex(m => m.id === before.id) : peers.length;
+      peers.splice(index, 0, moving); peers.forEach((m, i) => { m.order = i + 1; });
+      reorder(config.materials, m => `${m.group_id}\0${m.role}`);
+      return result(dirtyWith(s, config));
     }
     case Event.MaterialDeleted: {
       if (!editable(s) || e.confirmed !== true) return deny();

@@ -1,5 +1,6 @@
 import { Event } from './model.js';
 import { id } from './contracts.js';
+import { normalizeMaterialPath } from './data-transfer.js';
 
 // Phase-2 input/render boundary; no product UI and no direct Service/IPC access.
 export function createPresenter(view, dispatch) {
@@ -13,10 +14,13 @@ export function createPresenter(view, dispatch) {
     addGroup(group) { dispatch({ type: Event.GroupAdded, group: structuredClone(group) }); },
     renameGroup(group_id, name) { id(group_id); dispatch({ type: Event.GroupRenamed, group_id, name }); },
     deleteGroup(group_id, confirmed) { id(group_id); dispatch({ type: Event.GroupDeleted, group_id, confirmed }); },
+    duplicateGroup(group_id) { id(group_id); dispatch({ type: Event.GroupDuplicated, group_id }); },
+    moveGroup(group_id, parent_id) { id(group_id); if (parent_id !== null) id(parent_id); dispatch({ type: Event.GroupMoved, group_id, parent_id }); },
     reorderGroup(group_id, before_group_id) { id(group_id); id(before_group_id); dispatch({ type: Event.GroupReordered, group_id, before_group_id }); },
-    addMaterial(material) { dispatch({ type: Event.MaterialAdded, material: structuredClone(material) }); },
-    updateMaterial(material) { id(material.id); dispatch({ type: Event.MaterialUpdated, material: structuredClone(material) }); },
+    addMaterial(material) { const value=structuredClone(material);value.path=normalizeMaterialPath(value.path);dispatch({ type: Event.MaterialAdded, material:value }); },
+    updateMaterial(material) { id(material.id); const value=structuredClone(material);value.path=normalizeMaterialPath(value.path);dispatch({ type: Event.MaterialUpdated, material:value }); },
     deleteMaterial(material_id, confirmed) { id(material_id); dispatch({ type: Event.MaterialDeleted, material_id, confirmed }); },
+    moveMaterial(material_id, group_id, role, before_material_id = null) { id(material_id);id(group_id);if(before_material_id!==null)id(before_material_id);dispatch({ type: Event.MaterialMoved, material_id, group_id, role, before_material_id }); },
     reorderMaterial(material_id, before_material_id) { id(material_id); id(before_material_id); dispatch({ type: Event.MaterialReordered, material_id, before_material_id }); },
     nativeFilesDropped(group_id, paths) {
       id(group_id); if (!Array.isArray(paths)) throw new TypeError('Expected paths');
