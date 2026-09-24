@@ -397,5 +397,7 @@ test('drag reorder is draft-only and limited to the same parent or material sect
   assert.deepEqual(groups.draft.groups.filter(g=>g.parent_id===null).sort((a,b)=>a.order-b.order).map(g=>g.id),['g3','g1','g2']);
   const materials=run(withPeers,Event.MaterialReordered,{material_id:'m3',before_material_id:'m1'}).state;
   assert.deepEqual(materials.draft.materials.filter(m=>m.group_id==='g1'&&m.role==='main').sort((a,b)=>a.order-b.order).map(m=>m.id),['m3','m1']);
+  const tail=run(materials,Event.MaterialMoved,{material_id:'m3',group_id:'g1',role:'main',before_material_id:null}).state;
+  assert.deepEqual(tail.draft.materials.filter(m=>m.group_id==='g1'&&m.role==='main').sort((a,b)=>a.order-b.order).map(m=>m.id),['m1','m3']);
   assert.equal(run(withPeers,Event.MaterialReordered,{material_id:'m2',before_material_id:'m1'}).state,withPeers);
 });
