@@ -247,11 +247,7 @@ impl WindowService {
             } else {
                 None
             };
-            let reader_path = if entry
-                .window
-                .executable_name
-                .eq_ignore_ascii_case("acrord32.exe")
-            {
+            let reader_path = if is_supported_acrobat_executable(&entry.window.executable_name) {
                 reader_paths
                     .get(&entry.window.identity.hwnd)
                     .map(String::as_str)
@@ -585,12 +581,7 @@ fn resolve_reader_window_paths(
 ) -> HashMap<isize, String> {
     let reader_hwnds: HashSet<_> = windows
         .iter()
-        .filter(|entry| {
-            entry
-                .window
-                .executable_name
-                .eq_ignore_ascii_case("acrord32.exe")
-        })
+        .filter(|entry| is_supported_acrobat_executable(&entry.window.executable_name))
         .map(|entry| entry.window.identity.hwnd)
         .collect();
     let mut resolved: HashMap<isize, String> = HashMap::new();
@@ -609,6 +600,11 @@ fn resolve_reader_window_paths(
         }
     }
     resolved
+}
+
+fn is_supported_acrobat_executable(executable_name: &str) -> bool {
+    executable_name.eq_ignore_ascii_case("acrord32.exe")
+        || executable_name.eq_ignore_ascii_case("acrobat.exe")
 }
 
 fn resolve_excel_window_paths(
@@ -1329,12 +1325,10 @@ fn reader_document_observations(windows: &[EnumeratedWindow]) -> Vec<ReaderDocum
     }
     let _apartment = ComApartment;
     let mut observations = Vec::new();
-    for entry in windows.iter().filter(|entry| {
-        entry
-            .window
-            .executable_name
-            .eq_ignore_ascii_case("acrord32.exe")
-    }) {
+    for entry in windows
+        .iter()
+        .filter(|entry| is_supported_acrobat_executable(&entry.window.executable_name))
+    {
         let top_level = entry.window.identity.hwnd;
         let mut candidates = vec![top_level];
         unsafe {
@@ -1853,6 +1847,16 @@ mod tests {
         entry
     }
 
+    fn acrobat_pro_window(hwnd: isize, pid: u32) -> EnumeratedWindow {
+        let mut entry =
+            test_window(r"C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe".into());
+        entry.window.identity.hwnd = hwnd;
+        entry.window.identity.pid = pid;
+        entry.window.executable_name = "Acrobat.exe".into();
+        entry.window.app_name = "Adobe Acrobat Pro".into();
+        entry
+    }
+
     fn office_window(hwnd: isize, pid: u32, executable_name: &str) -> EnumeratedWindow {
         let mut entry = test_window(format!(
             r"C:\Program Files\Microsoft Office\{executable_name}"
@@ -1985,6 +1989,76 @@ mod tests {
             }],
         )
         .is_empty());
+    }
+
+    #[test]
+    fn acrobat_pro_and_reader_paths_require_exact_unique_hwnd_mappings() {
+        let reader = reader_window(201, 52);
+        let pro = acrobat_pro_window(202, 53);
+        let resolved = resolve_reader_window_paths(
+            &[reader.clone(), pro.clone()],
+            [
+                ReaderDocumentObservation {
+                    hwnd: 201,
+                    document_path: r"C:\Meetings\reader.pdf".into(),
+                },
+                ReaderDocumentObservation {
+                    hwnd: 202,
+                    document_path: r"C:\Meetings\pro.pdf".into(),
+                },
+            ],
+        );
+        assert_eq!(
+            resolved.get(&201).map(String::as_str),
+            Some(r"C:\Meetings\reader.pdf")
+        );
+        assert_eq!(
+            resolved.get(&202).map(String::as_str),
+            Some(r"C:\Meetings\pro.pdf")
+        );
+
+        let mut unrelated = pro.clone();
+        unrelated.window.identity.hwnd = 203;
+        unrelated.window.executable_name = "AcrobatHelper.exe".into();
+        assert!(resolve_reader_window_paths(
+            &[unrelated],
+            [ReaderDocumentObservation {
+                hwnd: 203,
+                document_path: r"C:\Meetings\wrong.pdf".into(),
+            }],
+        )
+        .is_empty());
+
+        assert!(resolve_reader_window_paths(
+            std::slice::from_ref(&pro),
+            [
+                ReaderDocumentObservation {
+                    hwnd: 202,
+                    document_path: r"C:\Meetings\pro.pdf".into(),
+                },
+                ReaderDocumentObservation {
+                    hwnd: 202,
+                    document_path: r"C:\Meetings\other.pdf".into(),
+                },
+            ],
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn snapshot_uses_acrobat_pro_path_after_registered_association() {
+        let path = r"C:\Meetings\external-pro.pdf";
+        let item = snapshot_item(
+            acrobat_pro_window(202, 53),
+            &[],
+            None,
+            None,
+            None,
+            Some(path),
+            None,
+            None,
+        );
+        assert_eq!(item.document_path.as_deref(), Some(path));
     }
 
     #[test]
