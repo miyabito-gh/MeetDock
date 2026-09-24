@@ -519,6 +519,20 @@ pub fn windows_shell_path(path: &str) -> String {
         normalized
     }
 }
+
+pub fn windows_path_key(path: &str) -> String {
+    windows_shell_path(path)
+        .trim_end_matches('\\')
+        .to_lowercase()
+}
+
+pub fn restoration_target_key(executable_path: &str, document_path: Option<&str>) -> String {
+    format!(
+        "{}\0{}",
+        windows_path_key(executable_path),
+        document_path.map(windows_path_key).unwrap_or_default()
+    )
+}
 impl Validate for MaterialItem {
     fn validate(&mut self) -> Result<(), AppError> {
         ensure(nonblank(&self.name) && self.order > 0)?;

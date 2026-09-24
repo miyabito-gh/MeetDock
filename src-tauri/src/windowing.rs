@@ -315,7 +315,7 @@ impl WindowService {
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis() as u64,
-            items,
+            items: deduplicate_snapshot_items(items),
         };
         persist_snapshot(&self.snapshot_path(), &snapshot)?;
         Ok(SaveSnapshotResult {
@@ -439,9 +439,20 @@ fn snapshot_launch_command(item: &SnapshotItem) -> std::process::Command {
 }
 
 fn snapshot_path_key(path: &str) -> String {
-    crate::contracts::windows_shell_path(path)
-        .trim_end_matches('\\')
-        .to_lowercase()
+    crate::contracts::windows_path_key(path)
+}
+
+fn deduplicate_snapshot_items(items: Vec<SnapshotItem>) -> Vec<SnapshotItem> {
+    let mut targets = HashSet::new();
+    items
+        .into_iter()
+        .filter(|item| {
+            targets.insert(crate::contracts::restoration_target_key(
+                &item.executable_path,
+                item.document_path.as_deref(),
+            ))
+        })
+        .collect()
 }
 
 fn snapshot_associated_identity(
@@ -658,9 +669,10 @@ fn load_snapshot_file(path: &Path) -> Result<Option<WindowSnapshot>, AppError> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(_) => return Err(AppError::new(ErrorCode::ConfigIo, None)),
     };
-    let snapshot: WindowSnapshot = serde_json::from_slice(&bytes)
+    let mut snapshot: WindowSnapshot = serde_json::from_slice(&bytes)
         .map_err(|_| AppError::new(ErrorCode::ConfigCorrupt, None))?;
     validate_snapshot(&snapshot)?;
+    snapshot.items = deduplicate_snapshot_items(snapshot.items);
     Ok(Some(snapshot))
 }
 
@@ -2218,6 +2230,78 @@ mod tests {
         )
         .unwrap();
         assert!(load_snapshot_file(&path).is_err());
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn snapshot_targets_are_normalized_and_deduplicated_on_save_and_load_boundaries() {
+        let item = |title: &str, executable_path: &str, document_path: Option<&str>| SnapshotItem {
+            material_id: None,
+            document_path: document_path.map(str::to_owned),
+            app_name: "テストアプリ".into(),
+            title: title.into(),
+            executable_name: "test.exe".into(),
+            executable_path: executable_path.into(),
+            restorability: SnapshotRestorability::Restorable,
+            reason: None,
+        };
+        let items = vec![
+            item("fallback first", r"C:\Apps\Test.exe", None),
+            item("fallback duplicate", r"\\?\c:/APPS/TEST.EXE\", None),
+            item(
+                "document first",
+                r"C:\Apps\Test.exe",
+                Some(r"C:\Docs\Agenda.docx"),
+            ),
+            item(
+                "document duplicate",
+                r"c:/apps/test.exe/",
+                Some(r"\\?\C:\DOCS\AGENDA.DOCX\"),
+            ),
+            item(
+                "distinct document",
+                r"C:\Apps\Test.exe",
+                Some(r"C:\Docs\Minutes.docx"),
+            ),
+            item(
+                "distinct executable",
+                r"C:\Apps\Other.exe",
+                Some(r"C:\Docs\Agenda.docx"),
+            ),
+        ];
+        let deduplicated = deduplicate_snapshot_items(items.clone());
+        assert_eq!(
+            deduplicated
+                .iter()
+                .map(|item| item.title.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "fallback first",
+                "document first",
+                "distinct document",
+                "distinct executable"
+            ]
+        );
+
+        let directory = std::env::temp_dir().join(format!(
+            "meetdock-window-snapshot-deduplicate-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let path = directory.join("window-snapshot.json");
+        persist_snapshot(
+            &path,
+            &WindowSnapshot {
+                schema_version: SNAPSHOT_SCHEMA_VERSION,
+                saved_at_unix_ms: 42,
+                items,
+            },
+        )
+        .unwrap();
+        assert_eq!(load_snapshot_file(&path).unwrap().unwrap().items.len(), 4);
         std::fs::remove_dir_all(directory).unwrap();
     }
 }

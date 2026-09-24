@@ -1,4 +1,4 @@
-import { validate, uuid, appError, MAX_SAFE } from './contracts.js';
+import { validate, uuid, appError, MAX_SAFE, restorationTargetKey, windowsPathKey } from './contracts.js';
 
 const enumeration = names => Object.freeze(Object.fromEntries(names.split(' ').map(n => [n, n])));
 export const Lifecycle = enumeration('Booting Ready ReadOnly RecoveryPending MigrationPending FatalError');
@@ -34,6 +34,14 @@ const reorder = (items, key) => {
   const buckets = new Map();
   for (const item of items) { const k = key(item); if (!buckets.has(k)) buckets.set(k, []); buckets.get(k).push(item); }
   for (const bucket of buckets.values()) bucket.sort((a, b) => a.order - b.order).forEach((item, index) => { item.order = index + 1; });
+};
+const uniqueSnapshotItems = items => {
+  const targets = new Set();
+  return items.filter(item => {
+    const key = restorationTargetKey(item.executable_path, item.document_path ?? null);
+    if (targets.has(key)) return false;
+    targets.add(key); return true;
+  });
 };
 const dirtyWith = (s, config) => ({ ...s, edit: s.edit === Edit.Conflict ? Edit.Conflict : Edit.Dirty, draft: config });
 const explorerMode = (s, groupId) => {
@@ -348,8 +356,12 @@ export function transition(s, e) {
       return s.windowing.snapshot_busy?deny():result({...s,windowing:{...s.windowing,snapshot_busy:true,snapshot_focus_after_load:true}},[effect(Effect.LoadWindowSnapshot,{})]);
     case Event.WindowSnapshotSaved:
       return e.response?.saved?result({...s,windowing:{...s.windowing,dialog_open:false,snapshot_busy:true}},[effect(Effect.LoadWindowSnapshot,{})],{code:'WINDOW_SNAPSHOT_SAVED'}):result({...s,windowing:{...s.windowing,snapshot_busy:false,snapshot_focus_after_load:false}},[],appError('VALIDATION_ERROR'));
-    case Event.WindowSnapshotLoaded:
-      return result({...s,selected_group_id:s.windowing.snapshot_focus_after_load&&e.response?.items?.length?WINDOW_SNAPSHOT_GROUP_ID:s.selected_group_id,windowing:{...s.windowing,snapshot_busy:false,snapshot_focus_after_load:false,snapshot:e.response??null}});
+    case Event.WindowSnapshotLoaded: {
+      const snapshot=e.response===null?null:valid('OptionalWindowSnapshot',e.response);
+      if(e.response!==null&&!snapshot)return deny();
+      if(snapshot)snapshot.items=uniqueSnapshotItems(snapshot.items);
+      return result({...s,selected_group_id:s.windowing.snapshot_focus_after_load&&snapshot?.items?.length?WINDOW_SNAPSHOT_GROUP_ID:s.selected_group_id,windowing:{...s.windowing,snapshot_busy:false,snapshot_focus_after_load:false,snapshot}});
+    }
     case Event.WindowSnapshotSaveFailed:
     case Event.WindowSnapshotLoadFailed:
       return result({...s,windowing:{...s.windowing,snapshot_busy:false,snapshot_focus_after_load:false}},[],e.error);
@@ -363,7 +375,11 @@ export function transition(s, e) {
       return result({...s,windowing:{...s.windowing,snapshot_running:[...s.windowing.snapshot_running,e.index]}},[effect(Effect.LaunchWindowSnapshotItem,{index:e.index})]);
     }
     case Event.WindowSnapshotLaunchAllRequested: {
-      const indices=(s.windowing.snapshot?.items??[]).map((_,index)=>index);
+      const targets=new Set(),indices=[];
+      for(const [index,item] of (s.windowing.snapshot?.items??[]).entries()){
+        const key=restorationTargetKey(item.executable_path,item.document_path??null);
+        if(!targets.has(key)){targets.add(key);indices.push(index);}
+      }
       if(!indices.length||s.windowing.snapshot_batch||s.windowing.snapshot_running.length)return deny();
       return result({...s,windowing:{...s.windowing,snapshot_batch:true}},[effect(Effect.BatchLaunchWindowSnapshot,{indices})]);
     }
@@ -377,11 +393,13 @@ export function transition(s, e) {
     case Event.WindowSnapshotRegisterRequested: {
       if(!editable(s)||!s.windowing.snapshot?.items?.length||!s.saved_config)return deny();
       const config=editableConfig(s),groupId=crypto.randomUUID(),stamp=new Date(s.windowing.snapshot.saved_at_unix_ms).toLocaleString('ja-JP');
-      config.groups.push({id:groupId,parent_id:null,name:`保存ウィンドウ ${stamp}`,order:Number.MAX_SAFE_INTEGER});
-      for(const item of s.windowing.snapshot.items)config.materials.push({id:crypto.randomUUID(),group_id:groupId,name:item.title||item.app_name,role:'main',target_type:item.executable_name.toLocaleLowerCase('ja')==='explorer.exe'&&item.document_path?'folder':'file',path:item.document_path??item.executable_path,window_match_pattern:null,order:Number.MAX_SAFE_INTEGER});
+      const existingTargets=new Set(config.materials.map(item=>windowsPathKey(item.path)));
+      const items=uniqueSnapshotItems(s.windowing.snapshot.items).filter(item=>!existingTargets.has(windowsPathKey(item.document_path??item.executable_path)));
+      if(items.length)config.groups.push({id:groupId,parent_id:null,name:`保存ウィンドウ ${stamp}`,order:Number.MAX_SAFE_INTEGER});
+      for(const item of items)config.materials.push({id:crypto.randomUUID(),group_id:groupId,name:item.title||item.app_name,role:'main',target_type:item.executable_name.toLocaleLowerCase('ja')==='explorer.exe'&&item.document_path?'folder':'file',path:item.document_path??item.executable_path,window_match_pattern:null,order:Number.MAX_SAFE_INTEGER});
       reorder(config.groups,g=>g.parent_id??'root');reorder(config.materials,m=>`${m.group_id}\0${m.role}`);
-      const next=dirtyWith(s,config);
-      return result({...next,selected_group_id:groupId,windowing:{...next.windowing,snapshot:null,snapshot_focus_after_load:false}},[effect(Effect.ClearWindowSnapshot,{})],{code:'WINDOW_SNAPSHOT_REGISTERED'});
+      const next=items.length?dirtyWith(s,config):s;
+      return result({...next,selected_group_id:items.length?groupId:s.selected_group_id,windowing:{...next.windowing,snapshot:null,snapshot_focus_after_load:false}},[effect(Effect.ClearWindowSnapshot,{})],{code:'WINDOW_SNAPSHOT_REGISTERED'});
     }
     case Event.ActivateRequested:
       if (!editable(s) || !material(s, e.material_id) || s.launch.running.some(x => x.material_id === e.material_id) || s.launch.batch?.material_ids.includes(e.material_id)) return deny();

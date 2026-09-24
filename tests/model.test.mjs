@@ -124,13 +124,43 @@ test('saved window snapshot supports individual/all launch and group registratio
   assert.equal(registered.state.windowing.snapshot,null);assert.equal(registered.effects[0].type,Effect.ClearWindowSnapshot);assert.equal(registered.state.selected_group_id,registered.state.draft.groups.at(-1).id);
   assert.equal(run(registered.state,Event.WindowSnapshotClearSucceeded,{removed:true}).state.windowing.snapshot,null);
 });
+test('window snapshot load, launch all, and registration share normalized restoration target deduplication', () => {
+  const item=(title,executable_path,document_path)=>({app_name:'Editor',title,executable_name:'editor.exe',executable_path,...(document_path?{document_path}:{}),restorability:'restorable',reason:null});
+  const existingPath=config.materials[0].path;
+  const snapshot={schema_version:1,saved_at_unix_ms:Date.UTC(2026,8,25),items:[
+    item('Fallback A','C:\\Apps\\Editor.exe'),
+    item('Fallback B','\\\\?\\C:/APPS/EDITOR.EXE\\'),
+    item('Existing','C:\\Apps\\Editor.exe',existingPath.replaceAll('\\','/').toUpperCase()),
+    item('Agenda A','C:\\Apps\\Editor.exe','C:\\Docs\\Agenda.docx'),
+    item('Agenda duplicate','c:/apps/editor.exe/','\\\\?\\C:\\DOCS\\AGENDA.DOCX\\'),
+    item('Minutes','C:\\Apps\\Editor.exe','C:\\Docs\\Minutes.docx'),
+  ]};
+  const loaded=run(ready(),Event.WindowSnapshotLoaded,{response:snapshot}).state;
+  assert.deepEqual(loaded.windowing.snapshot.items.map(item=>item.title),['Fallback A','Existing','Agenda A','Minutes']);
+  const all=run(loaded,Event.WindowSnapshotLaunchAllRequested);
+  assert.deepEqual(all.effects[0].request.indices,[0,1,2,3]);
+  const registered=run(loaded,Event.WindowSnapshotRegisterRequested);
+  const added=registered.state.draft.materials.slice(config.materials.length);
+  assert.deepEqual(added.map(item=>item.path),['C:\\Apps\\Editor.exe','C:\\Docs\\Agenda.docx','C:\\Docs\\Minutes.docx']);
+});
+test('snapshot registration does not create an empty group when every confirmed target already exists', () => {
+  const existing=config.materials[0],snapshot={schema_version:1,saved_at_unix_ms:1,items:[{
+    app_name:'Existing',title:'Different title',executable_name:'reader.exe',executable_path:'C:\\Apps\\reader.exe',
+    document_path:`\\\\?\\${existing.path.toUpperCase()}\\`,restorability:'restorable',reason:null,
+  }]};
+  const registered=run(run(ready(),Event.WindowSnapshotLoaded,{response:snapshot}).state,Event.WindowSnapshotRegisterRequested);
+  assert.equal(registered.state.edit,Edit.Clean);
+  assert.equal(registered.state.saved_config.groups.length,config.groups.length);
+  assert.equal(registered.state.windowing.snapshot,null);
+  assert.equal(registered.effects[0].type,Effect.ClearWindowSnapshot);
+});
 test('saving a window snapshot closes the dialog, reloads it, and selects its virtual group',()=>{
   const started=run({...ready(),windowing:{...ready().windowing,dialog_open:true}},Event.WindowSnapshotSaveRequested);
   const saved=run(started.state,Event.WindowSnapshotSaved,{response:{saved:true,saved_count:1,excluded_count:0,exclusion_reasons:[]}});
   assert.equal(saved.state.windowing.dialog_open,false);assert.equal(saved.effects[0].type,Effect.LoadWindowSnapshot);
   const snapshot={schema_version:1,saved_at_unix_ms:1,items:[{app_name:'Editor',title:'Agenda',executable_name:'editor.exe',executable_path:'C:\\Apps\\editor.exe',restorability:'restorable',reason:null}]};
   const loaded=run(saved.state,Event.WindowSnapshotLoaded,{response:snapshot});
-  assert.equal(loaded.state.selected_group_id,WINDOW_SNAPSHOT_GROUP_ID);assert.equal(loaded.state.windowing.snapshot,snapshot);
+  assert.equal(loaded.state.selected_group_id,WINDOW_SNAPSHOT_GROUP_ID);assert.deepEqual(loaded.state.windowing.snapshot,snapshot);
 });
 test('revision, request_id and generation cannot substitute for one another', () => {
   const s = sync();

@@ -96,6 +96,15 @@ function windowsAbsolutePath(path) {
     !/[. ]$/.test(c) && !/[\x00-\x1f\x7f<>:"|?*]/.test(c) &&
     !/^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])$/i.test(c.split('.')[0]));
 }
+export function windowsPathKey(path) {
+  let normalized = String(path).replaceAll('/', '\\');
+  if (normalized.slice(0, 8).toLocaleLowerCase('en-US') === '\\\\?\\unc\\') normalized = `\\\\${normalized.slice(8)}`;
+  else if (normalized.slice(0, 4).toLocaleLowerCase('en-US') === '\\\\?\\') normalized = normalized.slice(4);
+  return normalized.replace(/\\+$/, '').toLocaleLowerCase('en-US');
+}
+export function restorationTargetKey(executablePath, documentPath = null) {
+  return `${windowsPathKey(executablePath)}\0${documentPath === null ? '' : windowsPathKey(documentPath)}`;
+}
 const group = v => {
   object(v, { id, parent_id: nullable(id), name: string, order: u32, explorer_open_mode: member(enums.group_explorer_open_mode) });
   requireValue(nonblank(v.name) && v.order > 0 && v.parent_id !== v.id);

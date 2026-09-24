@@ -1,9 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { validate, decodeConfig, appError } from '../src/contracts.js';
+import { validate, decodeConfig, appError, restorationTargetKey, windowsPathKey } from '../src/contracts.js';
 import { createIpcAdapter } from '../src/ipc-adapter.js';
 const { fixtures } = JSON.parse(readFileSync(new URL('./fixtures/contracts.json', import.meta.url)));
+test('restoration target keys normalize Windows path spelling without merging distinct documents', () => {
+  assert.equal(windowsPathKey('\\\\?\\C:/Apps/Editor.EXE\\'), windowsPathKey('c:\\apps\\editor.exe'));
+  assert.equal(windowsPathKey('\\\\?\\UNC\\Server\\Share\\Docs\\'), windowsPathKey('\\\\server/share/docs'));
+  assert.equal(
+    restorationTargetKey('C:\\Apps\\Editor.exe', 'C:\\Docs\\Agenda.docx'),
+    restorationTargetKey('c:/apps/editor.exe/', '\\\\?\\C:\\DOCS\\AGENDA.DOCX\\'),
+  );
+  assert.notEqual(
+    restorationTargetKey('C:\\Apps\\Editor.exe', 'C:\\Docs\\Agenda.docx'),
+    restorationTargetKey('C:\\Apps\\Editor.exe', 'C:\\Docs\\Minutes.docx'),
+  );
+  assert.notEqual(
+    restorationTargetKey('C:\\Apps\\Editor.exe', 'C:\\Docs\\Agenda.docx'),
+    restorationTargetKey('C:\\Apps\\Other.exe', 'C:\\Docs\\Agenda.docx'),
+  );
+});
 for (const f of fixtures) test(f.name, () => {
   const decode = () => f.type === 'ConfigDocument' ? decodeConfig(f.value) : validate(f.type, f.value);
   if (!f.valid) assert.throws(decode);
