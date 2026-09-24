@@ -811,7 +811,17 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ウィンドウ一覧から、MeetDock以外で起動されたPDF・Office文書についても、可能な場合はファイル名を含む完全パスを取得し、一時保存データの `document_path` として保存できるようにする。
 
-### 14.2 対象アプリと推奨方式
+### 14.2 実装順序
+
+実装はアプリごとに順番に行い、各段階で停止する。最初はExcelだけを実装し、Excelの実装・テスト・差分確認・コミットが完了した時点で次の指示を待つ。ユーザーの明示指示があるまでWord、PowerPoint、Acrobat、ブラウザーPDFには進まない。
+
+1. Excel（`EXCEL.EXE`）
+2. ユーザーの指示後にWord（`WINWORD.EXE`）
+3. ユーザーの指示後にPowerPoint（`POWERPNT.EXE`）
+4. ユーザーの指示後にAdobe Acrobat／Reader
+5. ユーザーの指示後にブラウザー内PDF
+
+### 14.3 対象アプリと推奨方式
 
 - Word（`WINWORD.EXE`）: Office COM APIで開いているDocumentの `FullName` を取得する。
 - Excel（`EXCEL.EXE`）: Office COM APIで開いているWorkbookの `FullName` を取得する。
@@ -819,7 +829,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - Adobe Acrobat／Reader: 利用可能なAcrobat COM APIから開いているPDFのパスを取得する。
 - ブラウザー内PDF: まず対象外または条件付き対象とし、UI Automation等で確実性を検証してから扱う。タイトル推測だけで完全パスとして保存しない。
 
-### 14.3 実装方針
+### 14.4 実装方針
 
 - ウィンドウHWNDとアプリプロセスを起点に、アプリ別アダプターで開いている文書を列挙する。
 - 取得した文書パスは、対象HWND／プロセスとの関連付けが一意な場合だけ `document_path` に設定する。
@@ -828,19 +838,20 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 権限不足、COM未登録、保護ビュー、未保存文書、クラウド上の仮想パスなどは取得失敗として理由を通知し、アプリ全体の保存は継続する。
 - 既存のMeetDock起動資料関連付けとExplorer ShellWindows取得を優先し、アプリ別取得はフォールバックとして実行する。
 
-### 14.4 完了条件
+### 14.5 完了条件（まずExcelのみ）
 
-- Word／Excel／PowerPointのローカル保存済み文書で、ファイル名を含む完全パスを取得できる。
-- Acrobat／Readerで取得可能なPDFの完全パスを保存できる。
+- Excelのローカル保存済みWorkbookで、ファイル名を含む完全パスを取得できる。
+- Excelの実装段階では、Word、PowerPoint、Acrobat／Reader、ブラウザーPDFへ変更を広げない。
 - HWNDと文書パスの対応が曖昧な場合、別資料を誤って保存・復元しない。
 - 取得できない文書は既存の復元可能性判定に従い、理由付きで除外または条件付き保存する。
 - 一時保存からの再起動で、取得済みパスを使って既存画面のアクティブ化または資料の起動ができる。
 - Windows依存処理をモック可能な境界に分離し、COM未使用環境でも既存テストが通る。
 
-### 14.5 次チャットで最初に行う確認・テスト
+### 14.6 Excel実装時の確認・テスト
 
 1. `UI_IMPLEMENTATION_HANDOVER.md` と `src-tauri/src/windowing.rs` の一時保存モデルを確認する。
 2. 対象アプリ別のWindows API／COM依存を調査し、利用可能な取得経路を確定する。
-3. 実装前に既存のウィンドウ保存・PDF関連テストを実行する。
-4. パス取得アダプター、曖昧一致、権限不足、取得不能の単体テストを追加する。
-5. 実機UIは明示許可があるまで起動しない。実アプリでの取得確認が必要な場合は、コード・単体テスト完了後に別途確認する。
+3. 実装前の対象テスト実行は必須としない。必要性を判断し、必要な場合だけ実行する。
+4. Excel用パス取得アダプター、曖昧一致、権限不足、取得不能、復元のテストを追加・実行する。
+5. Excelの実装・テスト・差分確認・コミットまで完了したら停止し、次のアプリへ進まずユーザーの指示を待つ。
+6. 実機UIは明示許可があるまで起動しない。実Excelでの取得確認が必要な場合は、コード・テスト完了後に別途許可を得る。
