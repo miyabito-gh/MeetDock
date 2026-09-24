@@ -813,16 +813,16 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ### 14.2 実装順序
 
-実装はアプリごとに順番に行い、各段階で停止する。2026-09-25時点でExcel、Adobe Acrobat Reader、Word、PowerPointは実装・テスト・コミット済み。Adobe Acrobat Pro、ブラウザーPDF、Explorer仮想フォルダー、重複登録防止は未実装であり、次チャットでは残項目ごとに調査・実装・テスト・コミットして停止する。
+実装はアプリごとに順番に行い、各段階で停止する。2026-09-25時点でExcel、Adobe Acrobat Reader、Word、PowerPoint、重複登録防止は実装・テスト・コミット済み。ブラウザーPDFは安全な一意対応ができないため通常起動セッションを対象外とする調査が完了している。Adobe Acrobat ProとExplorer仮想フォルダーは未実装であり、次チャットでは残項目ごとに調査・実装・テスト・コミットして停止する。
 
 1. 実装済み: Excel（`EXCEL.EXE`）
 2. 実装済み: Adobe Acrobat Reader（`AcroRd32.exe`）
 3. 実装済み: Word（`WINWORD.EXE`）
 4. 実装済み: PowerPoint（`POWERPNT.EXE`）
 5. 未実装: Adobe Acrobat Pro
-6. 未実装: ブラウザー内PDF
+6. 調査済み・通常起動セッションは対象外: ブラウザー内PDF
 7. 未実装: Explorerのホーム等の仮想フォルダー
-8. 未実装: 同一復元対象の二重保存・二重登録防止
+8. 実装済み: 同一復元対象の二重保存・二重登録防止
 
 ### 14.3 対象アプリと推奨方式
 
@@ -831,7 +831,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - PowerPoint（`POWERPNT.EXE`）: Office COM APIで開いているPresentationの `FullName` を取得する。
 - Adobe Acrobat Reader: Accessibility DOMの `GetDocInfo` から開いているPDFの完全パスを取得する（実装済み）。
 - Adobe Acrobat Pro: 利用可能なAcrobat COM APIから開いているPDFのパスを取得する（未実装）。
-- ブラウザー内PDF: まず対象外または条件付き対象とし、UI Automation等で確実性を検証してから扱う。タイトル推測だけで完全パスとして保存しない。
+- ブラウザー内PDF: 通常起動セッションは対象外とする。将来、ユーザーが明示的に有効化したDevTools Protocolまたは専用拡張から、タブ、ブラウザーウィンドウ、URL、Win32 HWNDを一意に対応できる境界を追加した場合だけ条件付き対象として再検討する。タイトルやアドレスバー表示から完全パスを推測しない。
 - Explorer仮想フォルダー: PIDLからShellの正規parsing nameを取得し、通常の `document_path` とは別のShellロケーションとして保存する。ホーム、PC、ごみ箱等を表示名だけで判定しない。
 
 ### 14.4 実装方針
@@ -869,6 +869,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - `546f9d7`: 同一復元対象の二重保存・二重登録防止。Windowsパス表記を正規化した復元対象キーをRust／JavaScriptに追加し、保存・読み込み・全件起動・グループ登録で重複を除外する。異なる完全パスの文書は別項目として保持する。
 - `2e1ee2e`: Serde既定値フィールドを省略可能にしつつ、必須フィールド欠落・未知フィールド・位置配列入力を拒否する厳格性を維持。
 - `2e5534e`: `AGENTS.md` にMeetDock全体の共通作業指示とモデル選定基準を追加。引継ぎでは共通指示を再掲せず、このファイル固有の進捗・設計・未解決事項だけを記載する。
+- ブラウザー内PDFは公式資料を調査し、通常起動したChrome／Edgeのタブ、PDF URL、トップレベルHWNDを安全に一意対応できる契約がないため実装対象外と判断。条件付きの代替案を14.8.3へ記録した。
 - 上記修正後、Rust全テスト71件、JavaScript全テスト579件、`cargo check`、`git diff --check` が成功している。
 - 実機UI確認は未実施。
 
@@ -901,16 +902,32 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 曖昧または取得不能な対応は保存せず、Readerの既存挙動を壊さない。
 - Pro固有の観測を純粋な解決処理へ渡す境界と単体テストがある。
 
-#### 14.8.3 ブラウザー内PDFのパス取得可否調査
+#### 14.8.3 ブラウザー内PDFのパス取得可否調査（完了）
 
-- Chrome、Edge等のブラウザー内PDFは、タブタイトルやアドレスバー表示だけでローカル完全パスを断定しない。
-- ブラウザー、タブ、トップレベルHWND、PDF URL／ローカルパスを安全に一意対応できる公式または安定した境界があるかを先に調査する。
-- 一意対応できない場合は実装せず、取得不能と判断した根拠と代替案だけを文書化する。
+調査結果:
 
-完了条件:
+- Chrome DevTools Protocol（CDP）の `Target.getTargets` とEdgeの `/json/list` はページターゲットごとのURLを取得できる。CDPの `Browser.getWindowForTarget` はターゲットからブラウザー内部の `WindowID` を返すが、MeetDockが列挙するWin32トップレベルHWNDを返す契約ではない。座標、タイトル、選択状態から両者を推測すると、複数ウィンドウ・同名タブ・仮想デスクトップ・最小化時に一意性を保証できない。
+- Chrome／EdgeのDevTools Protocolは通常セッションへ無条件に接続できるAPIではない。Edge公式手順は全Edge終了後に `--remote-debugging-port` 付きで起動する方式を示す。Chrome 136以降は既定データディレクトリに対する `--remote-debugging-port`／`--remote-debugging-pipe` が無効で、非標準の `--user-data-dir` が必要である。したがって、MeetDockが既存の通常起動セッションを後付けで安全に観測する方式には使えない。
+- Windows UI AutomationはデスクトップUI要素へアクセスする汎用Accessibility／テスト基盤であり、ブラウザーのタブ、実URL、トップレベルHWNDを結ぶブラウザー固有の安定契約ではない。アドレスバーの表示値は編集・省略・内部URL・権限差の影響を受けるため、`file:` URLやローカル完全パスの確定根拠にしない。
+- 以上から、通常起動したChrome／Edge内PDFの `document_path` 自動取得は実装しない。タイトル、タブ名、アドレスバー文字列、ウィンドウ矩形、列挙順による照合も禁止する。既存の厳格なスナップショット検証は変更しない。
 
-- 対応可否と安全性の根拠が文書化されている。
-- 実装する場合は、任意URL・表示名・タイトルからローカルパスを推測せず、曖昧時に保存しないテストがある。
+条件付きの代替案:
+
+- 将来対応する場合は、MeetDockが専用の分離プロファイルを明示的に起動してCDP接続を管理する方式、またはユーザーが明示的に導入したブラウザー拡張とNative Messaging hostが選択中タブのURLとブラウザー側window IDを通知する方式を別機能として設計する。
+- いずれもWin32 HWNDとの対応を公式または自ら管理する起動セッション情報で一意に確定できることを追加条件とする。取得URLが `file:` の場合だけ、正規化・デコード後の絶対ローカルパス、PDF実体、許可された起動対象であることを検証して `document_path` 候補にする。`https:` PDFはローカルパスへ変換しない。
+- CDP接続は閲覧中ページや認証済みセッションへ強いアクセスを持つため、既存ブラウザーへ黙って有効化しない。明示的な利用者同意、接続先のローカル限定、ポート／プロファイル所有権の確認、切断処理を設計条件とする。
+
+公式根拠（2026-09-25確認）:
+
+- Chrome DevTools Protocol: `Target.getTargets`、`Browser.getWindowForTarget` — <https://chromedevtools.github.io/devtools-protocol/>
+- Chrome 136以降のリモートデバッグ制約 — <https://developer.chrome.com/blog/remote-debugging-port>
+- Microsoft Edge DevTools Protocolと `/json/list` — <https://learn.microsoft.com/en-us/microsoft-edge/devtools/protocol/>
+- Windows UI Automationの適用範囲 — <https://learn.microsoft.com/en-us/windows/win32/winauto/entry-uiauto-win32>
+
+完了判定:
+
+- 対応可否と安全性の根拠、および条件付き代替案を文書化した。
+- 安全な一意対応がないためコードは変更せず、推測に基づく取得処理とテストは追加していない。
 
 ### 14.9 次チャット用引継ぎプロンプト
 
@@ -924,7 +941,6 @@ MeetDockの残項目から、次の1項目だけを選んで実装・テスト�
 残項目:
 1. Explorerのホーム等の仮想フォルダーを、通常のdocument_pathと分離したShellロケーションとして保存・復元する。
 2. Adobe Acrobat Proの外部起動PDFパス取得。
-3. ブラウザー内PDFのパス取得可否調査と、安全に一意対応できる場合だけの実装。
 
 UI_IMPLEMENTATION_HANDOVER.mdの14.7〜14.9で、現在の進捗、選択項目の設計、完了条件を確認してください。
 
@@ -941,6 +957,7 @@ UI_IMPLEMENTATION_HANDOVER.mdの14.7〜14.9で、現在の進捗、選択項目�
 - 同一復元対象の二重保存・二重登録防止は546f9d7で実装済み。
 - Serde既定値と厳格なRust契約読込の両立は2e1ee2eで修正済み。
 - 共通作業指示とモデル選定基準は2e5534eでAGENTS.mdへ反映済み。
+- ブラウザー内PDFは安全な一意対応ができないため通常起動セッションを対象外とする調査済み。条件付き代替案は14.8.3に記録済み。
 - Rust全71件、JavaScript全579件、cargo check、git diff --check成功。
 - 実機UI確認は未実施。
 
