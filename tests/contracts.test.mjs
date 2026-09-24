@@ -20,7 +20,7 @@ test('adapter: exact command envelope, no generation on wire', async () => {
     calls.push([command, args]); return command === 'load_settings' ? base('SettingsLoadResponse') : base('LaunchResponse');
   });
   await api.call('load_settings'); await api.call('activate_or_launch', { material_id: 'm1' });
-  assert.deepEqual(calls, [['load_settings', {}], ['activate_or_launch', { request: { material_id: 'm1' } }]]);
+  assert.deepEqual(calls, [['load_settings', {}], ['activate_or_launch', { request: { material_id: 'm1', explorer_open_mode: 'new_window' } }]]);
 });
 test('adapter rejects invalid request before I/O and sanitizes malformed errors/results', async () => {
   let calls = 0;

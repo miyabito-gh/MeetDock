@@ -1,6 +1,6 @@
 //! ID-resolved launch orchestration. OS interaction is kept behind small mockable ports.
 use crate::contracts::{
-    AppError, EmptyResponse, ErrorCode, LaunchOutcome, LaunchResponse, MaterialItem, TargetType,
+    AppError, EmptyResponse, ErrorCode, ExplorerOpenMode, LaunchOutcome, LaunchResponse, MaterialItem, TargetType,
 };
 use std::{
     path::Path,
@@ -41,12 +41,8 @@ pub trait TargetLaunch: Send + Sync + 'static {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ExplorerOpenMode {
-    #[default]
-    NewWindow,
-    ExistingTab,
+pub(crate) trait LaunchSessionSource {
+    fn launch_associations(&self) -> Vec<LaunchAssociation>;
 }
 
 /// Kept inside the launcher only.  It deliberately has no serde implementation.
@@ -59,10 +55,20 @@ pub enum LaunchReport {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct SessionEntry {
     material_id: crate::contracts::Id,
+    material_path: String,
     pid: u32,
     hwnd: isize,
     process_started: u64,
     target_type: TargetType,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LaunchAssociation {
+    pub material_id: crate::contracts::Id,
+    pub material_path: String,
+    pub hwnd: isize,
+    pub pid: u32,
+    pub process_started: u64,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -130,6 +136,13 @@ impl<D: WindowDetection, F: Foreground, L: TargetLaunch> Launcher<D, F, L> {
             foreground,
             target,
         }
+    }
+
+    pub(crate) fn launch_associations(&self) -> Vec<LaunchAssociation>
+    where
+        L: LaunchSessionSource,
+    {
+        self.target.launch_associations()
     }
 
     pub fn activate_or_launch(&self, material: MaterialItem) -> LaunchResponse {
@@ -447,6 +460,24 @@ pub struct NativeTargetLaunch {
     state: SharedSessionState,
 }
 
+impl LaunchSessionSource for NativeTargetLaunch {
+    fn launch_associations(&self) -> Vec<LaunchAssociation> {
+        self.state
+            .lock()
+            .expect("launcher session state poisoned")
+            .entries
+            .iter()
+            .map(|entry| LaunchAssociation {
+                material_id: entry.material_id.clone(),
+                material_path: entry.material_path.clone(),
+                hwnd: entry.hwnd,
+                pid: entry.pid,
+                process_started: entry.process_started,
+            })
+            .collect()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ExplorerWindowObservation {
     hwnd: isize,
@@ -544,6 +575,7 @@ impl TargetLaunch for NativeTargetLaunch {
                 &self.state,
                 SessionEntry {
                     material_id: material.id.clone(),
+                    material_path: material.path.clone(),
                     pid,
                     hwnd,
                     process_started: started,
@@ -806,6 +838,7 @@ mod tests {
     fn session() -> SessionEntry {
         SessionEntry {
             material_id: Id::try_from("m1".to_owned()).unwrap(),
+            material_path: "C:\\Docs\\agenda.pdf".to_owned(),
             pid: 42,
             hwnd: 101,
             process_started: 77,

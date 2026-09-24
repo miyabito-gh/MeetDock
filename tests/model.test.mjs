@@ -59,7 +59,7 @@ const rows = [
   ['M23 batch', ready, Event.BatchLaunchRequested, { group_id: 'g1' }, 1, s => s.launch.batch.group_id === 'g1', { group_id: 'missing' }],
   ['M24 batch complete', batch, Event.BatchLaunchCompleted, { group_id: 'g1', generation: 1, response: { results: [launched] } }, 0, s => s.launch.batch === null, { group_id: 'g2', generation: 1 }],
   ['M25 pdf open', ready, Event.PdfOpenRequested, { material_id: 'm1' }, 1, s => s.pdf.kind === Pdf.Loading && s.state_generation === 2, { material_id: 'missing' }],
-  ['M26 pdf ready', loading, Event.PdfReady, { material_id: 'm1', generation: 2, view: pdfView }, 0, s => s.pdf.kind === Pdf.Viewing && s.pdf.current_page === 1 && s.pdf.total_pages === 4 && s.pdf.zoom_percent === 100, { material_id: 'm2', generation: 2, view: pdfView }],
+  ['M26 pdf ready', loading, Event.PdfReady, { material_id: 'm1', generation: 2, view: pdfView }, 1, s => s.pdf.kind === Pdf.Viewing && s.pdf.current_page === 1 && s.pdf.total_pages === 4 && s.pdf.zoom_percent === 100, { material_id: 'm2', generation: 2, view: pdfView }],
   ['M27 pdf switch', viewing, Event.PdfOpenRequested, { material_id: 'm2' }, 1, s => s.pdf.material_id === 'm2' && s.state_generation === 3, { material_id: 'm1' }],
   ['M28 pdf password', loading, Event.PdfPasswordRequired, { material_id: 'm1', generation: 2, error: appError('PDF_PASSWORD_REQUIRED') }, 0, s => s.pdf.kind === Pdf.PasswordRequired, { material_id: 'm1', generation: 1 }],
   ['M29 pdf fail', viewing, Event.PdfFailed, { material_id: 'm1', generation: 2, error: pdfError }, 0, s => s.pdf.kind === Pdf.Failed, { material_id: 'm1', generation: 1, error: pdfError }],
@@ -199,9 +199,9 @@ test('migration remains gated until service result, and failure permits explicit
   assert.equal(run(failure, Event.MigrationApproved, { candidate_id: 'candidate1' }).effects.length, 1);
   assert.equal(run(s, Event.SettingsLoaded, { config }).state.lifecycle, Lifecycle.Ready);
 });
-test('effects contain only saved IDs, never a path or arbitrary URL', () => {
-  const activate = run(ready(), Event.ActivateRequested, { material_id: 'm1' }).effects[0]; assert.deepEqual(activate.request, { material_id: 'm1' });
-  const batch = run(ready(), Event.BatchLaunchRequested, { group_id: 'g1' }).effects[0]; assert.deepEqual(batch.request, { group_id: 'g1', material_ids: ['m1'] });
+test('execution effects contain only saved IDs and fixed modes, never a path or arbitrary URL', () => {
+  const activate = run(ready(), Event.ActivateRequested, { material_id: 'm1' }).effects[0]; assert.deepEqual(activate.request, { material_id: 'm1', explorer_open_mode: 'new_window' });
+  const batch = run(ready(), Event.BatchLaunchRequested, { group_id: 'g1' }).effects[0]; assert.deepEqual(batch.request, { group_id: 'g1', material_ids: ['m1'], explorer_open_mode: 'new_window' });
   const f = run(ready(), Event.PdfOpenRequested, { material_id: 'm1' }).effects[0];
   assert.equal(f.request.url, 'material://pdf/m1'); assert.equal(f.type, Effect.ReplacePdf);
 });
@@ -368,7 +368,7 @@ test('DnD is draft-only and execution effects remain ID-only', () => {
   const unsavedOpen = run(dropped.state, Event.OpenContainingFolderRequested, { material_id: added.id });
   assert.equal(unsavedOpen.effects.length, 0, 'unsaved dropped paths cannot reach execution IPC');
   const open = run(dropped.state, Event.OpenContainingFolderRequested, { material_id: 'm1' });
-  assert.deepEqual(open.effects[0].request, { material_id: 'm1' });
+  assert.deepEqual(open.effects[0].request, { material_id: 'm1', explorer_open_mode: 'new_window' });
 });
 
 test('PDF fallback opens only its saved material ID through Activate', () => {

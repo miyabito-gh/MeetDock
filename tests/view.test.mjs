@@ -204,6 +204,12 @@ test('groups and materials expose internal drag reorder affordances', () => {
   assert.doesNotMatch(source,/addEventListener\('dragstart'/);
 });
 
+test('material pointer reorder can move across roles at an explicit position or section tail', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  for (const token of ["s.dataset.role=role", "closest('.role-section')", "beforeId:before?.dataset.materialId??null", "emit('moveMaterial',sourceId,target.groupId,target.role,target.beforeId)", "'drop-tail'"])
+    assert.ok(source.includes(token), token);
+});
+
 test('unsaved state uses a title indicator and toolbar actions without a floating popup', () => {
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   assert.ok(source.includes("editState=el('span','edit-state')"));

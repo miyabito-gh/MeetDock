@@ -21,6 +21,33 @@ use settings_io::NativeFileOps;
 use status::PathStatusService;
 use tauri::Manager;
 use windowing::WindowService;
+use pdf_sidecar::{PdfSidecar, PdfSidecarStore, SidecarError};
+
+fn sidecar_error(error: SidecarError) -> AppError {
+    AppError::new(match error { SidecarError::Invalid | SidecarError::IdentityMismatch => ErrorCode::InvalidRequest, _ => ErrorCode::ConfigIo }, None)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PdfSidecarKey { material_id: String, pdf_identity: String }
+
+#[tauri::command]
+async fn load_pdf_sidecar(window: tauri::WebviewWindow, body: tauri::ipc::Request<'_>, store: tauri::State<'_, PdfSidecarStore>) -> Result<Option<PdfSidecar>, AppError> {
+    let request: PdfSidecarKey = serde_json::from_value(payload(&window, body, true)?).map_err(|_| AppError::new(ErrorCode::InvalidRequest, None))?;
+    store.load(&request.material_id, &request.pdf_identity).map_err(sidecar_error)
+}
+
+#[tauri::command]
+async fn save_pdf_sidecar(window: tauri::WebviewWindow, body: tauri::ipc::Request<'_>, store: tauri::State<'_, PdfSidecarStore>) -> Result<PdfSidecar, AppError> {
+    let sidecar: PdfSidecar = serde_json::from_value(payload(&window, body, true)?).map_err(|_| AppError::new(ErrorCode::InvalidRequest, None))?;
+    store.save(&sidecar).map_err(sidecar_error)?; Ok(sidecar)
+}
+
+#[tauri::command]
+async fn remove_pdf_sidecar(window: tauri::WebviewWindow, body: tauri::ipc::Request<'_>, store: tauri::State<'_, PdfSidecarStore>) -> Result<bool, AppError> {
+    let request: PdfSidecarKey = serde_json::from_value(payload(&window, body, true)?).map_err(|_| AppError::new(ErrorCode::InvalidRequest, None))?;
+    store.remove(&request.material_id, &request.pdf_identity).map_err(sidecar_error)
+}
 
 fn payload(
     window: &tauri::WebviewWindow,
@@ -104,6 +131,9 @@ mod ipc_tests {
             "allow-batch-launch-main",
             "allow-open-containing-folder",
             "allow-prepare-dropped-files",
+            "allow-load-pdf-sidecar",
+            "allow-save-pdf-sidecar",
+            "allow-remove-pdf-sidecar",
         ] {
             assert!(main["permissions"]
                 .as_array()
@@ -278,12 +308,14 @@ async fn save_window_exclusions(
 async fn save_window_snapshot(
     window: tauri::WebviewWindow,
     service: tauri::State<'_, WindowService>,
+    launcher: tauri::State<'_, NativeLauncher>,
 ) -> Result<windowing::SaveSnapshotResult, AppError> {
     if window.label() != "main" {
         return Err(AppError::new(ErrorCode::AccessDenied, None));
     }
     let service = service.inner().clone();
-    tokio::task::spawn_blocking(move || service.save_snapshot())
+    let associations = launcher.launch_associations();
+    tokio::task::spawn_blocking(move || service.save_snapshot(&associations))
         .await
         .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
 }
@@ -346,7 +378,7 @@ async fn activate_or_launch(
         .next()
         .ok_or_else(|| AppError::new(ErrorCode::NotFound, None))?;
     let service = launcher.inner().clone();
-    tokio::task::spawn_blocking(move || service.activate_or_launch(material))
+    tokio::task::spawn_blocking(move || service.activate_or_launch_with_explorer_mode(material, request.explorer_open_mode))
         .await
         .map_err(|_| AppError::new(ErrorCode::InternalError, None))
 }
@@ -370,7 +402,7 @@ async fn batch_launch_main(
                 if index > 0 {
                     std::thread::sleep(std::time::Duration::from_millis(250));
                 }
-                service.activate_or_launch(m)
+                service.activate_or_launch_with_explorer_mode(m, request.explorer_open_mode)
             })
             .collect(),
     })
@@ -394,7 +426,7 @@ async fn open_containing_folder(
         .next()
         .ok_or_else(|| AppError::new(ErrorCode::NotFound, None))?;
     let service = launcher.inner().clone();
-    tokio::task::spawn_blocking(move || service.reveal(material))
+    tokio::task::spawn_blocking(move || service.reveal_with_explorer_mode(material, request.explorer_open_mode))
         .await
         .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
 }
@@ -494,6 +526,7 @@ pub fn run() {
         }))
         .setup(|app| {
             let config_directory = app.path().app_config_dir()?;
+            app.manage(PdfSidecarStore::new(&config_directory));
             app.manage(PathStatusService::default());
             app.manage(NativeLauncher::default());
             app.manage(WindowService::new(
@@ -530,6 +563,9 @@ pub fn run() {
             batch_launch_main,
             open_containing_folder,
             prepare_dropped_files
+            ,load_pdf_sidecar,
+            save_pdf_sidecar,
+            remove_pdf_sidecar
         ])
         .run(tauri::generate_context!())
         .expect("error while running MeetDock");

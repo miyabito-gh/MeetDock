@@ -219,6 +219,12 @@
           "markdownDescription": "Enables the list_windows command without any pre-configured scope."
         },
         {
+          "description": "Enables the load_pdf_sidecar command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-load-pdf-sidecar",
+          "markdownDescription": "Enables the load_pdf_sidecar command without any pre-configured scope."
+        },
+        {
           "description": "Enables the load_settings command without any pre-configured scope.",
           "type": "string",
           "const": "allow-load-settings",
@@ -243,10 +249,22 @@
           "markdownDescription": "Enables the prepare_dropped_files command without any pre-configured scope."
         },
         {
+          "description": "Enables the remove_pdf_sidecar command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-remove-pdf-sidecar",
+          "markdownDescription": "Enables the remove_pdf_sidecar command without any pre-configured scope."
+        },
+        {
           "description": "Enables the resolve_settings_issue command without any pre-configured scope.",
           "type": "string",
           "const": "allow-resolve-settings-issue",
           "markdownDescription": "Enables the resolve_settings_issue command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_pdf_sidecar command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-pdf-sidecar",
+          "markdownDescription": "Enables the save_pdf_sidecar command without any pre-configured scope."
         },
         {
           "description": "Enables the save_settings command without any pre-configured scope.",
@@ -315,6 +333,12 @@
           "markdownDescription": "Denies the list_windows command without any pre-configured scope."
         },
         {
+          "description": "Denies the load_pdf_sidecar command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-load-pdf-sidecar",
+          "markdownDescription": "Denies the load_pdf_sidecar command without any pre-configured scope."
+        },
+        {
           "description": "Denies the load_settings command without any pre-configured scope.",
           "type": "string",
           "const": "deny-load-settings",
@@ -339,10 +363,22 @@
           "markdownDescription": "Denies the prepare_dropped_files command without any pre-configured scope."
         },
         {
+          "description": "Denies the remove_pdf_sidecar command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-remove-pdf-sidecar",
+          "markdownDescription": "Denies the remove_pdf_sidecar command without any pre-configured scope."
+        },
+        {
           "description": "Denies the resolve_settings_issue command without any pre-configured scope.",
           "type": "string",
           "const": "deny-resolve-settings-issue",
           "markdownDescription": "Denies the resolve_settings_issue command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_pdf_sidecar command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-pdf-sidecar",
+          "markdownDescription": "Denies the save_pdf_sidecar command without any pre-configured scope."
         },
         {
           "description": "Denies the save_settings command without any pre-configured scope.",

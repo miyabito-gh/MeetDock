@@ -13,6 +13,9 @@ const commands = Object.freeze({
   batch_launch_main: ['BatchLaunchRequest', 'BatchLaunchResponse'],
   open_containing_folder: ['OpenContainingFolderRequest', 'EmptyResponse'],
   prepare_dropped_files: ['PrepareDroppedFilesRequest', 'PrepareDroppedFilesResponse'],
+  load_pdf_sidecar: ['PdfSidecarKey', 'OptionalPdfSidecar'],
+  save_pdf_sidecar: ['PdfSidecar', 'PdfSidecar'],
+  remove_pdf_sidecar: ['PdfSidecarKey', 'BooleanResponse'],
 });
 
 // Composition Root supplies Tauri invoke; tests supply a plain function.

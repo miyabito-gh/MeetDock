@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "MeetDock main window permissions",
   "windows": ["main"],
-  "permissions": ["core:default", "allow-health-check", "allow-load-settings", "allow-resolve-settings-issue", "allow-save-settings", "allow-sync-material-statuses", "allow-list-windows", "allow-activate-window", "allow-close-window", "allow-save-window-exclusions", "allow-save-window-snapshot", "allow-load-window-snapshot", "allow-launch-window-snapshot-item", "allow-activate-or-launch", "allow-batch-launch-main", "allow-open-containing-folder", "allow-prepare-dropped-files"]
+  "permissions": ["core:default", "allow-health-check", "allow-load-settings", "allow-resolve-settings-issue", "allow-save-settings", "allow-sync-material-statuses", "allow-list-windows", "allow-activate-window", "allow-close-window", "allow-save-window-exclusions", "allow-save-window-snapshot", "allow-load-window-snapshot", "allow-launch-window-snapshot-item", "allow-activate-or-launch", "allow-batch-launch-main", "allow-open-containing-folder", "allow-prepare-dropped-files", "allow-load-pdf-sidecar", "allow-save-pdf-sidecar", "allow-remove-pdf-sidecar"]
 }

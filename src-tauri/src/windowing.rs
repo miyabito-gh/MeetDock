@@ -3,6 +3,7 @@ use crate::contracts::{
     validate_window_exclusions, AppError, ErrorCode, Id, ListWindowsResponse, RequestId,
     SaveWindowExclusionsResponse, WindowActionResponse, WindowListItem,
 };
+use crate::launcher::LaunchAssociation;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -47,6 +48,10 @@ pub enum SnapshotRestorability {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SnapshotItem {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material_id: Option<Id>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub document_path: Option<String>,
     pub app_name: String,
     pub title: String,
     pub executable_name: String,
@@ -176,7 +181,7 @@ impl WindowService {
         })
     }
 
-    pub fn save_snapshot(&self) -> Result<SaveSnapshotResult, AppError> {
+    pub(crate) fn save_snapshot(&self, associations: &[LaunchAssociation]) -> Result<SaveSnapshotResult, AppError> {
         let exclusions = self
             .state
             .lock()
@@ -187,7 +192,12 @@ impl WindowService {
         let mut items = Vec::new();
         let mut excluded_count = 0;
         for entry in enumerate_native_windows().into_iter().take(MAX_WINDOWS) {
-            let item = snapshot_item(entry, &exclusions);
+            let association = associations.iter().find(|association| {
+                association.hwnd == entry.window.identity.hwnd
+                    && association.pid == entry.window.identity.pid
+                    && association.process_started == entry.window.identity.process_started
+            });
+            let item = snapshot_item(entry, &exclusions, association);
             if item.restorability == SnapshotRestorability::Excluded {
                 excluded_count += 1;
                 if let Some(reason) = &item.reason {
@@ -241,7 +251,7 @@ impl WindowService {
         {
             return Err(AppError::new(ErrorCode::UnsupportedTarget, None));
         }
-        std::process::Command::new(&item.executable_path)
+        snapshot_launch_command(item)
             .spawn()
             .map(|_| ())
             .map_err(|_| AppError::new(ErrorCode::LaunchFailed, None))
@@ -292,7 +302,17 @@ impl WindowService {
     }
 }
 
-fn snapshot_item(entry: EnumeratedWindow, exclusions: &[String]) -> SnapshotItem {
+fn snapshot_launch_command(item: &SnapshotItem) -> std::process::Command {
+    #[cfg(windows)]
+    if let Some(path) = item.document_path.as_deref().filter(|path| !path.trim().is_empty()) {
+        let mut command = std::process::Command::new("explorer.exe");
+        command.arg(path);
+        return command;
+    }
+    std::process::Command::new(&item.executable_path)
+}
+
+fn snapshot_item(entry: EnumeratedWindow, exclusions: &[String], association: Option<&LaunchAssociation>) -> SnapshotItem {
     let excluded = is_excluded(&entry.window, exclusions);
     let path = Path::new(&entry.full_path);
     let (restorability, reason) = if excluded {
@@ -315,6 +335,8 @@ fn snapshot_item(entry: EnumeratedWindow, exclusions: &[String]) -> SnapshotItem
         (SnapshotRestorability::Restorable, None)
     };
     SnapshotItem {
+        material_id: association.map(|value| value.material_id.clone()),
+        document_path: association.map(|value| value.material_path.clone()),
         app_name: entry.window.app_name,
         title: entry.window.title,
         executable_name: entry.window.executable_name,
@@ -349,6 +371,10 @@ fn validate_snapshot(snapshot: &WindowSnapshot) -> Result<(), AppError> {
             || item.executable_name.trim().is_empty()
             || item.executable_path.trim().is_empty()
             || !Path::new(&item.executable_path).is_absolute()
+            || item.document_path.as_deref().is_some_and(|path| {
+                path.trim().is_empty() || !Path::new(path).is_absolute()
+            })
+            || (item.material_id.is_some() != item.document_path.is_some())
             || (item.restorability == SnapshotRestorability::Restorable && item.reason.is_some())
             || (item.restorability != SnapshotRestorability::Restorable
                 && item.reason.as_deref().is_none_or(str::is_empty))
@@ -801,13 +827,26 @@ mod tests {
         let executable = directory.join("test.exe");
         std::fs::write(&executable, b"test").unwrap();
 
-        let restorable = snapshot_item(test_window(executable.to_string_lossy().into_owned()), &[]);
+        let restorable = snapshot_item(test_window(executable.to_string_lossy().into_owned()), &[], None);
         assert_eq!(restorable.restorability, SnapshotRestorability::Restorable);
         assert_eq!(restorable.reason, None);
+
+        let associated_window = test_window(executable.to_string_lossy().into_owned());
+        let association = LaunchAssociation {
+            material_id: Id::try_from("material-1".to_owned()).unwrap(),
+            material_path: executable.to_string_lossy().into_owned(),
+            hwnd: associated_window.window.identity.hwnd,
+            pid: associated_window.window.identity.pid,
+            process_started: associated_window.window.identity.process_started,
+        };
+        let associated = snapshot_item(associated_window, &[], Some(&association));
+        assert_eq!(associated.material_id.as_ref().map(Id::as_str), Some("material-1"));
+        assert_eq!(associated.document_path, Some(association.material_path));
 
         let conditional = snapshot_item(
             test_window(directory.join("missing.exe").to_string_lossy().into_owned()),
             &[],
+            None,
         );
         assert_eq!(
             conditional.restorability,
@@ -818,6 +857,7 @@ mod tests {
         let excluded = snapshot_item(
             test_window(executable.to_string_lossy().into_owned()),
             &["test.exe".into()],
+            None,
         );
         assert_eq!(excluded.restorability, SnapshotRestorability::Excluded);
         assert!(excluded.reason.is_some());
@@ -839,6 +879,8 @@ mod tests {
             schema_version: SNAPSHOT_SCHEMA_VERSION,
             saved_at_unix_ms: 42,
             items: vec![SnapshotItem {
+                material_id: None,
+                document_path: None,
                 app_name: "テストアプリ".into(),
                 title: title.into(),
                 executable_name: "test.exe".into(),

@@ -9,6 +9,8 @@ export const enums = Object.freeze({
   confidence: ['exact', 'estimated', 'unknown'],
   path_state: ['exists', 'missing', 'timeout', 'access_denied', 'unchecked', 'error'],
   outcome: ['activated', 'launched', 'not_trackable', 'foreground_denied', 'not_found', 'failed'],
+  explorer_open_mode: ['new_window', 'existing_tab'],
+  group_explorer_open_mode: ['inherit', 'new_window', 'existing_tab'],
 });
 Object.values(enums).forEach(Object.freeze);
 export const errorCodes = Object.freeze([
@@ -95,12 +97,12 @@ function windowsAbsolutePath(path) {
     !/^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|COM[1-9¹²³]|LPT[1-9¹²³])$/i.test(c.split('.')[0]));
 }
 const group = v => {
-  object(v, { id, parent_id: nullable(id), name: string, order: u32 });
+  object(v, { id, parent_id: nullable(id), name: string, order: u32, explorer_open_mode: member(enums.group_explorer_open_mode) });
   requireValue(nonblank(v.name) && v.order > 0 && v.parent_id !== v.id);
 };
 function config(v) {
   object(v, { schema_version: member([3]), app_version: string, revision: safe,
-    last_updated: timestamp, groups: array(group), materials: array(material) });
+    last_updated: timestamp, explorer_open_mode: member(enums.explorer_open_mode), groups: array(group), materials: array(material) });
   const groups = new Map(), materials = new Set(), orders = new Map();
   const addOrder = (scope, order) => { const key = JSON.stringify(scope); if (!orders.has(key)) orders.set(key, []); orders.get(key).push(order); };
   for (const g of v.groups) {
@@ -140,10 +142,18 @@ function launch(v) {
   requireValue(['activated', 'launched', 'not_trackable'].includes(v.outcome) === (v.error === null));
 }
 const empty = v => object(v, {});
+const pdfSidecarKey = v => object(v, { material_id: id, pdf_identity: string });
+const pdfSidecar = v => {
+  object(v, { format: member(['meetdock-pdf-sidecar']), version: member([1]), material_id: id, pdf_identity: string, strokes: array(() => {}), bookmarks: array(() => {}) });
+  requireValue(v.pdf_identity.length > 0);
+};
 export const validators = Object.freeze({
   AppConfig: config, GroupItem: group, MaterialItem: material, SettingsCandidate: candidate,
   SettingsLoadResponse: settings, AppError: error, MaterialStatusResult: status, LaunchResponse: launch,
   LoadSettingsRequest: empty, EmptyResponse: empty,
+  PdfSidecarKey: pdfSidecarKey, PdfSidecar: pdfSidecar,
+  OptionalPdfSidecar: v => { if (v !== null) pdfSidecar(v); },
+  BooleanResponse: bool,
   ResolveSettingsIssueRequest(v) {
     object(v, { action: member(enums.action), candidate_id: nullable(id) });
     requireValue(['restore_candidate', 'import_legacy'].includes(v.action) === (v.candidate_id !== null));
@@ -155,9 +165,9 @@ export const validators = Object.freeze({
   SaveSettingsResponse: v => object(v, { revision: safe, last_updated: timestamp }),
   SyncStatusesRequest: v => object(v, { material_ids: array(id), request_id: uuid }),
   SyncStatusesResponse: v => object(v, { request_id: uuid, results: array(status) }),
-  ActivateOrLaunchRequest: v => object(v, { material_id: id }),
-  OpenContainingFolderRequest: v => object(v, { material_id: id }),
-  BatchLaunchRequest: v => object(v, { group_id: id }),
+  ActivateOrLaunchRequest: v => object(v, { material_id: id, explorer_open_mode: member(enums.explorer_open_mode) }),
+  OpenContainingFolderRequest: v => object(v, { material_id: id, explorer_open_mode: member(enums.explorer_open_mode) }),
+  BatchLaunchRequest: v => object(v, { group_id: id, explorer_open_mode: member(enums.explorer_open_mode) }),
   BatchLaunchResponse: v => object(v, { results: array(launch) }),
   PrepareDroppedFilesRequest: v => { object(v, { paths: array(string) }); requireValue(v.paths.length > 0 && v.paths.length <= 100 && v.paths.every(path => path.length > 0 && path.length <= 32767)); },
   DroppedFileCandidate: droppedCandidate,
@@ -175,9 +185,12 @@ export const validators = Object.freeze({
   SaveWindowExclusionsResponse: v => object(v, { patterns: exclusionPatterns }),
 });
 export function validate(type, value) {
-  requireValue(Object.hasOwn(validators, type)); validators[type](value);
   const copy = structuredClone(value);
-  const cfg = type === 'AppConfig' ? copy : copy.config;
+  const cfg = type === 'AppConfig' ? copy : copy?.config;
+  if (cfg) { cfg.explorer_open_mode ??= 'new_window'; for (const g of cfg.groups ?? []) g.explorer_open_mode ??= 'inherit'; }
+  if (type === 'GroupItem') copy.explorer_open_mode ??= 'inherit';
+  if (['ActivateOrLaunchRequest','OpenContainingFolderRequest','BatchLaunchRequest'].includes(type)) copy.explorer_open_mode ??= 'new_window';
+  requireValue(Object.hasOwn(validators, type)); validators[type](copy);
   for (const m of cfg?.materials ?? []) if (m.window_match_pattern === '') m.window_match_pattern = null;
   if (type === 'MaterialItem' && copy.window_match_pattern === '') copy.window_match_pattern = null;
   return copy;

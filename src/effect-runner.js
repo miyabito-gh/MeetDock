@@ -20,6 +20,7 @@ export function createServices(ipc, pdf, lifecycle) {
     windows: Object.freeze({ list: r => ipc.call('list_windows', r), activate: r => ipc.call('activate_window', r), close: r => ipc.call('close_window', r), saveExclusions: r => ipc.call('save_window_exclusions', r), saveSnapshot:()=>ipc.call('save_window_snapshot'), loadSnapshot:()=>ipc.call('load_window_snapshot'), launchSnapshotItem:r=>ipc.call('launch_window_snapshot_item',r) }),
     launch: Object.freeze({ activate: r => ipc.call('activate_or_launch', r), batch: r => ipc.call('batch_launch_main', r), openContainingFolder: r => ipc.call('open_containing_folder', r) }),
     droppedFiles: Object.freeze({ prepare: r => ipc.call('prepare_dropped_files', r) }),
+    pdfSidecars: Object.freeze({ load: r => ipc.call('load_pdf_sidecar', r), save: r => ipc.call('save_pdf_sidecar', r), remove: r => ipc.call('remove_pdf_sidecar', r) }),
     pdf, lifecycle,
   });
 }
@@ -31,7 +32,7 @@ export function createServices(ipc, pdf, lifecycle) {
 export function createEffectRunner(services, dispatch, onIdle = () => {}) {
   const seen = new WeakSet(), pending = new Set(), batches = new Map();
   async function execute(f) {
-    const context = { generation: f.generation, material_id: f.request.material_id, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id, index:f.request.index,
+    const context = { generation: f.generation, material_id: f.request.material_id, pdf_identity: f.request.pdf_identity, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id, index:f.request.index,
       ...(Number.isSafeInteger(f.request.search_generation) ? { search_generation: f.request.search_generation } : {}) };
     let event;
     try {
@@ -96,7 +97,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
             if (control.cancelled) break;
             if (index) await new Promise(resolve => setTimeout(resolve, 250));
             if (control.cancelled) break;
-            try { results.push(validate('LaunchResponse', await services.launch.activate({ material_id: f.request.material_ids[index] }))); }
+            try { results.push(validate('LaunchResponse', await services.launch.activate({ material_id: f.request.material_ids[index], explorer_open_mode: f.request.explorer_open_mode }))); }
             catch (raw) { results.push({ material_id: f.request.material_ids[index], outcome: 'launch_failed', error: safeError(raw) }); }
           }
           batches.delete(f.request.group_id);
@@ -112,6 +113,9 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
           event = { type: Event.PdfReady, view, ...context }; break;
         }
         case Effect.ClosePdf: await services.pdf.close(); return;
+        case Effect.LoadPdfSidecar: event = { type: Event.PdfSidecarLoaded, sidecar: await services.pdfSidecars.load(f.request), ...context }; break;
+        case Effect.SavePdfSidecar: event = { type: Event.PdfSidecarSaved, sidecar: await services.pdfSidecars.save(f.request), ...context }; break;
+        case Effect.RemovePdfSidecar: event = { type: Event.PdfSidecarRemoved, removed: await services.pdfSidecars.remove(f.request), ...context }; break;
         case Effect.PdfPrevious: event = { type: Event.PdfViewChanged, view: await services.pdf.previous(f.request), ...context }; break;
         case Effect.PdfNext: event = { type: Event.PdfViewChanged, view: await services.pdf.next(f.request), ...context }; break;
         case Effect.PdfGoToPage: event = { type: Event.PdfViewChanged, view: await services.pdf.goToPage(f.request.page, f.request), ...context }; break;
@@ -138,7 +142,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         [Effect.PrepareDroppedFiles]: Event.DroppedFilesPrepareFailed,
         [Effect.BatchLaunch]: Event.BatchLaunchCompleted,
         [Effect.ReplacePdf]: error.code === 'PDF_PASSWORD_REQUIRED' ? Event.PdfPasswordRequired : Event.PdfFailed,
-        [Effect.ClosePdf]: Event.EffectFailed, [Effect.PdfPrevious]: Event.PdfFailed, [Effect.PdfNext]: Event.PdfFailed,
+        [Effect.ClosePdf]: Event.EffectFailed, [Effect.LoadPdfSidecar]: Event.PdfSidecarFailed, [Effect.SavePdfSidecar]: Event.PdfSidecarFailed, [Effect.RemovePdfSidecar]: Event.PdfSidecarFailed, [Effect.PdfPrevious]: Event.PdfFailed, [Effect.PdfNext]: Event.PdfFailed,
         [Effect.PdfZoomIn]: Event.PdfFailed, [Effect.PdfZoomOut]: Event.PdfFailed, [Effect.PdfFit]: Event.PdfFailed,
         [Effect.PdfSearch]: Event.PdfFailed, [Effect.PdfSearchPrevious]: Event.PdfFailed, [Effect.PdfSearchNext]: Event.PdfFailed, [Effect.CloseWindow]: Event.EffectFailed,
       }[f.type] ?? Event.FatalError;

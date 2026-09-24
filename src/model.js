@@ -4,12 +4,12 @@ const enumeration = names => Object.freeze(Object.fromEntries(names.split(' ').m
 export const Lifecycle = enumeration('Booting Ready ReadOnly RecoveryPending MigrationPending FatalError');
 export const Edit = enumeration('Clean Dirty Saving Conflict');
 export const Pdf = enumeration('Closed Loading Viewing PasswordRequired Failed');
-export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDuplicated GroupMoved GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialMoved MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed WindowSnapshotSaveRequested WindowSnapshotSaved WindowSnapshotSaveFailed WindowSnapshotLoadRequested WindowSnapshotLoaded WindowSnapshotLoadFailed WindowSnapshotLaunchRequested WindowSnapshotLaunchAllRequested WindowSnapshotLaunchSucceeded WindowSnapshotLaunchFailed WindowSnapshotLaunchAllCompleted WindowSnapshotRegisterRequested ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
-export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses SyncWindows ActivateWindow RequestWindowClose SaveWindowExclusions SaveWindowSnapshot LoadWindowSnapshot LaunchWindowSnapshotItem BatchLaunchWindowSnapshot Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit PdfSearch PdfSearchPrevious PdfSearchNext CloseWindow');
+export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDuplicated GroupMoved GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialMoved MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed WindowSnapshotSaveRequested WindowSnapshotSaved WindowSnapshotSaveFailed WindowSnapshotLoadRequested WindowSnapshotLoaded WindowSnapshotLoadFailed WindowSnapshotLaunchRequested WindowSnapshotLaunchAllRequested WindowSnapshotLaunchSucceeded WindowSnapshotLaunchFailed WindowSnapshotLaunchAllCompleted WindowSnapshotRegisterRequested ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfSidecarSaveRequested PdfSidecarRemoveRequested PdfSidecarLoaded PdfSidecarSaved PdfSidecarRemoved PdfSidecarFailed PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
+export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses SyncWindows ActivateWindow RequestWindowClose SaveWindowExclusions SaveWindowSnapshot LoadWindowSnapshot LaunchWindowSnapshotItem BatchLaunchWindowSnapshot Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit PdfSearch PdfSearchPrevious PdfSearchNext LoadPdfSidecar SavePdfSidecar RemovePdfSidecar CloseWindow');
 
 export function initialState() {
   return { lifecycle: Lifecycle.Booting, edit: Edit.Clean, sync: { kind: 'Idle' },
-    launch: { running: [], batch: null }, pdf: { kind: Pdf.Closed },
+    launch: { running: [], batch: null }, pdf: { kind: Pdf.Closed }, pdf_sidecars: {},
     windowing: { dialog_open: false, sync: { kind: 'Idle' }, items: [], exclusions: [], running: [], closing: [], saving_exclusions: false, snapshot_busy:false, snapshot:null, snapshot_running:[], snapshot_batch:false, last_sync_at: null },
     config_revision: 0, state_generation: 0, saved_config: null, draft: null,
     candidates: [], resolution: null, saving: null, selected_group_id: null,
@@ -35,6 +35,11 @@ const reorder = (items, key) => {
   for (const bucket of buckets.values()) bucket.sort((a, b) => a.order - b.order).forEach((item, index) => { item.order = index + 1; });
 };
 const dirtyWith = (s, config) => ({ ...s, edit: s.edit === Edit.Conflict ? Edit.Conflict : Edit.Dirty, draft: config });
+const explorerMode = (s, groupId) => {
+  const config = s.draft ?? s.saved_config;
+  const override = config?.groups.find(g => g.id === groupId)?.explorer_open_mode ?? 'inherit';
+  return override === 'inherit' ? (config?.explorer_open_mode ?? 'new_window') : override;
+};
 
 /** Pure transition; guard failures retain the identical state and produce no effects.
  * `notice` is an ephemeral RenderModel value, never persisted or an effect.
@@ -104,12 +109,12 @@ export function transition(s, e) {
     case Event.DraftChanged:
       if (!editable(s) || ![Edit.Dirty, Edit.Conflict].includes(s.edit)) return deny();
       // Keep incomplete user input; SaveRequested alone validates the draft.
-      return result({ ...s, draft: structuredClone(e.config) });
+      return result(dirtyWith(s, structuredClone(e.config)));
     case Event.GroupAdded: {
       if (!editable(s) || !s.saved_config || typeof e.group?.name !== 'string' || !e.group.name.trim()) return deny();
       const config = editableConfig(s);
       if (config.groups.some(g => g.id === e.group.id) || (e.group.parent_id !== null && !config.groups.some(g => g.id === e.group.parent_id))) return deny();
-      config.groups.push({ id: e.group.id, parent_id: e.group.parent_id, name: e.group.name, order: Number.MAX_SAFE_INTEGER });
+      config.groups.push({ id: e.group.id, parent_id: e.group.parent_id, name: e.group.name, order: Number.MAX_SAFE_INTEGER, explorer_open_mode: e.group.explorer_open_mode ?? 'inherit' });
       reorder(config.groups, g => g.parent_id ?? 'root');
       return result({ ...dirtyWith(s, config), selected_group_id: e.group.id });
     }
@@ -368,17 +373,17 @@ export function transition(s, e) {
       if(!editable(s)||!s.windowing.snapshot?.items?.length||!s.saved_config)return deny();
       const config=editableConfig(s),groupId=crypto.randomUUID(),stamp=new Date(s.windowing.snapshot.saved_at_unix_ms).toLocaleString('ja-JP');
       config.groups.push({id:groupId,parent_id:null,name:`保存ウィンドウ ${stamp}`,order:Number.MAX_SAFE_INTEGER});
-      for(const item of s.windowing.snapshot.items)config.materials.push({id:crypto.randomUUID(),group_id:groupId,name:item.title||item.app_name,role:'main',target_type:'file',path:item.executable_path,window_match_pattern:null,order:Number.MAX_SAFE_INTEGER});
+      for(const item of s.windowing.snapshot.items)config.materials.push({id:crypto.randomUUID(),group_id:groupId,name:item.title||item.app_name,role:'main',target_type:'file',path:item.document_path??item.executable_path,window_match_pattern:null,order:Number.MAX_SAFE_INTEGER});
       reorder(config.groups,g=>g.parent_id??'root');reorder(config.materials,m=>`${m.group_id}\0${m.role}`);
       return result({...dirtyWith(s,config),selected_group_id:groupId},[],{code:'WINDOW_SNAPSHOT_REGISTERED'});
     }
     case Event.ActivateRequested:
       if (!editable(s) || !material(s, e.material_id) || s.launch.running.some(x => x.material_id === e.material_id) || s.launch.batch?.material_ids.includes(e.material_id)) return deny();
       return result({ ...s, launch: { ...s.launch, running: [...s.launch.running, { material_id: e.material_id, generation: s.state_generation }] } },
-        [effect(Effect.Activate, { material_id: e.material_id })]);
+        [effect(Effect.Activate, { material_id: e.material_id, explorer_open_mode: explorerMode(s, material(s,e.material_id).group_id) })]);
     case Event.OpenContainingFolderRequested:
       if (!editable(s) || !material(s, e.material_id)) return deny();
-      return result(s, [effect(Effect.OpenContainingFolder, { material_id: e.material_id })]);
+      return result(s, [effect(Effect.OpenContainingFolder, { material_id: e.material_id, explorer_open_mode: explorerMode(s, material(s,e.material_id).group_id) })]);
     case Event.OpenContainingFolderCompleted:
       return result(s, [], e.error ?? null);
     case Event.LaunchSucceeded:
@@ -395,7 +400,7 @@ export function transition(s, e) {
       if (!editable(s) || !group(s, e.group_id) || s.launch.batch) return deny();
       const ids = s.saved_config.materials.filter(m => m.group_id === e.group_id && m.role === 'main').map(m => m.id);
       if (s.launch.running.some(x => ids.includes(x.material_id))) return deny();
-      return result({ ...s, launch: { ...s.launch, batch: { group_id: e.group_id, material_ids: ids, generation: s.state_generation } } }, [effect(Effect.BatchLaunch, { group_id: e.group_id, material_ids: ids })]);
+      return result({ ...s, launch: { ...s.launch, batch: { group_id: e.group_id, material_ids: ids, generation: s.state_generation } } }, [effect(Effect.BatchLaunch, { group_id: e.group_id, material_ids: ids, explorer_open_mode: explorerMode(s,e.group_id) })]);
     }
     case Event.BatchLaunchCancelRequested:
       if (!s.launch.batch || s.launch.batch.group_id !== e.group_id) return deny();
@@ -434,10 +439,38 @@ export function transition(s, e) {
       if (!(s.pdf.kind === Pdf.Loading || (e.type === Event.PdfFailed && s.pdf.kind === Pdf.Viewing))) return deny();
       if (e.type === Event.PdfReady && (!Number.isSafeInteger(e.view?.current_page) || !Number.isSafeInteger(e.view?.total_pages) ||
         !Number.isSafeInteger(e.view?.zoom_percent) || e.view.current_page < 1 || e.view.current_page > e.view.total_pages || e.view.zoom_percent < 1)) return deny();
-      return result({ ...s, pdf: e.type === Event.PdfReady
+      const nextPdf = e.type === Event.PdfReady
         ? { ...s.pdf, kind: Pdf.Viewing, ...e.view }
         : { kind: e.type === Event.PdfPasswordRequired ? Pdf.PasswordRequired : Pdf.Failed, material_id: s.pdf.material_id,
-          generation: s.pdf.generation, ...(e.type === Event.PdfFailed ? { code: e.error.code } : {}) } }, [], e.error ?? null);
+          generation: s.pdf.generation, ...(e.type === Event.PdfFailed ? { code: e.error.code } : {}) };
+      if (e.type !== Event.PdfReady) return result({ ...s, pdf: nextPdf }, [], e.error ?? null);
+      const current = material(s, s.pdf.material_id), pdf_identity = `${current.target_type}:${current.path}`;
+      return result({ ...s, pdf: { ...nextPdf, sidecar_loading: true, pdf_identity } },
+        [effect(Effect.LoadPdfSidecar, { material_id: current.id, pdf_identity }, { generation: s.pdf.generation })]);
+    case Event.PdfSidecarLoaded:
+      if (s.pdf.kind !== Pdf.Viewing || e.generation !== s.pdf.generation || e.material_id !== s.pdf.material_id) return deny();
+      return result({ ...s, pdf: { ...s.pdf, sidecar_loading: false, sidecar: e.sidecar }, pdf_sidecars: e.sidecar ? { ...s.pdf_sidecars, [`${e.sidecar.material_id}\0${e.sidecar.pdf_identity}`]: e.sidecar } : s.pdf_sidecars });
+    case Event.PdfSidecarSaveRequested:
+      { const target = material(s, e.sidecar?.material_id), identity = target ? `${target.target_type}:${target.path}` : null;
+      if (!target || e.sidecar?.pdf_identity !== identity) return deny();
+      const key = `${e.sidecar.material_id}\0${identity}`, current = s.pdf.kind === Pdf.Viewing && e.sidecar.material_id === s.pdf.material_id;
+      return result({ ...s, pdf: current ? { ...s.pdf, sidecar: structuredClone(e.sidecar) } : s.pdf,
+        pdf_sidecars: { ...s.pdf_sidecars, [key]: structuredClone(e.sidecar) } },
+        [effect(Effect.SavePdfSidecar, structuredClone(e.sidecar), { generation: s.state_generation })]); }
+    case Event.PdfSidecarSaved:
+      return result({ ...s, pdf_sidecars: { ...s.pdf_sidecars, [`${e.sidecar.material_id}\0${e.sidecar.pdf_identity}`]: e.sidecar },
+        pdf: s.pdf.kind === Pdf.Viewing && e.sidecar.material_id === s.pdf.material_id ? { ...s.pdf, sidecar: e.sidecar } : s.pdf });
+    case Event.PdfSidecarRemoveRequested: {
+      const target = material(s, e.material_id), identity = target ? `${target.target_type}:${target.path}` : null;
+      if (!target || e.pdf_identity !== identity) return deny();
+      return result(s, [effect(Effect.RemovePdfSidecar, { material_id: e.material_id, pdf_identity: identity })]);
+    }
+    case Event.PdfSidecarRemoved: {
+      const key = `${e.material_id}\0${e.pdf_identity}`, sidecars = { ...s.pdf_sidecars }; delete sidecars[key];
+      return result({ ...s, pdf_sidecars: sidecars, pdf: s.pdf.kind === Pdf.Viewing && e.material_id === s.pdf.material_id ? { ...s.pdf, sidecar: null } : s.pdf });
+    }
+    case Event.PdfSidecarFailed:
+      return result(s, [], e.error);
     case Event.PdfClosed: {
       const generation = bump();
       if (s.pdf.kind === Pdf.Closed || generation === null) return deny();
@@ -510,7 +543,7 @@ export function renderModel(result) {
     can_edit: editable(s) && s.edit !== Edit.Saving, can_launch: editable(s),
     config: s.draft ?? s.saved_config, statuses: s.statuses, last_sync_at: s.last_sync_at, launch_results: s.launch_results,
     candidates: s.candidates, selected_group_id: s.selected_group_id,
-    dropped_files: s.dropped_files, pdf_candidates, pdf_current_name, query: s.query, width: s.width, layout: s.layout,
+    dropped_files: s.dropped_files, pdf_candidates, pdf_current_name, pdf_sidecars: s.pdf_sidecars, query: s.query, width: s.width, layout: s.layout,
     window_dialog_open: s.windowing.dialog_open, window_items: s.windowing.items, window_exclusions: s.windowing.exclusions, window_snapshot_busy:s.windowing.snapshot_busy, window_snapshot:s.windowing.snapshot, window_snapshot_running:s.windowing.snapshot_running, window_snapshot_batch:s.windowing.snapshot_batch,
     window_sync: s.windowing.sync, window_operations: s.windowing.running, closing_window_ids: s.windowing.closing,
     window_exclusions_saving: s.windowing.saving_exclusions, window_last_sync_at: s.windowing.last_sync_at,

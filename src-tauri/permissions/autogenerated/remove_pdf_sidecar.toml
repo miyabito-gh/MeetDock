@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-remove-pdf-sidecar"
+description = "Enables the remove_pdf_sidecar command without any pre-configured scope."
+commands.allow = ["remove_pdf_sidecar"]
+
+[[permission]]
+identifier = "deny-remove-pdf-sidecar"
+description = "Denies the remove_pdf_sidecar command without any pre-configured scope."
+commands.deny = ["remove_pdf_sidecar"]

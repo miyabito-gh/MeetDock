@@ -14,6 +14,21 @@ macro_rules! enumeration {
 }
 enumeration!(MaterialRole { Main, Reference });
 enumeration!(TargetType { File, Folder, Url });
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExplorerOpenMode {
+    #[default]
+    NewWindow,
+    ExistingTab,
+}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GroupExplorerOpenMode {
+    #[default]
+    Inherit,
+    NewWindow,
+    ExistingTab,
+}
 enumeration!(SettingsMode {
     Ready,
     MigrationRequired,
@@ -252,8 +267,10 @@ macro_rules! dto {
         pub struct $name { $($(#[$attr])* pub $field: $ty),* }
     };
 }
-dto!(AppConfig { schema_version: u32, app_version: String, revision: Revision, last_updated: UtcTimestamp, groups: Vec<GroupItem>, materials: Vec<MaterialItem> });
-dto!(GroupItem { id: Id, #[serde(deserialize_with = "required_nullable")] parent_id: Option<Id>, name: String, order: u32 });
+dto!(AppConfig { schema_version: u32, app_version: String, revision: Revision, last_updated: UtcTimestamp,
+    #[serde(default)] explorer_open_mode: ExplorerOpenMode, groups: Vec<GroupItem>, materials: Vec<MaterialItem> });
+dto!(GroupItem { id: Id, #[serde(deserialize_with = "required_nullable")] parent_id: Option<Id>, name: String, order: u32,
+    #[serde(default)] explorer_open_mode: GroupExplorerOpenMode });
 dto!(MaterialItem { id: Id, group_id: Id, name: String, role: MaterialRole, target_type: TargetType, path: String,
     #[serde(deserialize_with = "required_nullable")] window_match_pattern: Option<String>, order: u32 });
 dto!(SettingsCandidate { candidate_id: Id, kind: CandidateKind,
@@ -276,9 +293,9 @@ dto!(SaveSettingsResponse {
 });
 dto!(SyncStatusesRequest { material_ids: Vec<Id>, request_id: RequestId });
 dto!(SyncStatusesResponse { request_id: RequestId, results: Vec<MaterialStatusResult> });
-dto!(ActivateOrLaunchRequest { material_id: Id });
-dto!(OpenContainingFolderRequest { material_id: Id });
-dto!(BatchLaunchRequest { group_id: Id });
+dto!(ActivateOrLaunchRequest { material_id: Id, #[serde(default)] explorer_open_mode: ExplorerOpenMode });
+dto!(OpenContainingFolderRequest { material_id: Id, #[serde(default)] explorer_open_mode: ExplorerOpenMode });
+dto!(BatchLaunchRequest { group_id: Id, #[serde(default)] explorer_open_mode: ExplorerOpenMode });
 dto!(BatchLaunchResponse { results: Vec<LaunchResponse> });
 dto!(PrepareDroppedFilesRequest { paths: Vec<String> });
 dto!(DroppedFileCandidate {

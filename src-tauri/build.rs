@@ -17,6 +17,9 @@ fn main() {
             "batch_launch_main",
             "open_containing_folder",
             "prepare_dropped_files",
+            "load_pdf_sidecar",
+            "save_pdf_sidecar",
+            "remove_pdf_sidecar",
         ]),
     ))
     .expect("failed to build MeetDock permissions")

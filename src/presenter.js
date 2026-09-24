@@ -61,6 +61,8 @@ export function createPresenter(view, dispatch) {
     pdfSearch(query) { if (typeof query !== 'string') throw new TypeError('Expected text'); dispatch({ type: Event.PdfSearchRequested, query }); },
     pdfSearchPrevious() { dispatch({ type: Event.PdfSearchPreviousRequested }); },
     pdfSearchNext() { dispatch({ type: Event.PdfSearchNextRequested }); },
+    savePdfSidecar(sidecar) { dispatch({ type: Event.PdfSidecarSaveRequested, sidecar: structuredClone(sidecar) }); },
+    removePdfSidecar(material_id, pdf_identity) { id(material_id); dispatch({ type: Event.PdfSidecarRemoveRequested, material_id, pdf_identity }); },
     pdfMaximize() { dispatch({ type: Event.PdfMaximizeToggled }); },
     toggleSidebar() { dispatch({ type: Event.SidebarToggled }); },
     sidebarWidth(value) { dispatch({ type: Event.SidebarWidthChanged, value }); },

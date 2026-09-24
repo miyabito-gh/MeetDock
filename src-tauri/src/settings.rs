@@ -82,6 +82,7 @@ fn empty_config() -> Result<AppConfig, AppError> {
         app_version: env!("CARGO_PKG_VERSION").into(),
         revision: Revision::try_from(0).unwrap(),
         last_updated: settings_io::now()?,
+        explorer_open_mode: ExplorerOpenMode::NewWindow,
         groups: vec![],
         materials: vec![],
     })
