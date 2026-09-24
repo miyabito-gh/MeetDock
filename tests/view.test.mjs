@@ -42,7 +42,7 @@ test('SEC-01 dynamic view uses textContent and does not inject markup', () => {
 
 test('modal key handling is isolated from document shortcuts', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  assert.match(source, /for\(const modal of \[dialog,issue,dndDialog,windowsDialog\]\) modal\.addEventListener\('keydown',e=>e\.stopPropagation\(\)\)/);
+  assert.match(source, /for\(const modal of \[dialog,operationDialog,issue,dndDialog,windowsDialog\]\) modal\.addEventListener\('keydown',e=>e\.stopPropagation\(\)\)/);
   assert.match(source, /const modalOpen=dialog\.open\|\|issue\.open\|\|dndDialog\.open\|\|windowsDialog\.open;if\(modalOpen\)return/);
 });
 
@@ -245,4 +245,14 @@ test('empty search results provide a clear recovery action', () => {
 test('DnD confirmation and PDF external fallback are explicit UI actions', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   for (const token of ["'dnd-confirm'", "'dnd-cancel'", "'confirmDroppedFiles'", "'PDF_FALLBACK_TOO_LARGE'", "'pdf-external'", "'openPdfExternal'"]) assert.ok(source.includes(token));
+});
+
+test('group and material operations use an accessible in-app dialog with explicit contracts', () => {
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  for(const token of ["'modal operation-dialog'","'子グループと資料を含めて複製'","'別のグループへ移動'","'登録のみ削除（実ファイルは残す）'","emit('duplicateGroup',item.id)","emit('moveGroup',item.id,parentId||null)","emit('moveMaterial',item.id,item.group_id,item.role==='main'?'reference':'main')",'groupDescendants(item.id)',"operationDialog.addEventListener('cancel'","operationSubmit.type='submit'"])assert.ok(source.includes(token));
+  assert.doesNotMatch(source,/prompt\('(新しいグループ名|子グループ名|グループ名)'/);
+  assert.doesNotMatch(source,/confirm\('(未保存の変更|空のグループ|資料を削除)/);
+  assert.match(styles,/\.operation-dialog-text\{[^}]*line-height:1\.6/);
+  assert.match(styles,/\.danger-button\{[^}]*background:var\(--danger\)/);
 });
