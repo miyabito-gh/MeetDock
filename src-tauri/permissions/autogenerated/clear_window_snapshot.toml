@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-clear-window-snapshot"
+description = "Enables the clear_window_snapshot command without any pre-configured scope."
+commands.allow = ["clear_window_snapshot"]
+
+[[permission]]
+identifier = "deny-clear-window-snapshot"
+description = "Denies the clear_window_snapshot command without any pre-configured scope."
+commands.deny = ["clear_window_snapshot"]

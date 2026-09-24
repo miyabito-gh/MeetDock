@@ -334,6 +334,20 @@ async fn load_window_snapshot(
         .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
 }
 
+#[tauri::command]
+async fn clear_window_snapshot(
+    window: tauri::WebviewWindow,
+    service: tauri::State<'_, WindowService>,
+) -> Result<bool, AppError> {
+    if window.label() != "main" {
+        return Err(AppError::new(ErrorCode::AccessDenied, None));
+    }
+    let service = service.inner().clone();
+    tokio::task::spawn_blocking(move || service.clear_snapshot())
+        .await
+        .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
+}
+
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct LaunchWindowSnapshotItemRequest {
@@ -558,6 +572,7 @@ pub fn run() {
             save_window_exclusions,
             save_window_snapshot,
             load_window_snapshot,
+            clear_window_snapshot,
             launch_window_snapshot_item,
             activate_or_launch,
             batch_launch_main,

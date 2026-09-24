@@ -238,6 +238,10 @@ impl WindowService {
         load_snapshot_file(&self.snapshot_path())
     }
 
+    pub fn clear_snapshot(&self) -> Result<bool, AppError> {
+        clear_snapshot_file(&self.snapshot_path())
+    }
+
     pub fn launch_snapshot_item(&self, index: usize) -> Result<(), AppError> {
         let snapshot = self
             .load_snapshot()?
@@ -356,6 +360,14 @@ fn load_snapshot_file(path: &Path) -> Result<Option<WindowSnapshot>, AppError> {
         .map_err(|_| AppError::new(ErrorCode::ConfigCorrupt, None))?;
     validate_snapshot(&snapshot)?;
     Ok(Some(snapshot))
+}
+
+fn clear_snapshot_file(path: &Path) -> Result<bool, AppError> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(_) => Err(AppError::new(ErrorCode::ConfigIo, None)),
+    }
 }
 
 fn validate_snapshot(snapshot: &WindowSnapshot) -> Result<(), AppError> {
@@ -895,6 +907,11 @@ mod tests {
             load_snapshot_file(&path).unwrap().unwrap().items[0].title,
             "更新後"
         );
+        assert!(clear_snapshot_file(&path).unwrap());
+        assert!(!clear_snapshot_file(&path).unwrap());
+        assert!(load_snapshot_file(&path).unwrap().is_none());
+
+        persist_snapshot(&path, &make_snapshot("検証用")).unwrap();
 
         std::fs::write(
             &path,

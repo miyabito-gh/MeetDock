@@ -19,7 +19,7 @@ const req1 = '12345678-1234-4234-8234-123456789abc', req2 = '12345678-1234-4234-
 function ports() {
   return { settings: { load: async () => fixture('SettingsLoadResponse'), save: async () => fixture('SaveSettingsResponse'), resolve: async () => fixture('SettingsLoadResponse') },
     statuses: { sync: async r => ({ request_id: r.request_id, results: [] }) },
-    windows: { list: async r => ({ request_id: r.request_id, windows: [], exclusions: [] }), activate: async r => r, close: async r => r, saveExclusions: async r => ({ patterns: r.patterns }), launchSnapshotItem:async r=>r },
+    windows: { list: async r => ({ request_id: r.request_id, windows: [], exclusions: [] }), activate: async r => r, close: async r => r, saveExclusions: async r => ({ patterns: r.patterns }), clearSnapshot:async()=>true, launchSnapshotItem:async r=>r },
     launch: { activate: async () => fixture('LaunchResponse'), batch: async () => fixture('BatchLaunchResponse') },
     pdf: { replace: async () => ({ current_page: 1, total_pages: 3, zoom_percent: 100 }), close: async () => {},
       previous: async () => ({ current_page: 1, total_pages: 3, zoom_percent: 100 }), next: async () => ({ current_page: 2, total_pages: 3, zoom_percent: 100 }),
@@ -91,6 +91,11 @@ test('Runner launches saved window snapshot items individually and sequentially'
     {type:Effect.LaunchWindowSnapshotItem,request:{index:2},generation:1},
     {type:Effect.BatchLaunchWindowSnapshot,request:{indices:[0,1]},generation:1},
   ]);await runner.settled();assert.deepEqual(calls,[2,0,1]);assert.deepEqual(events.map(event=>event.type),[Event.WindowSnapshotLaunchSucceeded,Event.WindowSnapshotLaunchAllCompleted]);
+});
+test('Runner clears the persisted window snapshot after registration',async()=>{
+  const services=ports(),events=[];let calls=0;services.windows.clearSnapshot=async()=>{calls++;return true};
+  const runner=createEffectRunner(services,event=>events.push(event));runner.run([{type:Effect.ClearWindowSnapshot,request:{}}]);
+  await runner.settled();assert.equal(calls,1);assert.equal(events[0].type,Event.WindowSnapshotClearSucceeded);assert.equal(events[0].removed,true);
 });
 test('Runner error mapping for every service and malformed response', async () => {
   const cases = [

@@ -173,6 +173,7 @@ export const validators = Object.freeze({
   SaveWindowSnapshotRequest: empty,
   SaveWindowSnapshotResponse: v => object(v, { saved: bool, saved_count: safe, excluded_count: safe, exclusion_reasons: array(string) }),
   LoadWindowSnapshotRequest: empty,
+  ClearWindowSnapshotRequest: empty,
   OptionalWindowSnapshot: v => { if (v !== null) windowSnapshot(v); },
   LaunchWindowSnapshotItemRequest: v => object(v, { index: safe }),
   LaunchWindowSnapshotItemResponse: v => object(v, { index: safe }),

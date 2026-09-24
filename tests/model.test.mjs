@@ -120,6 +120,8 @@ test('saved window snapshot supports individual/all launch and group registratio
   assert.equal(run(all.state,Event.WindowSnapshotLaunchAllCompleted).state.windowing.snapshot_batch,false);
   const registered=run(loaded,Event.WindowSnapshotRegisterRequested);assert.equal(registered.state.edit,Edit.Dirty);assert.equal(registered.state.draft.groups.length,config.groups.length+1);
   const added=registered.state.draft.materials.slice(config.materials.length);assert.deepEqual(added.map(item=>item.path),snapshot.items.map(item=>item.executable_path));assert.ok(added.every(item=>item.role==='main'));
+  assert.equal(registered.state.windowing.snapshot,null);assert.equal(registered.effects[0].type,Effect.ClearWindowSnapshot);assert.equal(registered.state.selected_group_id,registered.state.draft.groups.at(-1).id);
+  assert.equal(run(registered.state,Event.WindowSnapshotClearSucceeded,{removed:true}).state.windowing.snapshot,null);
 });
 test('saving a window snapshot closes the dialog, reloads it, and selects its virtual group',()=>{
   const started=run({...ready(),windowing:{...ready().windowing,dialog_open:true}},Event.WindowSnapshotSaveRequested);

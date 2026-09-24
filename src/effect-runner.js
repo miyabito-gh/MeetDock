@@ -17,7 +17,7 @@ export function createServices(ipc, pdf, lifecycle) {
   return Object.freeze({
     settings: Object.freeze({ load: () => ipc.call('load_settings'), resolve: r => ipc.call('resolve_settings_issue', r), save: r => ipc.call('save_settings', r) }),
     statuses: Object.freeze({ sync: r => ipc.call('sync_material_statuses', r) }),
-    windows: Object.freeze({ list: r => ipc.call('list_windows', r), activate: r => ipc.call('activate_window', r), close: r => ipc.call('close_window', r), saveExclusions: r => ipc.call('save_window_exclusions', r), saveSnapshot:()=>ipc.call('save_window_snapshot'), loadSnapshot:()=>ipc.call('load_window_snapshot'), launchSnapshotItem:r=>ipc.call('launch_window_snapshot_item',r) }),
+    windows: Object.freeze({ list: r => ipc.call('list_windows', r), activate: r => ipc.call('activate_window', r), close: r => ipc.call('close_window', r), saveExclusions: r => ipc.call('save_window_exclusions', r), saveSnapshot:()=>ipc.call('save_window_snapshot'), loadSnapshot:()=>ipc.call('load_window_snapshot'), clearSnapshot:()=>ipc.call('clear_window_snapshot'), launchSnapshotItem:r=>ipc.call('launch_window_snapshot_item',r) }),
     launch: Object.freeze({ activate: r => ipc.call('activate_or_launch', r), batch: r => ipc.call('batch_launch_main', r), openContainingFolder: r => ipc.call('open_containing_folder', r) }),
     droppedFiles: Object.freeze({ prepare: r => ipc.call('prepare_dropped_files', r) }),
     pdfSidecars: Object.freeze({ load: r => ipc.call('load_pdf_sidecar', r), save: r => ipc.call('save_pdf_sidecar', r), remove: r => ipc.call('remove_pdf_sidecar', r) }),
@@ -71,6 +71,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         }
         case Effect.SaveWindowSnapshot: event={type:Event.WindowSnapshotSaved,response:await services.windows.saveSnapshot(),...context};break;
         case Effect.LoadWindowSnapshot: event={type:Event.WindowSnapshotLoaded,response:await services.windows.loadSnapshot(),...context};break;
+        case Effect.ClearWindowSnapshot: event={type:Event.WindowSnapshotClearSucceeded,removed:await services.windows.clearSnapshot(),...context};break;
         case Effect.LaunchWindowSnapshotItem: {
           const r=await services.windows.launchSnapshotItem(f.request);if(r?.index!==f.request.index)throw appError('INTERNAL_ERROR');
           event={type:Event.WindowSnapshotLaunchSucceeded,index:r.index,...context};break;
@@ -136,7 +137,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         [Effect.SyncStatuses]: Event.SyncFailed, [Effect.SyncWindows]: Event.WindowSyncFailed,
         [Effect.ActivateWindow]: Event.WindowActivateFailed, [Effect.RequestWindowClose]: Event.WindowCloseFailed,
         [Effect.SaveWindowExclusions]: Event.WindowExclusionsSaveFailed,
-        [Effect.SaveWindowSnapshot]: Event.WindowSnapshotSaveFailed, [Effect.LoadWindowSnapshot]: Event.WindowSnapshotLoadFailed,
+        [Effect.SaveWindowSnapshot]: Event.WindowSnapshotSaveFailed, [Effect.LoadWindowSnapshot]: Event.WindowSnapshotLoadFailed, [Effect.ClearWindowSnapshot]: Event.WindowSnapshotClearFailed,
         [Effect.LaunchWindowSnapshotItem]: Event.WindowSnapshotLaunchFailed, [Effect.BatchLaunchWindowSnapshot]: Event.WindowSnapshotLaunchAllCompleted,
         [Effect.Activate]: Event.LaunchFailed, [Effect.OpenContainingFolder]: Event.OpenContainingFolderCompleted,
         [Effect.PrepareDroppedFiles]: Event.DroppedFilesPrepareFailed,

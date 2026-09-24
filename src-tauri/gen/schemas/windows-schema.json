@@ -195,6 +195,12 @@
           "markdownDescription": "Enables the batch_launch_main command without any pre-configured scope."
         },
         {
+          "description": "Enables the clear_window_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-clear-window-snapshot",
+          "markdownDescription": "Enables the clear_window_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the close_window command without any pre-configured scope.",
           "type": "string",
           "const": "allow-close-window",
@@ -307,6 +313,12 @@
           "type": "string",
           "const": "deny-batch-launch-main",
           "markdownDescription": "Denies the batch_launch_main command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the clear_window_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-clear-window-snapshot",
+          "markdownDescription": "Denies the clear_window_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the close_window command without any pre-configured scope.",

@@ -28,15 +28,18 @@ test('window snapshot commands reach native IPC with exact envelopes', async () 
   const calls = [], responses = {
     save_window_snapshot: { saved: true, saved_count: 1, excluded_count: 0, exclusion_reasons: [] },
     load_window_snapshot: snapshot,
+    clear_window_snapshot: true,
     launch_window_snapshot_item: { index: 2 },
   };
   const api = createIpcAdapter(async (command, payload) => { calls.push([command, payload]); return responses[command]; });
   assert.equal((await api.call('save_window_snapshot')).saved, true);
   assert.deepEqual(await api.call('load_window_snapshot'), snapshot);
+  assert.equal(await api.call('clear_window_snapshot'), true);
   assert.deepEqual(await api.call('launch_window_snapshot_item', { index: 2 }), { index: 2 });
   assert.deepEqual(calls, [
     ['save_window_snapshot', {}],
     ['load_window_snapshot', {}],
+    ['clear_window_snapshot', {}],
     ['launch_window_snapshot_item', { request: { index: 2 } }],
   ]);
 });

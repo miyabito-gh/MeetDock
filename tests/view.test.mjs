@@ -204,6 +204,17 @@ test('groups and materials expose internal drag reorder affordances', () => {
   assert.doesNotMatch(source,/addEventListener\('dragstart'/);
 });
 
+test('temporary window group stays separated at the bottom and never exposes reorder affordance',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  assert.ok(source.includes("row.classList.contains('snapshot-group')"));
+  assert.ok(source.includes('groups.append(row)'));
+  assert.ok(source.includes("previousEdit==='Saving'&&next.edit==='Clean'"));
+  assert.ok(source.includes("querySelectorAll('.snapshot-material-row')"));
+  assert.match(styles,/\.snapshot-group\{[^}]*border-top:1px solid var\(--line\)/);
+  assert.match(styles,/\.reorder-mode \.snapshot-group\{[^}]*grid-template-columns:26px minmax\(0,1fr\) 28px/);
+});
+
 test('material pointer reorder can move across roles at an explicit position or section tail', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');

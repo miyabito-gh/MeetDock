@@ -11,6 +11,7 @@ const commands = Object.freeze({
   save_window_exclusions: ['SaveWindowExclusionsRequest', 'SaveWindowExclusionsResponse'],
   save_window_snapshot: ['SaveWindowSnapshotRequest', 'SaveWindowSnapshotResponse'],
   load_window_snapshot: ['LoadWindowSnapshotRequest', 'OptionalWindowSnapshot'],
+  clear_window_snapshot: ['ClearWindowSnapshotRequest', 'BooleanResponse'],
   launch_window_snapshot_item: ['LaunchWindowSnapshotItemRequest', 'LaunchWindowSnapshotItemResponse'],
   activate_or_launch: ['ActivateOrLaunchRequest', 'LaunchResponse'],
   batch_launch_main: ['BatchLaunchRequest', 'BatchLaunchResponse'],
@@ -31,7 +32,7 @@ export function createIpcAdapter(invoke) {
       try { dto = validate(input, request); }
       catch { throw appError(command === 'save_settings' ? 'VALIDATION_ERROR' : 'INVALID_REQUEST'); }
       let response;
-      try { response = await invoke(command, ['load_settings', 'save_window_snapshot', 'load_window_snapshot'].includes(command) ? {} : { request: dto }); }
+      try { response = await invoke(command, ['load_settings', 'save_window_snapshot', 'load_window_snapshot', 'clear_window_snapshot'].includes(command) ? {} : { request: dto }); }
       catch (error) {
         let checked;
         try { checked = validate('AppError', error); }
