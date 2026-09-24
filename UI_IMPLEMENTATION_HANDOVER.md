@@ -870,12 +870,14 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - `2e1ee2e`: Serde既定値フィールドを省略可能にしつつ、必須フィールド欠落・未知フィールド・位置配列入力を拒否する厳格性を維持。
 - `2e5534e`: `AGENTS.md` にMeetDock全体の共通作業指示とモデル選定基準を追加。引継ぎでは共通指示を再掲せず、このファイル固有の進捗・設計・未解決事項だけを記載する。
 - ブラウザー内PDFは公式資料を調査し、通常起動したChrome／Edgeのタブ、PDF URL、トップレベルHWNDを安全に一意対応できる契約がないため実装対象外と判断。条件付きの代替案を14.8.3へ記録した。
-- 上記修正後、Rust全テスト71件、JavaScript全テスト579件、`cargo check`、`git diff --check` が成功している。
+- Adobe Acrobat Pro（`Acrobat.exe`）をReaderと同じAccessibility DOM境界で観測し、実行ファイルとトップレベルHWNDが一致する一意なPDFパスだけを保存する対応を実装した。
+- Explorerの仮想フォルダーを、通常パスの `document_path` と排他的な `shell_location` として保存・復元する対応を実装した。Shell APIで正規化し、厳格なGUID parsing nameだけを許可する。
+- 上記修正後、Rust全テスト75件、JavaScript全テスト581件、`cargo check`、`git diff --check` が成功している。
 - 実機UI確認は未実施。
 
 ### 14.8 残項目
 
-#### 14.8.1 Explorerのホーム等の仮想フォルダー
+#### 14.8.1 Explorerのホーム等の仮想フォルダー（完了）
 
 - 現在の `explorer_window_paths` は `IWebBrowser2.LocationURL` が `file:///` または `file://` の場合だけ通常の絶対パスへ変換している。
 - ホーム、PC、ごみ箱等はファイルシステム上の絶対パスを持たないため、既存の `document_path` 検証を緩めて格納しない。
@@ -890,7 +892,13 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 同じShell parsing nameのExplorerだけを一意に再利用し、曖昧時は新規起動または安全な未復元とする。
 - 不正な任意文字列をShellロケーションとして起動しない厳格な検証と単体テストがある。
 
-#### 14.8.2 Adobe Acrobat Proの外部起動PDFパス取得
+実装結果:
+
+- `IShellFolderViewDual` から対象フォルダーを取得し、`SHParseDisplayName` と `SHGetNameFromIDList` でPIDLを正規化する。`SIGDN_FILESYSPATH` が得られる項目は従来の `document_path`、得られない仮想項目は `SIGDN_DESKTOPABSOLUTEPARSING` の `shell_location` として保存する。
+- `shell_location` はGUID parsing nameの連鎖だけを許可し、表示名、タイトル、任意の `shell:` エイリアスを拒否する。同じ正規名の既存Explorerが一つだけの場合に再利用し、複数なら新規起動へフォールバックする。
+- 現行Material契約へ仮想Shell項目を通常パスとして登録しない。スナップショットからの復元に限定する。
+
+#### 14.8.2 Adobe Acrobat Proの外部起動PDFパス取得（完了）
 
 - Reader向けのAccessibility DOM取得実装をそのままProへ広げず、Acrobat Proの実際の実行ファイル名、ウィンドウ階層、Accessibility構造を調査してから対応する。
 - HWNDとPDF完全パスを一意に対応できる場合だけ保存する。タイトル文字列だけからパスを推測しない。
@@ -901,6 +909,11 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - Acrobat Proで開いているPDFの完全パスを、対象HWNDへ一意に関連付けて保存できる。
 - 曖昧または取得不能な対応は保存せず、Readerの既存挙動を壊さない。
 - Pro固有の観測を純粋な解決処理へ渡す境界と単体テストがある。
+
+実装結果:
+
+- `Acrobat.exe` のトップレベルHWND配下だけをAccessibility DOMの `GetDocInfo` で観測し、既存の純粋な一意解決処理へ渡す。Readerの `AcroRd32.exe`、Proの `Acrobat.exe`、その他のHelper実行ファイルを混同しない。
+- 同一HWNDから異なる完全パスが観測された場合は保存しない。ReaderとProの同時存在、対象外実行ファイル、曖昧観測を単体テストで確認した。
 
 #### 14.8.3 ブラウザー内PDFのパス取得可否調査（完了）
 
@@ -931,35 +944,4 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ### 14.9 次チャット用引継ぎプロンプト
 
-以下を次チャットへそのまま貼り付ける。
-
-```text
-MeetDockの残項目から、次の1項目だけを選んで実装・テスト・差分確認・コミットまで完了し、他の残項目へ進まず停止してください。
-
-リポジトリ共通の作業規則はAGENTS.mdに従ってください。このプロンプトでは重複して列挙しません。
-
-残項目:
-1. Explorerのホーム等の仮想フォルダーを、通常のdocument_pathと分離したShellロケーションとして保存・復元する。
-2. Adobe Acrobat Proの外部起動PDFパス取得。
-
-UI_IMPLEMENTATION_HANDOVER.mdの14.7〜14.9で、現在の進捗、選択項目の設計、完了条件を確認してください。
-
-主な対象ファイル:
-- src-tauri/src/windowing.rs
-- src-tauri/src/contracts.rs
-- src-tauri/src/lib.rs
-- src/model.js
-- src/contracts.js
-- 関連するRust／JavaScriptテスト
-
-実施済み確認:
-- Excel、Reader、Word、PowerPointの取得実装済み。
-- 同一復元対象の二重保存・二重登録防止は546f9d7で実装済み。
-- Serde既定値と厳格なRust契約読込の両立は2e1ee2eで修正済み。
-- 共通作業指示とモデル選定基準は2e5534eでAGENTS.mdへ反映済み。
-- ブラウザー内PDFは安全な一意対応ができないため通常起動セッションを対象外とする調査済み。条件付き代替案は14.8.3に記録済み。
-- Rust全71件、JavaScript全579件、cargo check、git diff --check成功。
-- 実機UI確認は未実施。
-
-推奨モデル: gpt-5.6-sol、reasoning effortはmedium。残項目はいずれもWindows固有API、スナップショット、契約テストを横断する通常規模の実装または調査であり、複雑な専門作業向けのモデルを標準的な推論量で使うのが適している。
-```
+14.8の残項目はすべて完了したため、次チャット用の残項目プロンプトは不要。

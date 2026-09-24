@@ -56,6 +56,12 @@ struct OfficeWindowDocumentObservation {
     document_path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ExplorerLocation {
+    document_path: Option<String>,
+    shell_location: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SnapshotRestorability {
@@ -71,6 +77,8 @@ pub struct SnapshotItem {
     pub material_id: Option<Id>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub document_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell_location: Option<String>,
     pub app_name: String,
     pub title: String,
     pub executable_name: String,
@@ -213,7 +221,7 @@ impl WindowService {
         let mut reasons = Vec::new();
         let mut items = Vec::new();
         let mut excluded_count = 0;
-        let explorer_paths = explorer_window_paths();
+        let explorer_locations = explorer_window_locations();
         let windows = enumerate_native_windows();
         let excel_paths = excel_window_paths(&windows);
         let reader_paths = reader_window_paths(&windows);
@@ -230,9 +238,9 @@ impl WindowService {
                 .executable_name
                 .eq_ignore_ascii_case("explorer.exe")
             {
-                explorer_paths
+                explorer_locations
                     .get(&entry.window.identity.hwnd)
-                    .map(String::as_str)
+                    .and_then(|location| location.document_path.as_deref())
             } else {
                 None
             };
@@ -276,7 +284,8 @@ impl WindowService {
             } else {
                 None
             };
-            let item = snapshot_item(
+            let hwnd = entry.window.identity.hwnd;
+            let mut item = snapshot_item(
                 entry,
                 &exclusions,
                 association,
@@ -286,6 +295,11 @@ impl WindowService {
                 word_path,
                 powerpoint_path,
             );
+            if association.is_none() {
+                item.shell_location = explorer_locations
+                    .get(&hwnd)
+                    .and_then(|location| location.shell_location.clone());
+            }
             if item.restorability == SnapshotRestorability::Excluded {
                 excluded_count += 1;
                 if let Some(reason) = &item.reason {
@@ -360,7 +374,7 @@ impl WindowService {
         let explorer_paths = item
             .executable_name
             .eq_ignore_ascii_case("explorer.exe")
-            .then(explorer_window_paths)
+            .then(explorer_window_locations)
             .unwrap_or_default();
         if let Some(identity) = snapshot_window_identity(item, &windows, &explorer_paths) {
             match activate_native(&identity) {
@@ -431,6 +445,16 @@ fn snapshot_launch_command(item: &SnapshotItem) -> std::process::Command {
         command.arg(path);
         return command;
     }
+    #[cfg(windows)]
+    if let Some(location) = item
+        .shell_location
+        .as_deref()
+        .filter(|value| shell_location_syntax(value))
+    {
+        let mut command = std::process::Command::new("explorer.exe");
+        command.arg(location);
+        return command;
+    }
     std::process::Command::new(&item.executable_path)
 }
 
@@ -438,14 +462,51 @@ fn snapshot_path_key(path: &str) -> String {
     crate::contracts::windows_path_key(path)
 }
 
+fn shell_location_syntax(value: &str) -> bool {
+    let value = value.strip_prefix("shell:").unwrap_or(value);
+    let mut rest = value;
+    loop {
+        let Some(candidate) = rest.strip_prefix("::{") else {
+            return false;
+        };
+        let Some(end) = candidate.find('}') else {
+            return false;
+        };
+        let guid = &candidate[..end];
+        if guid.len() != 36
+            || !guid.chars().enumerate().all(|(index, ch)| {
+                matches!(index, 8 | 13 | 18 | 23) && ch == '-'
+                    || !matches!(index, 8 | 13 | 18 | 23) && ch.is_ascii_hexdigit()
+            })
+        {
+            return false;
+        }
+        rest = &candidate[end + 1..];
+        if rest.is_empty() {
+            return true;
+        }
+        let Some(next) = rest.strip_prefix('\\') else {
+            return false;
+        };
+        rest = next;
+    }
+}
+
 fn deduplicate_snapshot_items(items: Vec<SnapshotItem>) -> Vec<SnapshotItem> {
     let mut targets = HashSet::new();
     items
         .into_iter()
         .filter(|item| {
-            targets.insert(crate::contracts::restoration_target_key(
-                &item.executable_path,
-                item.document_path.as_deref(),
+            targets.insert(format!(
+                "{}\0{}",
+                crate::contracts::restoration_target_key(
+                    &item.executable_path,
+                    item.document_path.as_deref(),
+                ),
+                item.shell_location
+                    .as_deref()
+                    .unwrap_or("")
+                    .to_ascii_lowercase()
             ))
         })
         .collect()
@@ -469,7 +530,7 @@ fn snapshot_associated_identity(
 fn snapshot_window_identity(
     item: &SnapshotItem,
     windows: &[EnumeratedWindow],
-    explorer_paths: &HashMap<isize, String>,
+    explorer_locations: &HashMap<isize, ExplorerLocation>,
 ) -> Option<WindowIdentity> {
     let executable = snapshot_path_key(&item.executable_path);
     let explorer_path = item
@@ -478,14 +539,27 @@ fn snapshot_window_identity(
         .then(|| item.document_path.as_deref())
         .flatten()
         .map(snapshot_path_key);
+    let explorer_shell = item
+        .executable_name
+        .eq_ignore_ascii_case("explorer.exe")
+        .then(|| item.shell_location.as_deref())
+        .flatten()
+        .map(str::to_ascii_lowercase);
     let mut matches = windows.iter().filter(|entry| {
         if snapshot_path_key(&entry.full_path) != executable {
             return false;
         }
         if let Some(path) = explorer_path.as_deref() {
-            return explorer_paths
+            return explorer_locations
                 .get(&entry.window.identity.hwnd)
+                .and_then(|current| current.document_path.as_deref())
                 .is_some_and(|current| snapshot_path_key(current) == path);
+        }
+        if let Some(location) = explorer_shell.as_deref() {
+            return explorer_locations
+                .get(&entry.window.identity.hwnd)
+                .and_then(|current| current.shell_location.as_deref())
+                .is_some_and(|current| current.eq_ignore_ascii_case(location));
         }
         entry.window.title.eq_ignore_ascii_case(&item.title)
     });
@@ -533,6 +607,7 @@ fn snapshot_item(
             .or_else(|| reader_path.map(str::to_owned))
             .or_else(|| word_path.map(str::to_owned))
             .or_else(|| powerpoint_path.map(str::to_owned)),
+        shell_location: None,
         app_name: entry.window.app_name,
         title: entry.window.title,
         executable_name: entry.window.executable_name,
@@ -697,6 +772,11 @@ fn validate_snapshot(snapshot: &WindowSnapshot) -> Result<(), AppError> {
                 .document_path
                 .as_deref()
                 .is_some_and(|path| path.trim().is_empty() || !Path::new(path).is_absolute())
+            || item
+                .shell_location
+                .as_deref()
+                .is_some_and(|value| !shell_location_syntax(value))
+            || (item.document_path.is_some() && item.shell_location.is_some())
             || (item.material_id.is_some() && item.document_path.is_none())
             || (item.restorability == SnapshotRestorability::Restorable && item.reason.is_some())
             || (item.restorability != SnapshotRestorability::Restorable
@@ -1351,10 +1431,10 @@ fn reader_document_observations(windows: &[EnumeratedWindow]) -> Vec<ReaderDocum
 }
 
 #[cfg(windows)]
-fn explorer_window_paths() -> HashMap<isize, String> {
+fn explorer_window_locations() -> HashMap<isize, ExplorerLocation> {
     use std::mem::ManuallyDrop;
     use windows::{
-        core::Interface,
+        core::{Interface, PCWSTR},
         Win32::{
             System::{
                 Com::{
@@ -1363,7 +1443,10 @@ fn explorer_window_paths() -> HashMap<isize, String> {
                 },
                 Variant::{VARIANT, VARIANT_0, VARIANT_0_0, VARIANT_0_0_0, VT_I4},
             },
-            UI::Shell::{IShellWindows, IWebBrowser2, ShellWindows},
+            UI::Shell::{
+                Folder2, IShellFolderViewDual, IShellWindows, IWebBrowser2, SHGetNameFromIDList,
+                SHParseDisplayName, ShellWindows, SIGDN_DESKTOPABSOLUTEPARSING, SIGDN_FILESYSPATH,
+            },
         },
     };
 
@@ -1386,6 +1469,45 @@ fn explorer_window_paths() -> HashMap<isize, String> {
     let Ok(count) = (unsafe { shell_windows.Count() }) else {
         return HashMap::new();
     };
+    fn canonical_location(raw: &str) -> Option<ExplorerLocation> {
+        use windows::Win32::System::Com::{CoTaskMemFree, IBindCtx};
+        let path = explorer_file_url_to_path(raw);
+        if let Some(path) = path {
+            return Some(ExplorerLocation {
+                document_path: Some(path),
+                shell_location: None,
+            });
+        }
+        let wide: Vec<u16> = raw.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut pidl = std::ptr::null_mut();
+        unsafe {
+            SHParseDisplayName(PCWSTR(wide.as_ptr()), None::<&IBindCtx>, &mut pidl, 0, None)
+                .ok()?;
+        }
+        let result = (|| {
+            if let Ok(name) = unsafe { SHGetNameFromIDList(pidl, SIGDN_FILESYSPATH) } {
+                let value = unsafe { name.to_string().ok() };
+                unsafe { CoTaskMemFree(Some(name.0.cast())) };
+                if let Some(value) = value.filter(|value| Path::new(value).is_absolute()) {
+                    return Some(ExplorerLocation {
+                        document_path: Some(value),
+                        shell_location: None,
+                    });
+                }
+            }
+            let name = unsafe { SHGetNameFromIDList(pidl, SIGDN_DESKTOPABSOLUTEPARSING) }.ok()?;
+            let value = unsafe { name.to_string().ok() };
+            unsafe { CoTaskMemFree(Some(name.0.cast())) };
+            let value = value?;
+            shell_location_syntax(&value).then_some(ExplorerLocation {
+                document_path: None,
+                shell_location: Some(value),
+            })
+        })();
+        unsafe { CoTaskMemFree(Some(pidl.cast())) };
+        result
+    }
+
     let mut paths = HashMap::new();
     let mut ambiguous = HashSet::new();
     for index in 0..count.clamp(0, MAX_WINDOWS as i32) {
@@ -1409,7 +1531,16 @@ fn explorer_window_paths() -> HashMap<isize, String> {
         else {
             continue;
         };
-        if let Some(path) = explorer_file_url_to_path(&location.to_string()) {
+        let folder_path = unsafe { browser.Document() }
+            .ok()
+            .and_then(|document| document.cast::<IShellFolderViewDual>().ok())
+            .and_then(|view| unsafe { view.Folder() }.ok())
+            .and_then(|folder| folder.cast::<Folder2>().ok())
+            .and_then(|folder| unsafe { folder.Self_() }.ok())
+            .and_then(|item| unsafe { item.Path() }.ok())
+            .map(|path| path.to_string());
+        let raw_location = folder_path.unwrap_or_else(|| location.to_string());
+        if let Some(path) = canonical_location(&raw_location) {
             let hwnd = hwnd.0;
             if ambiguous.contains(&hwnd) {
                 continue;
@@ -1426,7 +1557,7 @@ fn explorer_window_paths() -> HashMap<isize, String> {
 }
 
 #[cfg(not(windows))]
-fn explorer_window_paths() -> HashMap<isize, String> {
+fn explorer_window_locations() -> HashMap<isize, ExplorerLocation> {
     HashMap::new()
 }
 
@@ -1829,6 +1960,51 @@ mod tests {
         .is_ok());
     }
 
+    #[test]
+    fn shell_locations_are_strict_separate_and_restorable() {
+        let location = "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}";
+        assert!(shell_location_syntax(location));
+        assert!(shell_location_syntax(
+            "shell:::{645FF040-5081-101B-9F08-00AA002F954E}"
+        ));
+        for invalid in [
+            "Home",
+            "shell:Downloads",
+            "::{not-a-guid}",
+            "C:\\Windows",
+            "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}\\child",
+        ] {
+            assert!(!shell_location_syntax(invalid));
+        }
+
+        let mut item = snapshot_item(
+            test_window(r"C:\Windows\explorer.exe".into()),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
+        item.executable_name = "explorer.exe".into();
+        item.shell_location = Some(location.into());
+        assert!(validate_snapshot(&WindowSnapshot {
+            schema_version: SNAPSHOT_SCHEMA_VERSION,
+            saved_at_unix_ms: 1,
+            items: vec![item.clone()],
+        })
+        .is_ok());
+
+        item.document_path = Some(r"C:\Meetings".into());
+        assert!(validate_snapshot(&WindowSnapshot {
+            schema_version: SNAPSHOT_SCHEMA_VERSION,
+            saved_at_unix_ms: 1,
+            items: vec![item],
+        })
+        .is_err());
+    }
+
     fn excel_window(hwnd: isize, pid: u32) -> EnumeratedWindow {
         let mut entry = test_window(r"C:\Program Files\Microsoft Office\EXCEL.EXE".into());
         entry.window.identity.hwnd = hwnd;
@@ -2190,6 +2366,7 @@ mod tests {
         let item = SnapshotItem {
             material_id: None,
             document_path: None,
+            shell_location: None,
             app_name: "Editor".into(),
             title: "資料".into(),
             executable_name: "editor.exe".into(),
@@ -2218,10 +2395,67 @@ mod tests {
         let mut explorer = test_window(r"C:\Windows\explorer.exe".into());
         explorer.window.executable_name = "explorer.exe".into();
         explorer.window.title = "タイトルには依存しない".into();
-        let paths = HashMap::from([(explorer.window.identity.hwnd, r"c:/meetings/資料/".into())]);
+        let paths = HashMap::from([(
+            explorer.window.identity.hwnd,
+            ExplorerLocation {
+                document_path: Some(r"c:/meetings/資料/".into()),
+                shell_location: None,
+            },
+        )]);
         assert_eq!(
             snapshot_window_identity(&explorer_item, std::slice::from_ref(&explorer), &paths),
             Some(explorer.window.identity)
+        );
+    }
+
+    #[test]
+    fn snapshot_window_matching_reuses_only_one_exact_shell_location() {
+        let location = "::{20D04FE0-3AEA-1069-A2D8-08002B30309D}";
+        let item = SnapshotItem {
+            material_id: None,
+            document_path: None,
+            shell_location: Some(location.into()),
+            app_name: "Explorer".into(),
+            title: "表示名には依存しない".into(),
+            executable_name: "explorer.exe".into(),
+            executable_path: r"C:\Windows\explorer.exe".into(),
+            restorability: SnapshotRestorability::Restorable,
+            reason: None,
+        };
+        let mut explorer = test_window(r"C:\Windows\explorer.exe".into());
+        explorer.window.executable_name = "explorer.exe".into();
+        let locations = HashMap::from([(
+            explorer.window.identity.hwnd,
+            ExplorerLocation {
+                document_path: None,
+                shell_location: Some(location.to_lowercase()),
+            },
+        )]);
+        assert_eq!(
+            snapshot_window_identity(&item, std::slice::from_ref(&explorer), &locations),
+            Some(explorer.window.identity.clone())
+        );
+        let mut duplicate = explorer.clone();
+        duplicate.window.identity.hwnd = 9;
+        let duplicate_locations = HashMap::from([
+            (
+                explorer.window.identity.hwnd,
+                ExplorerLocation {
+                    document_path: None,
+                    shell_location: Some(location.into()),
+                },
+            ),
+            (
+                duplicate.window.identity.hwnd,
+                ExplorerLocation {
+                    document_path: None,
+                    shell_location: Some(location.into()),
+                },
+            ),
+        ]);
+        assert_eq!(
+            snapshot_window_identity(&item, &[explorer, duplicate], &duplicate_locations),
+            None
         );
     }
 
@@ -2231,6 +2465,7 @@ mod tests {
         let item = SnapshotItem {
             material_id: Some(material_id.clone()),
             document_path: Some(r"C:\Meetings\agenda.docx".into()),
+            shell_location: None,
             app_name: "Editor".into(),
             title: "Agenda".into(),
             executable_name: "editor.exe".into(),
@@ -2272,6 +2507,7 @@ mod tests {
             items: vec![SnapshotItem {
                 material_id: None,
                 document_path: None,
+                shell_location: None,
                 app_name: "テストアプリ".into(),
                 title: title.into(),
                 executable_name: "test.exe".into(),
@@ -2312,6 +2548,7 @@ mod tests {
         let item = |title: &str, executable_path: &str, document_path: Option<&str>| SnapshotItem {
             material_id: None,
             document_path: document_path.map(str::to_owned),
+            shell_location: None,
             app_name: "テストアプリ".into(),
             title: title.into(),
             executable_name: "test.exe".into(),

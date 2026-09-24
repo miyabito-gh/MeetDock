@@ -32,6 +32,7 @@ windows = { version = "0.61", features = [
   "Win32_UI_WindowsAndMessaging"
   ,"Win32_UI_Accessibility"
   ,"Win32_UI_Shell"
+  ,"Win32_UI_Shell_Common"
 ] }
 
 [profile.release]

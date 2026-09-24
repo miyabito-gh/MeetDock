@@ -20,6 +20,16 @@ test('restoration target keys normalize Windows path spelling without merging di
     restorationTargetKey('C:\\Apps\\Other.exe', 'C:\\Docs\\Agenda.docx'),
   );
 });
+
+test('window snapshot keeps strict Shell locations separate from document paths', () => {
+  const base={app_name:'Explorer',title:'PC',executable_name:'explorer.exe',executable_path:'C:\\Windows\\explorer.exe',restorability:'restorable',reason:null};
+  assert.doesNotThrow(()=>validate('OptionalWindowSnapshot',{schema_version:1,saved_at_unix_ms:1,items:[{...base,shell_location:'::{20D04FE0-3AEA-1069-A2D8-08002B30309D}'}]}));
+  for(const item of [
+    {...base,shell_location:'Home'},
+    {...base,shell_location:'::{not-a-guid}'},
+    {...base,document_path:'C:\\Meetings',shell_location:'::{20D04FE0-3AEA-1069-A2D8-08002B30309D}'},
+  ]) assert.throws(()=>validate('OptionalWindowSnapshot',{schema_version:1,saved_at_unix_ms:1,items:[item]}),TypeError);
+});
 for (const f of fixtures) test(f.name, () => {
   const decode = () => f.type === 'ConfigDocument' ? decodeConfig(f.value) : validate(f.type, f.value);
   if (!f.valid) assert.throws(decode);

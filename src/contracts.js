@@ -102,8 +102,8 @@ export function windowsPathKey(path) {
   else if (normalized.slice(0, 4).toLocaleLowerCase('en-US') === '\\\\?\\') normalized = normalized.slice(4);
   return normalized.replace(/\\+$/, '').toLocaleLowerCase('en-US');
 }
-export function restorationTargetKey(executablePath, documentPath = null) {
-  return `${windowsPathKey(executablePath)}\0${documentPath === null ? '' : windowsPathKey(documentPath)}`;
+export function restorationTargetKey(executablePath, documentPath = null, shellLocation = null) {
+  return `${windowsPathKey(executablePath)}\0${documentPath === null ? '' : windowsPathKey(documentPath)}\0${shellLocation === null ? '' : shellLocation.toLocaleLowerCase('en-US')}`;
 }
 const group = v => {
   object(v, { id, parent_id: nullable(id), name: string, order: u32, explorer_open_mode: member(enums.group_explorer_open_mode) });
@@ -158,7 +158,7 @@ const pdfSidecar = v => {
 };
 const snapshotItem = v => {
   requireValue(v !== null && typeof v === 'object' && !Array.isArray(v));
-  const optional = ['material_id', 'document_path'];
+  const optional = ['material_id', 'document_path', 'shell_location'];
   requireValue(Object.keys(v).every(key => [...optional, 'app_name', 'title', 'executable_name', 'executable_path', 'restorability', 'reason'].includes(key)));
   object({
     app_name: v.app_name, title: v.title, executable_name: v.executable_name,
@@ -167,6 +167,11 @@ const snapshotItem = v => {
     restorability: member(['restorable', 'conditional', 'excluded']), reason: nullable(string) });
   if (Object.hasOwn(v, 'material_id')) id(v.material_id);
   if (Object.hasOwn(v, 'document_path')) string(v.document_path);
+  if (Object.hasOwn(v, 'shell_location')) {
+    string(v.shell_location);
+    requireValue(/^(?:shell:)?::\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}(?:\\::\{[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\})*$/i.test(v.shell_location));
+  }
+  requireValue(!(Object.hasOwn(v, 'document_path') && Object.hasOwn(v, 'shell_location')));
 };
 const windowSnapshot = v => {
   object(v, { schema_version: member([1]), saved_at_unix_ms: safe, items: array(snapshotItem) });

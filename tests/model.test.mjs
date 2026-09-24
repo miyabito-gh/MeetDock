@@ -154,6 +154,14 @@ test('snapshot registration does not create an empty group when every confirmed 
   assert.equal(registered.state.windowing.snapshot,null);
   assert.equal(registered.effects[0].type,Effect.ClearWindowSnapshot);
 });
+
+test('snapshot registration never converts a Shell location into a normal material path',()=>{
+  const snapshot={schema_version:1,saved_at_unix_ms:1,items:[{app_name:'Explorer',title:'PC',executable_name:'explorer.exe',executable_path:'C:\\Windows\\explorer.exe',shell_location:'::{20D04FE0-3AEA-1069-A2D8-08002B30309D}',restorability:'restorable',reason:null}]};
+  const registered=run(run(ready(),Event.WindowSnapshotLoaded,{response:snapshot}).state,Event.WindowSnapshotRegisterRequested);
+  assert.equal(registered.state.edit,Edit.Clean);
+  assert.equal(registered.state.saved_config.materials.length,config.materials.length);
+  assert.equal(registered.effects[0].type,Effect.ClearWindowSnapshot);
+});
 test('saving a window snapshot closes the dialog, reloads it, and selects its virtual group',()=>{
   const started=run({...ready(),windowing:{...ready().windowing,dialog_open:true}},Event.WindowSnapshotSaveRequested);
   const saved=run(started.state,Event.WindowSnapshotSaved,{response:{saved:true,saved_count:1,excluded_count:0,exclusion_reasons:[]}});
