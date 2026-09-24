@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-save-window-snapshot"
+description = "Enables the save_window_snapshot command without any pre-configured scope."
+commands.allow = ["save_window_snapshot"]
+
+[[permission]]
+identifier = "deny-save-window-snapshot"
+description = "Denies the save_window_snapshot command without any pre-configured scope."
+commands.deny = ["save_window_snapshot"]

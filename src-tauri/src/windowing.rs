@@ -13,6 +13,7 @@ use std::{
 
 const MAX_WINDOWS: usize = 512;
 const TOKEN_TTL: Duration = Duration::from_secs(300);
+const SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct WindowIdentity {
@@ -27,6 +28,47 @@ struct NativeWindow {
     app_name: String,
     title: String,
     executable_name: String,
+}
+
+#[derive(Debug, Clone)]
+struct EnumeratedWindow {
+    window: NativeWindow,
+    full_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SnapshotRestorability {
+    Restorable,
+    Conditional,
+    Excluded,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SnapshotItem {
+    pub app_name: String,
+    pub title: String,
+    pub executable_name: String,
+    pub executable_path: String,
+    pub restorability: SnapshotRestorability,
+    pub reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WindowSnapshot {
+    schema_version: u32,
+    pub saved_at_unix_ms: u64,
+    pub items: Vec<SnapshotItem>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SaveSnapshotResult {
+    pub saved: bool,
+    pub saved_count: usize,
+    pub excluded_count: usize,
+    pub exclusion_reasons: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -75,12 +117,18 @@ impl WindowService {
             .exclusions
             .clone();
         let mut native = enumerate_native_windows();
-        native.retain(|window| !is_excluded(window, &exclusions));
+        native.retain(|entry| !is_excluded(&entry.window, &exclusions));
         native.sort_by(|a, b| {
-            a.app_name
+            a.window
+                .app_name
                 .to_lowercase()
-                .cmp(&b.app_name.to_lowercase())
-                .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+                .cmp(&b.window.app_name.to_lowercase())
+                .then_with(|| {
+                    a.window
+                        .title
+                        .to_lowercase()
+                        .cmp(&b.window.title.to_lowercase())
+                })
         });
         native.truncate(MAX_WINDOWS);
 
@@ -89,13 +137,17 @@ impl WindowService {
         state
             .entries
             .retain(|_, entry| now.duration_since(entry.last_seen) <= TOKEN_TTL);
-        let current: HashSet<_> = native.iter().map(|window| window.identity.clone()).collect();
+        let current: HashSet<_> = native
+            .iter()
+            .map(|entry| entry.window.identity.clone())
+            .collect();
         state
             .entries
             .retain(|_, entry| current.contains(&entry.identity));
 
         let mut windows = Vec::with_capacity(native.len());
-        for window in native {
+        for entry in native {
+            let window = entry.window;
             let token = state
                 .entries
                 .iter()
@@ -122,6 +174,62 @@ impl WindowService {
             windows,
             exclusions,
         })
+    }
+
+    pub fn save_snapshot(&self) -> Result<SaveSnapshotResult, AppError> {
+        let exclusions = self
+            .state
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .exclusions
+            .clone();
+        let mut reasons = Vec::new();
+        let mut items = Vec::new();
+        let mut excluded_count = 0;
+        for entry in enumerate_native_windows().into_iter().take(MAX_WINDOWS) {
+            let item = snapshot_item(entry, &exclusions);
+            if item.restorability == SnapshotRestorability::Excluded {
+                excluded_count += 1;
+                if let Some(reason) = &item.reason {
+                    reasons.push(reason.clone());
+                }
+            } else {
+                items.push(item);
+            }
+        }
+        reasons.sort();
+        reasons.dedup();
+        if items.is_empty() {
+            return Ok(SaveSnapshotResult {
+                saved: false,
+                saved_count: 0,
+                excluded_count,
+                exclusion_reasons: reasons,
+            });
+        }
+        let snapshot = WindowSnapshot {
+            schema_version: SNAPSHOT_SCHEMA_VERSION,
+            saved_at_unix_ms: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64,
+            items,
+        };
+        persist_snapshot(&self.snapshot_path(), &snapshot)?;
+        Ok(SaveSnapshotResult {
+            saved: true,
+            saved_count: snapshot.items.len(),
+            excluded_count,
+            exclusion_reasons: reasons,
+        })
+    }
+
+    pub fn load_snapshot(&self) -> Result<Option<WindowSnapshot>, AppError> {
+        load_snapshot_file(&self.snapshot_path())
+    }
+
+    fn snapshot_path(&self) -> PathBuf {
+        self.preferences_path.with_file_name("window-snapshot.json")
     }
 
     pub fn activate(&self, window_id: Id) -> Result<WindowActionResponse, AppError> {
@@ -165,6 +273,109 @@ impl WindowService {
     }
 }
 
+fn snapshot_item(entry: EnumeratedWindow, exclusions: &[String]) -> SnapshotItem {
+    let excluded = is_excluded(&entry.window, exclusions);
+    let path = Path::new(&entry.full_path);
+    let (restorability, reason) = if excluded {
+        (
+            SnapshotRestorability::Excluded,
+            Some(format!(
+                "{} は除外設定に一致します",
+                entry.window.executable_name
+            )),
+        )
+    } else if !path.is_absolute() || !path.is_file() {
+        (
+            SnapshotRestorability::Conditional,
+            Some(format!(
+                "{} の実行ファイルを確認できません",
+                entry.window.executable_name
+            )),
+        )
+    } else {
+        (SnapshotRestorability::Restorable, None)
+    };
+    SnapshotItem {
+        app_name: entry.window.app_name,
+        title: entry.window.title,
+        executable_name: entry.window.executable_name,
+        executable_path: entry.full_path,
+        restorability,
+        reason,
+    }
+}
+
+fn load_snapshot_file(path: &Path) -> Result<Option<WindowSnapshot>, AppError> {
+    let bytes = match std::fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(AppError::new(ErrorCode::ConfigIo, None)),
+    };
+    let snapshot: WindowSnapshot = serde_json::from_slice(&bytes)
+        .map_err(|_| AppError::new(ErrorCode::ConfigCorrupt, None))?;
+    validate_snapshot(&snapshot)?;
+    Ok(Some(snapshot))
+}
+
+fn validate_snapshot(snapshot: &WindowSnapshot) -> Result<(), AppError> {
+    if snapshot.schema_version != SNAPSHOT_SCHEMA_VERSION
+        || snapshot.items.is_empty()
+        || snapshot.items.len() > MAX_WINDOWS
+    {
+        return Err(AppError::new(ErrorCode::ConfigCorrupt, None));
+    }
+    for item in &snapshot.items {
+        if item.app_name.trim().is_empty()
+            || item.title.trim().is_empty()
+            || item.executable_name.trim().is_empty()
+            || item.executable_path.trim().is_empty()
+            || !Path::new(&item.executable_path).is_absolute()
+            || (item.restorability == SnapshotRestorability::Restorable && item.reason.is_some())
+            || (item.restorability != SnapshotRestorability::Restorable
+                && item.reason.as_deref().is_none_or(str::is_empty))
+            || item.restorability == SnapshotRestorability::Excluded
+        {
+            return Err(AppError::new(ErrorCode::ConfigCorrupt, None));
+        }
+    }
+    Ok(())
+}
+
+fn persist_snapshot(path: &Path, snapshot: &WindowSnapshot) -> Result<(), AppError> {
+    validate_snapshot(snapshot)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| AppError::new(ErrorCode::ConfigIo, None))?;
+    }
+    let bytes = serde_json::to_vec_pretty(snapshot)
+        .map_err(|_| AppError::new(ErrorCode::InternalError, None))?;
+    let temporary = path.with_extension(format!("json.{}.tmp", std::process::id()));
+    let backup = path.with_extension(format!("json.{}.bak", std::process::id()));
+    let write_result = (|| -> std::io::Result<()> {
+        let mut file = std::fs::File::create(&temporary)?;
+        use std::io::Write;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        if path.exists() {
+            std::fs::rename(path, &backup)?;
+        }
+        if let Err(error) = std::fs::rename(&temporary, path) {
+            if backup.exists() {
+                let _ = std::fs::rename(&backup, path);
+            }
+            return Err(error);
+        }
+        if backup.exists() {
+            let _ = std::fs::remove_file(&backup);
+        }
+        Ok(())
+    })();
+    if write_result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(AppError::new(ErrorCode::ConfigIo, None));
+    }
+    Ok(())
+}
+
 fn next_token(state: &mut WindowState) -> String {
     loop {
         state.next_token = state.next_token.wrapping_add(1);
@@ -192,8 +403,7 @@ fn load_preferences(path: &Path) -> Option<Vec<String>> {
 
 fn persist_preferences(path: &Path, exclusions: &[String]) -> Result<(), AppError> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|_| AppError::new(ErrorCode::ConfigIo, None))?;
+        std::fs::create_dir_all(parent).map_err(|_| AppError::new(ErrorCode::ConfigIo, None))?;
     }
     let bytes = serde_json::to_vec_pretty(&WindowPreferences {
         schema_version: 1,
@@ -222,8 +432,7 @@ fn glob_matches(pattern: &str, value: &str) -> bool {
             }
         } else {
             for index in 1..=value.len() {
-                current[index] = previous[index - 1]
-                    && (token == '?' || token == value[index - 1]);
+                current[index] = previous[index - 1] && (token == '?' || token == value[index - 1]);
             }
         }
         previous = current;
@@ -280,27 +489,26 @@ fn display_parts(executable_name: &str, title: &str) -> (String, String) {
 }
 
 #[cfg(windows)]
-fn enumerate_native_windows() -> Vec<NativeWindow> {
+fn enumerate_native_windows() -> Vec<EnumeratedWindow> {
     use windows::{
         core::{BOOL, PWSTR},
         Win32::{
             Foundation::{CloseHandle, HWND, LPARAM},
             Graphics::Dwm::{DwmGetWindowAttribute, DWMWA_CLOAKED},
             System::Threading::{
-                GetProcessTimes, OpenProcess, QueryFullProcessImageNameW,
-                PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+                GetProcessTimes, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32,
+                PROCESS_QUERY_LIMITED_INFORMATION,
             },
             UI::WindowsAndMessaging::{
-                EnumWindows, GetClassNameW, GetDesktopWindow, GetShellWindow,
-                GetWindow, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
-                GetWindowThreadProcessId, IsWindowVisible, GWL_EXSTYLE, GW_OWNER,
-                WS_EX_TOOLWINDOW,
+                EnumWindows, GetClassNameW, GetDesktopWindow, GetShellWindow, GetWindow,
+                GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
+                IsWindowVisible, GWL_EXSTYLE, GW_OWNER, WS_EX_TOOLWINDOW,
             },
         },
     };
 
     unsafe extern "system" fn collect(hwnd: HWND, raw: LPARAM) -> BOOL {
-        let output = &mut *(raw.0 as *mut Vec<NativeWindow>);
+        let output = &mut *(raw.0 as *mut Vec<EnumeratedWindow>);
         if output.len() >= MAX_WINDOWS
             || !IsWindowVisible(hwnd).as_bool()
             || hwnd == GetShellWindow()
@@ -387,15 +595,18 @@ fn enumerate_native_windows() -> Vec<NativeWindow> {
             return true.into();
         }
         let (app_name, parsed_title) = display_parts(&executable_name, &title);
-        output.push(NativeWindow {
-            identity: WindowIdentity {
-                hwnd: hwnd.0 as isize,
-                pid,
-                process_started,
+        output.push(EnumeratedWindow {
+            full_path,
+            window: NativeWindow {
+                identity: WindowIdentity {
+                    hwnd: hwnd.0 as isize,
+                    pid,
+                    process_started,
+                },
+                app_name,
+                title: parsed_title,
+                executable_name,
             },
-            app_name,
-            title: parsed_title,
-            executable_name,
         });
         true.into()
     }
@@ -408,7 +619,7 @@ fn enumerate_native_windows() -> Vec<NativeWindow> {
 }
 
 #[cfg(not(windows))]
-fn enumerate_native_windows() -> Vec<NativeWindow> {
+fn enumerate_native_windows() -> Vec<EnumeratedWindow> {
     Vec::new()
 }
 
@@ -474,8 +685,15 @@ fn close_native(identity: &WindowIdentity) -> Result<(), AppError> {
         Foundation::{HWND, LPARAM, WPARAM},
         UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE},
     };
-    unsafe { PostMessageW(Some(HWND(identity.hwnd as *mut _)), WM_CLOSE, WPARAM(0), LPARAM(0)) }
-        .map_err(|_| AppError::new(ErrorCode::AccessDenied, None))
+    unsafe {
+        PostMessageW(
+            Some(HWND(identity.hwnd as *mut _)),
+            WM_CLOSE,
+            WPARAM(0),
+            LPARAM(0),
+        )
+    }
+    .map_err(|_| AppError::new(ErrorCode::AccessDenied, None))
 }
 
 #[cfg(not(windows))]
@@ -531,6 +749,104 @@ mod tests {
         )
         .unwrap();
         assert_eq!(load_preferences(&path), None);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    fn test_window(executable_path: String) -> EnumeratedWindow {
+        EnumeratedWindow {
+            window: NativeWindow {
+                identity: WindowIdentity {
+                    hwnd: 1,
+                    pid: 2,
+                    process_started: 3,
+                },
+                app_name: "テストアプリ".into(),
+                title: "資料".into(),
+                executable_name: "test.exe".into(),
+            },
+            full_path: executable_path,
+        }
+    }
+
+    #[test]
+    fn snapshot_classifies_restorable_conditional_and_excluded_items() {
+        let directory = std::env::temp_dir().join(format!(
+            "meetdock-window-snapshot-classify-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let executable = directory.join("test.exe");
+        std::fs::write(&executable, b"test").unwrap();
+
+        let restorable = snapshot_item(test_window(executable.to_string_lossy().into_owned()), &[]);
+        assert_eq!(restorable.restorability, SnapshotRestorability::Restorable);
+        assert_eq!(restorable.reason, None);
+
+        let conditional = snapshot_item(
+            test_window(directory.join("missing.exe").to_string_lossy().into_owned()),
+            &[],
+        );
+        assert_eq!(
+            conditional.restorability,
+            SnapshotRestorability::Conditional
+        );
+        assert!(conditional.reason.is_some());
+
+        let excluded = snapshot_item(
+            test_window(executable.to_string_lossy().into_owned()),
+            &["test.exe".into()],
+        );
+        assert_eq!(excluded.restorability, SnapshotRestorability::Excluded);
+        assert!(excluded.reason.is_some());
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn snapshot_persistence_is_versioned_strict_and_replaces_previous_value() {
+        let directory = std::env::temp_dir().join(format!(
+            "meetdock-window-snapshot-persist-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let path = directory.join("window-snapshot.json");
+        let make_snapshot = |title: &str| WindowSnapshot {
+            schema_version: SNAPSHOT_SCHEMA_VERSION,
+            saved_at_unix_ms: 42,
+            items: vec![SnapshotItem {
+                app_name: "テストアプリ".into(),
+                title: title.into(),
+                executable_name: "test.exe".into(),
+                executable_path: directory.join("test.exe").to_string_lossy().into_owned(),
+                restorability: SnapshotRestorability::Conditional,
+                reason: Some("実行ファイルを確認できません".into()),
+            }],
+        };
+        persist_snapshot(&path, &make_snapshot("最初")).unwrap();
+        persist_snapshot(&path, &make_snapshot("更新後")).unwrap();
+        assert_eq!(
+            load_snapshot_file(&path).unwrap().unwrap().items[0].title,
+            "更新後"
+        );
+
+        std::fs::write(
+            &path,
+            br#"{"schema_version":1,"saved_at_unix_ms":1,"items":[],"unexpected":true}"#,
+        )
+        .unwrap();
+        assert!(load_snapshot_file(&path).is_err());
+        std::fs::write(
+            &path,
+            br#"{"schema_version":99,"saved_at_unix_ms":1,"items":[]}"#,
+        )
+        .unwrap();
+        assert!(load_snapshot_file(&path).is_err());
         std::fs::remove_dir_all(directory).unwrap();
     }
 }

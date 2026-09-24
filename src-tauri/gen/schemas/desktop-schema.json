@@ -219,6 +219,12 @@
           "markdownDescription": "Enables the load_settings command without any pre-configured scope."
         },
         {
+          "description": "Enables the load_window_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-load-window-snapshot",
+          "markdownDescription": "Enables the load_window_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the open_containing_folder command without any pre-configured scope.",
           "type": "string",
           "const": "allow-open-containing-folder",
@@ -247,6 +253,12 @@
           "type": "string",
           "const": "allow-save-window-exclusions",
           "markdownDescription": "Enables the save_window_exclusions command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the save_window_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-window-snapshot",
+          "markdownDescription": "Enables the save_window_snapshot command without any pre-configured scope."
         },
         {
           "description": "Enables the sync_material_statuses command without any pre-configured scope.",
@@ -297,6 +309,12 @@
           "markdownDescription": "Denies the load_settings command without any pre-configured scope."
         },
         {
+          "description": "Denies the load_window_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-load-window-snapshot",
+          "markdownDescription": "Denies the load_window_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Denies the open_containing_folder command without any pre-configured scope.",
           "type": "string",
           "const": "deny-open-containing-folder",
@@ -325,6 +343,12 @@
           "type": "string",
           "const": "deny-save-window-exclusions",
           "markdownDescription": "Denies the save_window_exclusions command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_window_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-window-snapshot",
+          "markdownDescription": "Denies the save_window_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the sync_material_statuses command without any pre-configured scope.",

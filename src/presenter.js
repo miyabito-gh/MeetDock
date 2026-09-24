@@ -41,6 +41,8 @@ export function createPresenter(view, dispatch) {
       if (!Array.isArray(patterns)) throw new TypeError('Expected patterns');
       dispatch({ type: Event.WindowExclusionsSaveRequested, patterns: patterns.map(String) });
     },
+    saveWindowSnapshot() { dispatch({ type: Event.WindowSnapshotSaveRequested }); },
+    loadWindowSnapshot() { dispatch({ type: Event.WindowSnapshotLoadRequested }); },
     openPdf(material_id) { id(material_id); dispatch({ type: Event.PdfOpenRequested, material_id }); },
     pdfDocumentPrevious() { dispatch({ type: Event.PdfDocumentPreviousRequested }); },
     pdfDocumentNext() { dispatch({ type: Event.PdfDocumentNextRequested }); },

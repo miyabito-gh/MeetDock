@@ -17,7 +17,7 @@ export function createServices(ipc, pdf, lifecycle) {
   return Object.freeze({
     settings: Object.freeze({ load: () => ipc.call('load_settings'), resolve: r => ipc.call('resolve_settings_issue', r), save: r => ipc.call('save_settings', r) }),
     statuses: Object.freeze({ sync: r => ipc.call('sync_material_statuses', r) }),
-    windows: Object.freeze({ list: r => ipc.call('list_windows', r), activate: r => ipc.call('activate_window', r), close: r => ipc.call('close_window', r), saveExclusions: r => ipc.call('save_window_exclusions', r) }),
+    windows: Object.freeze({ list: r => ipc.call('list_windows', r), activate: r => ipc.call('activate_window', r), close: r => ipc.call('close_window', r), saveExclusions: r => ipc.call('save_window_exclusions', r), saveSnapshot:()=>ipc.call('save_window_snapshot'), loadSnapshot:()=>ipc.call('load_window_snapshot') }),
     launch: Object.freeze({ activate: r => ipc.call('activate_or_launch', r), batch: r => ipc.call('batch_launch_main', r), openContainingFolder: r => ipc.call('open_containing_folder', r) }),
     droppedFiles: Object.freeze({ prepare: r => ipc.call('prepare_dropped_files', r) }),
     pdf, lifecycle,
@@ -68,6 +68,8 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
           const r = validate('SaveWindowExclusionsResponse', await services.windows.saveExclusions(f.request));
           event = { type: Event.WindowExclusionsSaved, response: r, ...context }; break;
         }
+        case Effect.SaveWindowSnapshot: event={type:Event.WindowSnapshotSaved,response:await services.windows.saveSnapshot(),...context};break;
+        case Effect.LoadWindowSnapshot: event={type:Event.WindowSnapshotLoaded,response:await services.windows.loadSnapshot(),...context};break;
         case Effect.Activate: {
           const r = validate('LaunchResponse', await services.launch.activate(f.request));
           if (r.material_id !== f.request.material_id) throw appError('INTERNAL_ERROR');
@@ -122,6 +124,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         [Effect.SyncStatuses]: Event.SyncFailed, [Effect.SyncWindows]: Event.WindowSyncFailed,
         [Effect.ActivateWindow]: Event.WindowActivateFailed, [Effect.RequestWindowClose]: Event.WindowCloseFailed,
         [Effect.SaveWindowExclusions]: Event.WindowExclusionsSaveFailed,
+        [Effect.SaveWindowSnapshot]: Event.WindowSnapshotSaveFailed, [Effect.LoadWindowSnapshot]: Event.WindowSnapshotLoadFailed,
         [Effect.Activate]: Event.LaunchFailed, [Effect.OpenContainingFolder]: Event.OpenContainingFolderCompleted,
         [Effect.PrepareDroppedFiles]: Event.DroppedFilesPrepareFailed,
         [Effect.BatchLaunch]: Event.BatchLaunchCompleted,
