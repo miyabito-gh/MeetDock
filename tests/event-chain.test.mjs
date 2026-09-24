@@ -8,12 +8,18 @@ import { initialState, transition, Event, Effect } from '../src/model.js';
 import { appError } from '../src/contracts.js';
 import { readFileSync } from 'node:fs';
 const fixture = name => structuredClone(JSON.parse(readFileSync(new URL('./fixtures/contracts.json', import.meta.url))).fixtures.find(f => f.name === `${name}: valid`).value);
-const ready = () => transition(initialState(), { type: Event.SettingsLoaded, config: fixture('AppConfig') }).state;
+const ready = () => {
+  let state = transition(initialState(), { type: Event.SettingsLoaded, config: fixture('AppConfig') }).state;
+  const request_id = state.sync.request_id;
+  state = transition(state, { type: Event.SyncSucceeded, request_id, results: [], completed_at: 1 }).state;
+  return transition(state, { type: Event.WindowSyncSucceeded, request_id, response: { request_id, windows: [], exclusions: [] }, completed_at: 1 }).state;
+};
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const req1 = '12345678-1234-4234-8234-123456789abc', req2 = '12345678-1234-4234-8234-123456789abd';
 function ports() {
   return { settings: { load: async () => fixture('SettingsLoadResponse'), save: async () => fixture('SaveSettingsResponse'), resolve: async () => fixture('SettingsLoadResponse') },
     statuses: { sync: async r => ({ request_id: r.request_id, results: [] }) },
+    windows: { list: async r => ({ request_id: r.request_id, windows: [], exclusions: [] }), activate: async r => r, close: async r => r, saveExclusions: async r => ({ patterns: r.patterns }) },
     launch: { activate: async () => fixture('LaunchResponse'), batch: async () => fixture('BatchLaunchResponse') },
     pdf: { replace: async () => ({ current_page: 1, total_pages: 3, zoom_percent: 100 }), close: async () => {},
       previous: async () => ({ current_page: 1, total_pages: 3, zoom_percent: 100 }), next: async () => ({ current_page: 2, total_pages: 3, zoom_percent: 100 }),
@@ -120,7 +126,7 @@ test('Root integrates transitions/render before I/O, preserves draft on failure'
 test('Root discards out-of-order sync successes AND failures', async () => {
   for (const rejectOld of [false, true]) {
     const services = ports(), first = deferred(), second = deferred();
-    services.statuses.sync = r => r.request_id === req1 ? first.promise : second.promise;
+    services.statuses.sync = r => r.request_id === req1 ? first.promise : r.request_id === req2 ? second.promise : Promise.resolve({ request_id: r.request_id, results: [] });
     const root = createRoot({ services, presenter: { render() {} } }); root.start(); await root.settled();
     root.dispatch({ type: Event.SyncRequested, request_id: req1 });
     root.dispatch({ type: Event.SyncRequested, request_id: req2, manual: true });

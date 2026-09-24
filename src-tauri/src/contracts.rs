@@ -287,6 +287,22 @@ dto!(DroppedFileCandidate {
     target_type: TargetType
 });
 dto!(PrepareDroppedFilesResponse { candidates: Vec<DroppedFileCandidate> });
+dto!(ListWindowsRequest { request_id: RequestId });
+dto!(WindowListItem {
+    window_id: Id,
+    app_name: String,
+    title: String,
+    executable_name: String
+});
+dto!(ListWindowsResponse {
+    request_id: RequestId,
+    windows: Vec<WindowListItem>,
+    exclusions: Vec<String>
+});
+dto!(WindowActionRequest { window_id: Id });
+dto!(WindowActionResponse { window_id: Id });
+dto!(SaveWindowExclusionsRequest { patterns: Vec<String> });
+dto!(SaveWindowExclusionsResponse { patterns: Vec<String> });
 dto!(MaterialStatusResult { material_id: Id, open_state: OpenState, confidence: Confidence, path_state: PathState,
     #[serde(deserialize_with = "required_nullable")] detail: Option<String> });
 dto!(LaunchResponse { material_id: Id, outcome: LaunchOutcome, #[serde(deserialize_with = "required_nullable")] error: Option<AppError> });
@@ -325,8 +341,54 @@ structural!(
     ActivateOrLaunchRequest,
     OpenContainingFolderRequest,
     BatchLaunchRequest,
-    MaterialStatusResult
+    MaterialStatusResult,
+    ListWindowsRequest,
+    WindowActionRequest,
+    WindowActionResponse
 );
+fn valid_window_text(value: &str, maximum: usize, require_nonblank: bool) -> bool {
+    value.chars().count() <= maximum
+        && !value.chars().any(|c| c == '\0' || c == '\u{7f}')
+        && (!require_nonblank || nonblank(value))
+}
+pub fn validate_window_exclusions(patterns: &mut Vec<String>) -> Result<(), AppError> {
+    ensure(patterns.len() <= 64)?;
+    let mut seen = HashSet::new();
+    for pattern in patterns.iter_mut() {
+        *pattern = pattern.trim().to_owned();
+        ensure(valid_window_text(pattern, 128, true) && pattern != "*")?;
+        ensure(seen.insert(pattern.to_lowercase()))?;
+    }
+    Ok(())
+}
+impl Validate for WindowListItem {
+    fn validate(&mut self) -> Result<(), AppError> {
+        ensure(valid_window_text(&self.app_name, 256, true))?;
+        ensure(valid_window_text(&self.title, 4096, true))?;
+        ensure(valid_window_text(&self.executable_name, 260, true))
+    }
+}
+impl Validate for ListWindowsResponse {
+    fn validate(&mut self) -> Result<(), AppError> {
+        ensure(self.windows.len() <= 512)?;
+        let mut ids = HashSet::new();
+        for item in &mut self.windows {
+            item.validate()?;
+            ensure(ids.insert(item.window_id.as_str().to_owned()))?;
+        }
+        validate_window_exclusions(&mut self.exclusions)
+    }
+}
+impl Validate for SaveWindowExclusionsRequest {
+    fn validate(&mut self) -> Result<(), AppError> {
+        validate_window_exclusions(&mut self.patterns)
+    }
+}
+impl Validate for SaveWindowExclusionsResponse {
+    fn validate(&mut self) -> Result<(), AppError> {
+        validate_window_exclusions(&mut self.patterns)
+    }
+}
 impl Validate for PrepareDroppedFilesRequest {
     fn validate(&mut self) -> Result<(), AppError> {
         ensure(!self.paths.is_empty() && self.paths.len() <= 100)?;

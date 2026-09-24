@@ -183,16 +183,34 @@
           "markdownDescription": "Enables the activate_or_launch command without any pre-configured scope."
         },
         {
+          "description": "Enables the activate_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-activate-window",
+          "markdownDescription": "Enables the activate_window command without any pre-configured scope."
+        },
+        {
           "description": "Enables the batch_launch_main command without any pre-configured scope.",
           "type": "string",
           "const": "allow-batch-launch-main",
           "markdownDescription": "Enables the batch_launch_main command without any pre-configured scope."
         },
         {
+          "description": "Enables the close_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-close-window",
+          "markdownDescription": "Enables the close_window command without any pre-configured scope."
+        },
+        {
           "description": "Enables the health_check command without any pre-configured scope.",
           "type": "string",
           "const": "allow-health-check",
           "markdownDescription": "Enables the health_check command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the list_windows command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-list-windows",
+          "markdownDescription": "Enables the list_windows command without any pre-configured scope."
         },
         {
           "description": "Enables the load_settings command without any pre-configured scope.",
@@ -225,6 +243,12 @@
           "markdownDescription": "Enables the save_settings command without any pre-configured scope."
         },
         {
+          "description": "Enables the save_window_exclusions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-save-window-exclusions",
+          "markdownDescription": "Enables the save_window_exclusions command without any pre-configured scope."
+        },
+        {
           "description": "Enables the sync_material_statuses command without any pre-configured scope.",
           "type": "string",
           "const": "allow-sync-material-statuses",
@@ -237,16 +261,34 @@
           "markdownDescription": "Denies the activate_or_launch command without any pre-configured scope."
         },
         {
+          "description": "Denies the activate_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-activate-window",
+          "markdownDescription": "Denies the activate_window command without any pre-configured scope."
+        },
+        {
           "description": "Denies the batch_launch_main command without any pre-configured scope.",
           "type": "string",
           "const": "deny-batch-launch-main",
           "markdownDescription": "Denies the batch_launch_main command without any pre-configured scope."
         },
         {
+          "description": "Denies the close_window command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-close-window",
+          "markdownDescription": "Denies the close_window command without any pre-configured scope."
+        },
+        {
           "description": "Denies the health_check command without any pre-configured scope.",
           "type": "string",
           "const": "deny-health-check",
           "markdownDescription": "Denies the health_check command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the list_windows command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-list-windows",
+          "markdownDescription": "Denies the list_windows command without any pre-configured scope."
         },
         {
           "description": "Denies the load_settings command without any pre-configured scope.",
@@ -277,6 +319,12 @@
           "type": "string",
           "const": "deny-save-settings",
           "markdownDescription": "Denies the save_settings command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the save_window_exclusions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-save-window-exclusions",
+          "markdownDescription": "Denies the save_window_exclusions command without any pre-configured scope."
         },
         {
           "description": "Denies the sync_material_statuses command without any pre-configured scope.",

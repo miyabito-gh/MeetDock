@@ -4,12 +4,13 @@ const enumeration = names => Object.freeze(Object.fromEntries(names.split(' ').m
 export const Lifecycle = enumeration('Booting Ready ReadOnly RecoveryPending MigrationPending FatalError');
 export const Edit = enumeration('Clean Dirty Saving Conflict');
 export const Pdf = enumeration('Closed Loading Viewing PasswordRequired Failed');
-export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
-export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit PdfSearch PdfSearchPrevious PdfSearchNext CloseWindow');
+export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
+export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses SyncWindows ActivateWindow RequestWindowClose SaveWindowExclusions Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit PdfSearch PdfSearchPrevious PdfSearchNext CloseWindow');
 
 export function initialState() {
   return { lifecycle: Lifecycle.Booting, edit: Edit.Clean, sync: { kind: 'Idle' },
     launch: { running: [], batch: null }, pdf: { kind: Pdf.Closed },
+    windowing: { dialog_open: false, sync: { kind: 'Idle' }, items: [], exclusions: [], running: [], closing: [], saving_exclusions: false, last_sync_at: null },
     config_revision: 0, state_generation: 0, saved_config: null, draft: null,
     candidates: [], resolution: null, saving: null, selected_group_id: null,
     statuses: [], last_sync_at: null, launch_results: [], query: '', width: null,
@@ -56,11 +57,14 @@ export function transition(s, e) {
       return result({ ...s, resolution: 'load' }, [effect(Effect.LoadSettings, {})]);
     case Event.SettingsLoaded: {
       if (s.lifecycle !== Lifecycle.Booting && !s.resolution) return deny();
-      const config = valid('AppConfig', e.config), generation = bump();
+      const config = valid('AppConfig', e.config), generation = bump(), request_id = crypto.randomUUID();
       if (!config || generation === null) return deny();
       return result({ ...s, lifecycle: Lifecycle.Ready, edit: Edit.Clean, resolution: null, saving: null,
         saved_config: config, draft: null, config_revision: config.revision, state_generation: generation,
-        candidates: [], statuses: [], selected_group_id: config.groups[0]?.id ?? null });
+        candidates: [], statuses: [], selected_group_id: config.groups[0]?.id ?? null,
+        sync: { kind: 'Running', request_id }, windowing: { ...s.windowing, sync: { kind: 'Running', request_id } } },
+        [effect(Effect.SyncStatuses, { material_ids: config.materials.map(m => m.id), request_id }, { generation }),
+          effect(Effect.SyncWindows, { request_id }, { generation })]);
     }
     case Event.FutureSchemaFound:
     case Event.LegacySettingsFound:
@@ -211,11 +215,13 @@ export function transition(s, e) {
     }
     case Event.SyncRequested: {
       if (![Lifecycle.Ready, Lifecycle.ReadOnly].includes(s.lifecycle) || s.resolution) return deny();
-      if (s.sync.kind === 'Running' && !(e.manual === true || e.new_auto === true)) return deny();
+      if ((s.sync.kind === 'Running' || s.windowing.sync.kind === 'Running') && !(e.manual === true || e.new_auto === true)) return deny();
       try { uuid(e.request_id); } catch { return deny(); }
-      if (s.sync.request_id === e.request_id) return deny();
+      if (s.sync.request_id === e.request_id || s.windowing.sync.request_id === e.request_id) return deny();
       const request = { material_ids: s.saved_config?.materials.map(m => m.id) ?? [], request_id: e.request_id };
-      return result({ ...s, sync: { kind: 'Running', request_id: e.request_id } }, [effect(Effect.SyncStatuses, request)]);
+      return result({ ...s, sync: { kind: 'Running', request_id: e.request_id },
+        windowing: { ...s.windowing, sync: { kind: 'Running', request_id: e.request_id } } },
+        [effect(Effect.SyncStatuses, request), effect(Effect.SyncWindows, { request_id: e.request_id })]);
     }
     case Event.SyncSucceeded:
     case Event.SyncFailed:
@@ -223,6 +229,57 @@ export function transition(s, e) {
       if (e.type === Event.SyncSucceeded && !valid('SyncStatusesResponse', { request_id: e.request_id, results: e.results })) return deny();
       return result({ ...s, sync: { kind: 'Idle' }, statuses: e.type === Event.SyncSucceeded ? structuredClone(e.results) : s.statuses,
         last_sync_at: e.type === Event.SyncSucceeded && Number.isFinite(e.completed_at) ? e.completed_at : s.last_sync_at }, [], e.type === Event.SyncFailed ? e.error : null);
+    case Event.WindowDialogOpened:
+      return result({ ...s, windowing: { ...s.windowing, dialog_open: true } });
+    case Event.WindowDialogClosed:
+      return result({ ...s, windowing: { ...s.windowing, dialog_open: false } });
+    case Event.WindowSyncSucceeded:
+    case Event.WindowSyncFailed: {
+      if (s.windowing.sync.kind !== 'Running' || e.request_id !== s.windowing.sync.request_id) return result(s, [], null, 'stale_window_sync');
+      if (e.type === Event.WindowSyncFailed) return result({ ...s, windowing: { ...s.windowing, sync: { kind: 'Idle' } } }, [], e.error);
+      const response = valid('ListWindowsResponse', e.response);
+      if (!response || response.request_id !== e.request_id) return deny();
+      return result({ ...s, windowing: { ...s.windowing, sync: { kind: 'Idle' }, items: response.windows,
+        exclusions: response.exclusions, closing: [], last_sync_at: Number.isFinite(e.completed_at) ? e.completed_at : s.windowing.last_sync_at } });
+    }
+    case Event.WindowActivateRequested:
+    case Event.WindowCloseRequested: {
+      const item = s.windowing.items.find(item => item.window_id === e.window_id);
+      if (!item || s.windowing.running.some(item => item.window_id === e.window_id) || s.windowing.saving_exclusions) return deny();
+      const action = e.type === Event.WindowActivateRequested ? 'activate' : 'close';
+      const type = action === 'activate' ? Effect.ActivateWindow : Effect.RequestWindowClose;
+      return result({ ...s, windowing: { ...s.windowing, running: [...s.windowing.running, { window_id: e.window_id, action }] } },
+        [effect(type, { window_id: e.window_id })]);
+    }
+    case Event.WindowActivateSucceeded:
+    case Event.WindowActivateFailed:
+    case Event.WindowCloseSucceeded:
+    case Event.WindowCloseFailed: {
+      const operation = s.windowing.running.find(item => item.window_id === e.window_id);
+      if (!operation) return deny();
+      const closeSucceeded = e.type === Event.WindowCloseSucceeded;
+      return result({ ...s, windowing: { ...s.windowing,
+        running: s.windowing.running.filter(item => item !== operation),
+        closing: closeSucceeded && !s.windowing.closing.includes(e.window_id) ? [...s.windowing.closing, e.window_id] : s.windowing.closing } },
+        [], e.type.endsWith('Failed') ? e.error : null);
+    }
+    case Event.WindowExclusionsSaveRequested: {
+      if (s.windowing.saving_exclusions) return deny();
+      const request = valid('SaveWindowExclusionsRequest', { patterns: e.patterns });
+      if (!request) return result(s, [], appError('VALIDATION_ERROR'));
+      return result({ ...s, windowing: { ...s.windowing, saving_exclusions: true } }, [effect(Effect.SaveWindowExclusions, request)]);
+    }
+    case Event.WindowExclusionsSaved: {
+      if (!s.windowing.saving_exclusions) return deny();
+      const response = valid('SaveWindowExclusionsResponse', e.response), request_id = crypto.randomUUID();
+      if (!response) return deny();
+      return result({ ...s, windowing: { ...s.windowing, exclusions: response.patterns, saving_exclusions: false,
+        sync: { kind: 'Running', request_id }, running: [], closing: [] } }, [effect(Effect.SyncWindows, { request_id })]);
+    }
+    case Event.WindowExclusionsSaveFailed:
+      return s.windowing.saving_exclusions
+        ? result({ ...s, windowing: { ...s.windowing, saving_exclusions: false } }, [], e.error)
+        : deny();
     case Event.ActivateRequested:
       if (!editable(s) || !material(s, e.material_id) || s.launch.running.some(x => x.material_id === e.material_id) || s.launch.batch?.material_ids.includes(e.material_id)) return deny();
       return result({ ...s, launch: { ...s.launch, running: [...s.launch.running, { material_id: e.material_id, generation: s.state_generation }] } },
@@ -361,5 +418,9 @@ export function renderModel(result) {
     can_edit: editable(s) && s.edit !== Edit.Saving, can_launch: editable(s),
     config: s.draft ?? s.saved_config, statuses: s.statuses, last_sync_at: s.last_sync_at, launch_results: s.launch_results,
     candidates: s.candidates, selected_group_id: s.selected_group_id,
-    dropped_files: s.dropped_files, pdf_candidates, pdf_current_name, query: s.query, width: s.width, layout: s.layout, notice: result.notice };
+    dropped_files: s.dropped_files, pdf_candidates, pdf_current_name, query: s.query, width: s.width, layout: s.layout,
+    window_dialog_open: s.windowing.dialog_open, window_items: s.windowing.items, window_exclusions: s.windowing.exclusions,
+    window_sync: s.windowing.sync, window_operations: s.windowing.running, closing_window_ids: s.windowing.closing,
+    window_exclusions_saving: s.windowing.saving_exclusions, window_last_sync_at: s.windowing.last_sync_at,
+    refreshing: s.sync.kind === 'Running' || s.windowing.sync.kind === 'Running', notice: result.notice };
 }

@@ -19,7 +19,10 @@ root = createRoot({ services, presenter, diagnostic: code => console.warn(`MeetD
 view.bind(presenter);
 const syncOnFocus = createFocusSync({
   sync: (requestId, manual) => presenter.sync(requestId, manual),
-  canSync: () => ['Ready', 'ReadOnly'].includes(root.getState().lifecycle),
+  canSync: () => {
+    const state = root.getState();
+    return ['Ready', 'ReadOnly'].includes(state.lifecycle) && !state.windowing.dialog_open;
+  },
 });
 window.addEventListener('focus', syncOnFocus);
 getCurrentWindow().onDragDropEvent(event => {

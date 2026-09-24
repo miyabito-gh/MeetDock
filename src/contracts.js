@@ -34,6 +34,18 @@ const member = values => v => requireValue(values.includes(v));
 const nullable = check => v => { if (v !== null) check(v); };
 const array = check => v => { requireValue(Array.isArray(v)); v.forEach(check); };
 const droppedCandidate = v => object(v, { name: string, path: string, target_type: member(['file', 'folder']) });
+const windowText = (maximum, requireNonblank = true) => v => {
+  string(v); requireValue([...v].length <= maximum && !/[\0\x7f]/.test(v) && (!requireNonblank || nonblank(v)));
+};
+const exclusionPatterns = v => {
+  array(string)(v); requireValue(v.length <= 64);
+  const seen = new Set();
+  for (const raw of v) {
+    requireValue(raw === raw.trim() && [...raw].length <= 128 && nonblank(raw) && raw !== '*');
+    const key = raw.toLocaleLowerCase('en-US'); requireValue(!seen.has(key)); seen.add(key);
+  }
+};
+const windowItem = v => object(v, { window_id: id, app_name: windowText(256), title: windowText(4096), executable_name: windowText(260) });
 function object(v, fields) {
   requireValue(v !== null && typeof v === 'object' && !Array.isArray(v));
   requireValue(Object.keys(v).length === Object.keys(fields).length);
@@ -150,6 +162,16 @@ export const validators = Object.freeze({
   PrepareDroppedFilesRequest: v => { object(v, { paths: array(string) }); requireValue(v.paths.length > 0 && v.paths.length <= 100 && v.paths.every(path => path.length > 0 && path.length <= 32767)); },
   DroppedFileCandidate: droppedCandidate,
   PrepareDroppedFilesResponse: v => { object(v, { candidates: array(droppedCandidate) }); requireValue(v.candidates.length > 0 && v.candidates.length <= 100); },
+  ListWindowsRequest: v => object(v, { request_id: uuid }),
+  WindowListItem: windowItem,
+  ListWindowsResponse: v => {
+    object(v, { request_id: uuid, windows: array(windowItem), exclusions: exclusionPatterns });
+    requireValue(v.windows.length <= 512 && new Set(v.windows.map(item => item.window_id)).size === v.windows.length);
+  },
+  WindowActionRequest: v => object(v, { window_id: id }),
+  WindowActionResponse: v => object(v, { window_id: id }),
+  SaveWindowExclusionsRequest: v => object(v, { patterns: exclusionPatterns }),
+  SaveWindowExclusionsResponse: v => object(v, { patterns: exclusionPatterns }),
 });
 export function validate(type, value) {
   requireValue(Object.hasOwn(validators, type)); validators[type](value);

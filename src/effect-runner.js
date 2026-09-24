@@ -17,6 +17,7 @@ export function createServices(ipc, pdf, lifecycle) {
   return Object.freeze({
     settings: Object.freeze({ load: () => ipc.call('load_settings'), resolve: r => ipc.call('resolve_settings_issue', r), save: r => ipc.call('save_settings', r) }),
     statuses: Object.freeze({ sync: r => ipc.call('sync_material_statuses', r) }),
+    windows: Object.freeze({ list: r => ipc.call('list_windows', r), activate: r => ipc.call('activate_window', r), close: r => ipc.call('close_window', r), saveExclusions: r => ipc.call('save_window_exclusions', r) }),
     launch: Object.freeze({ activate: r => ipc.call('activate_or_launch', r), batch: r => ipc.call('batch_launch_main', r), openContainingFolder: r => ipc.call('open_containing_folder', r) }),
     droppedFiles: Object.freeze({ prepare: r => ipc.call('prepare_dropped_files', r) }),
     pdf, lifecycle,
@@ -30,7 +31,7 @@ export function createServices(ipc, pdf, lifecycle) {
 export function createEffectRunner(services, dispatch, onIdle = () => {}) {
   const seen = new WeakSet(), pending = new Set(), batches = new Map();
   async function execute(f) {
-    const context = { generation: f.generation, material_id: f.request.material_id, group_id: f.group_id ?? f.request.group_id,
+    const context = { generation: f.generation, material_id: f.request.material_id, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id,
       ...(Number.isSafeInteger(f.request.search_generation) ? { search_generation: f.request.search_generation } : {}) };
     let event;
     try {
@@ -47,6 +48,25 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
           const r = validate('SyncStatusesResponse', await services.statuses.sync(f.request));
           if (r.request_id !== f.request.request_id) throw appError('INTERNAL_ERROR');
           event = { type: Event.SyncSucceeded, request_id: r.request_id, results: r.results, completed_at: Date.now() }; break;
+        }
+        case Effect.SyncWindows: {
+          const r = validate('ListWindowsResponse', await services.windows.list(f.request));
+          if (r.request_id !== f.request.request_id) throw appError('INTERNAL_ERROR');
+          event = { type: Event.WindowSyncSucceeded, response: r, request_id: r.request_id, completed_at: Date.now() }; break;
+        }
+        case Effect.ActivateWindow: {
+          const r = validate('WindowActionResponse', await services.windows.activate(f.request));
+          if (r.window_id !== f.request.window_id) throw appError('INTERNAL_ERROR');
+          event = { type: Event.WindowActivateSucceeded, response: r, ...context }; break;
+        }
+        case Effect.RequestWindowClose: {
+          const r = validate('WindowActionResponse', await services.windows.close(f.request));
+          if (r.window_id !== f.request.window_id) throw appError('INTERNAL_ERROR');
+          event = { type: Event.WindowCloseSucceeded, response: r, ...context }; break;
+        }
+        case Effect.SaveWindowExclusions: {
+          const r = validate('SaveWindowExclusionsResponse', await services.windows.saveExclusions(f.request));
+          event = { type: Event.WindowExclusionsSaved, response: r, ...context }; break;
         }
         case Effect.Activate: {
           const r = validate('LaunchResponse', await services.launch.activate(f.request));
@@ -99,7 +119,10 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
       const type = {
         [Effect.LoadSettings]: Event.SettingsLoadFailed, [Effect.ResolveSettings]: Event.ResolutionFailed,
         [Effect.SaveSettings]: error.code === 'CONFIG_CONFLICT' ? Event.SaveConflict : Event.SaveFailed,
-        [Effect.SyncStatuses]: Event.SyncFailed, [Effect.Activate]: Event.LaunchFailed, [Effect.OpenContainingFolder]: Event.OpenContainingFolderCompleted,
+        [Effect.SyncStatuses]: Event.SyncFailed, [Effect.SyncWindows]: Event.WindowSyncFailed,
+        [Effect.ActivateWindow]: Event.WindowActivateFailed, [Effect.RequestWindowClose]: Event.WindowCloseFailed,
+        [Effect.SaveWindowExclusions]: Event.WindowExclusionsSaveFailed,
+        [Effect.Activate]: Event.LaunchFailed, [Effect.OpenContainingFolder]: Event.OpenContainingFolderCompleted,
         [Effect.PrepareDroppedFiles]: Event.DroppedFilesPrepareFailed,
         [Effect.BatchLaunch]: Event.BatchLaunchCompleted,
         [Effect.ReplacePdf]: error.code === 'PDF_PASSWORD_REQUIRED' ? Event.PdfPasswordRequired : Event.PdfFailed,

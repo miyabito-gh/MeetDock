@@ -29,6 +29,14 @@ export function createPresenter(view, dispatch) {
     discard(confirmed) { dispatch({ type: Event.EditDiscarded, confirmed: confirmed === true }); },
     reload(confirmed) { dispatch({ type: Event.ReloadRequested, confirmed: confirmed === true }); },
     sync(request_id, manual = true) { dispatch({ type: Event.SyncRequested, request_id, manual }); },
+    openWindows() { dispatch({ type: Event.WindowDialogOpened }); },
+    closeWindows() { dispatch({ type: Event.WindowDialogClosed }); },
+    activateWindow(window_id) { id(window_id); dispatch({ type: Event.WindowActivateRequested, window_id }); },
+    closeExternalWindow(window_id) { id(window_id); dispatch({ type: Event.WindowCloseRequested, window_id }); },
+    saveWindowExclusions(patterns) {
+      if (!Array.isArray(patterns)) throw new TypeError('Expected patterns');
+      dispatch({ type: Event.WindowExclusionsSaveRequested, patterns: patterns.map(String) });
+    },
     openPdf(material_id) { id(material_id); dispatch({ type: Event.PdfOpenRequested, material_id }); },
     pdfDocumentPrevious() { dispatch({ type: Event.PdfDocumentPreviousRequested }); },
     pdfDocumentNext() { dispatch({ type: Event.PdfDocumentNextRequested }); },

@@ -4,11 +4,14 @@ pub mod pdf_protocol;
 pub mod settings;
 pub mod settings_io;
 pub mod status;
+pub mod windowing;
 use contracts::{
     ActivateOrLaunchRequest, AppError, BatchLaunchRequest, BatchLaunchResponse,
-    DroppedFileCandidate, ErrorCode, LaunchResponse, OpenContainingFolderRequest,
-    PrepareDroppedFilesRequest, PrepareDroppedFilesResponse, SaveSettingsResponse,
-    SettingsLoadResponse, SyncStatusesRequest, SyncStatusesResponse,
+    DroppedFileCandidate, ErrorCode, LaunchResponse, ListWindowsRequest,
+    ListWindowsResponse, OpenContainingFolderRequest, PrepareDroppedFilesRequest,
+    PrepareDroppedFilesResponse, SaveSettingsResponse, SaveWindowExclusionsRequest,
+    SaveWindowExclusionsResponse, SettingsLoadResponse, SyncStatusesRequest,
+    SyncStatusesResponse, WindowActionRequest, WindowActionResponse,
 };
 use launcher::NativeLauncher;
 use pdf_protocol::{NativePdfFileOps, PdfAccessError};
@@ -16,6 +19,7 @@ use settings::{ConfigManager, SettingsPaths};
 use settings_io::NativeFileOps;
 use status::PathStatusService;
 use tauri::Manager;
+use windowing::WindowService;
 
 fn payload(
     window: &tauri::WebviewWindow,
@@ -140,6 +144,12 @@ mod ipc_tests {
             contracts::windows_shell_path("//?/unc/server/share/folder"),
             "\\\\server\\share\\folder"
         );
+        let long_unc = format!("\\\\?\\UNC\\server\\share\\{}", "a".repeat(30_000));
+        assert!(contracts::windows_absolute_path(&long_unc));
+        assert_eq!(
+            contracts::windows_shell_path(&long_unc),
+            format!("\\\\server\\share\\{}", "a".repeat(30_000))
+        );
         std::fs::remove_file(file).unwrap();
         std::fs::remove_dir(directory).unwrap();
     }
@@ -198,6 +208,62 @@ async fn sync_material_statuses(
         request_id: request.request_id,
         results,
     })
+}
+
+#[tauri::command]
+async fn list_windows(
+    window: tauri::WebviewWindow,
+    body: tauri::ipc::Request<'_>,
+    service: tauri::State<'_, WindowService>,
+) -> Result<ListWindowsResponse, AppError> {
+    let request: ListWindowsRequest =
+        contracts::decode(payload(&window, body, true)?, ErrorCode::InvalidRequest)?;
+    let service = service.inner().clone();
+    tokio::task::spawn_blocking(move || service.list(request.request_id))
+        .await
+        .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
+}
+
+#[tauri::command]
+async fn activate_window(
+    window: tauri::WebviewWindow,
+    body: tauri::ipc::Request<'_>,
+    service: tauri::State<'_, WindowService>,
+) -> Result<WindowActionResponse, AppError> {
+    let request: WindowActionRequest =
+        contracts::decode(payload(&window, body, true)?, ErrorCode::InvalidRequest)?;
+    let service = service.inner().clone();
+    tokio::task::spawn_blocking(move || service.activate(request.window_id))
+        .await
+        .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
+}
+
+#[tauri::command]
+async fn close_window(
+    window: tauri::WebviewWindow,
+    body: tauri::ipc::Request<'_>,
+    service: tauri::State<'_, WindowService>,
+) -> Result<WindowActionResponse, AppError> {
+    let request: WindowActionRequest =
+        contracts::decode(payload(&window, body, true)?, ErrorCode::InvalidRequest)?;
+    let service = service.inner().clone();
+    tokio::task::spawn_blocking(move || service.request_close(request.window_id))
+        .await
+        .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
+}
+
+#[tauri::command]
+async fn save_window_exclusions(
+    window: tauri::WebviewWindow,
+    body: tauri::ipc::Request<'_>,
+    service: tauri::State<'_, WindowService>,
+) -> Result<SaveWindowExclusionsResponse, AppError> {
+    let request: SaveWindowExclusionsRequest =
+        contracts::decode(payload(&window, body, true)?, ErrorCode::InvalidRequest)?;
+    let service = service.inner().clone();
+    tokio::task::spawn_blocking(move || service.save_exclusions(request.patterns))
+        .await
+        .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
 }
 
 #[tauri::command]
@@ -365,11 +431,15 @@ pub fn run() {
             }
         }))
         .setup(|app| {
+            let config_directory = app.path().app_config_dir()?;
             app.manage(PathStatusService::default());
             app.manage(NativeLauncher::default());
+            app.manage(WindowService::new(
+                config_directory.join("window-preferences.json"),
+            ));
             app.manage(ConfigManager::new(
                 SettingsPaths {
-                    directory: app.path().app_config_dir()?,
+                    directory: config_directory,
                     legacy: Some(
                         app.path()
                             .config_dir()?
@@ -387,6 +457,10 @@ pub fn run() {
             resolve_settings_issue,
             save_settings,
             sync_material_statuses,
+            list_windows,
+            activate_window,
+            close_window,
+            save_window_exclusions,
             activate_or_launch,
             batch_launch_main,
             open_containing_folder,

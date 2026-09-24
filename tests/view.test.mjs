@@ -23,6 +23,8 @@ test('Windows extended paths are normalized for display', () => {
   assert.equal(displayPath('\\\\?\\C:\\資料\\folder'), 'C:\\資料\\folder');
   assert.equal(displayPath('\\\\?\\unc\\server\\share\\folder'), '\\\\server\\share\\folder');
   assert.equal(displayPath('D:/資料/folder'), 'D:\\資料\\folder');
+  const longUnc = `\\\\?\\UNC\\server\\share\\${'資料'.repeat(8000)}`;
+  assert.equal(displayPath(longUnc), `\\\\server\\share\\${'資料'.repeat(8000)}`);
 });
 
 test('notices use specific messages and never show a generic fallback', () => {
@@ -36,6 +38,36 @@ test('SEC-01 dynamic view uses textContent and does not inject markup', () => {
   assert.doesNotMatch(source, /innerHTML|insertAdjacentHTML|outerHTML|document\.write/);
   const config = { groups: [group('g1', '<svg onload=alert(1)>', 1)], materials: [material('m1', 'g1', '<img onerror=alert(1)>', 1)] };
   assert.deepEqual(visibleMaterials(config, 'g1', 'onerror').map(item => item.id), ['m1']);
+});
+
+test('modal key handling is isolated from document shortcuts', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.match(source, /for\(const modal of \[dialog,issue,dndDialog,windowsDialog\]\) modal\.addEventListener\('keydown',e=>e\.stopPropagation\(\)\)/);
+  assert.match(source, /const modalOpen=dialog\.open\|\|issue\.open\|\|dndDialog\.open\|\|windowsDialog\.open;if\(modalOpen\)return/);
+});
+
+test('window inventory dialog balances context and workspace while keeping settings outside the list scroll', () => {
+  const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  assert.match(styles, /dialog\.modal\.windows-dialog\[open\]\{display:flex;width:min\(1080px,calc\(100vw - 64px\)\);max-width:min\(1080px,calc\(100vw - 64px\)\);height:min\(760px,calc\(100vh - 48px\)\)/);
+  assert.match(styles, /\.windows-dialog:not\(\[open\]\)\{display:none\}/);
+  assert.doesNotMatch(styles, /\.windows-dialog\{[^}]*width:/);
+  assert.match(styles, /\.windows-list\{flex:1 1 auto;min-height:0;max-height:none;overflow:auto/);
+  assert.match(styles, /\.window-exclusions\{flex:0 0 auto;max-height:180px;overflow:auto/);
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.ok(source.includes("windowsRefresh=button('↻ 更新','refresh-windows','secondary')"));
+  assert.ok(source.includes("action==='refresh-windows'"));
+  assert.doesNotMatch(source,/windowsDialog\.addEventListener\('close'/);
+});
+
+test('window inventory groups applications and sorts groups and titles without usage history', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  for (const token of ["new Intl.Collator('ja'", "key=`${item.app_name}\\u0000${item.executable_name}`", "'window-app-group'", "'window-app-head'", "`${group.items.length}件`", "group.items.sort((a,b)=>collator.compare(a.title,b.title))"]) assert.ok(source.includes(token));
+  assert.ok(source.includes("windowsList.querySelectorAll('.window-row')"));
+  assert.match(styles, /\.window-app-group\{[^}]*border:1px solid var\(--line\)/);
+  assert.match(styles, /\.window-app-head\{[^}]*min-height:40px/);
+  assert.match(styles, /\.window-app-items \.window-row\{min-height:42px;padding:5px 10px 5px 44px\}/);
+  assert.match(styles, /\.window-app-group\{margin:5px 0 8px/);
 });
 
 test('UI-02 keyboard routes cover search, context menu and escape without HTML insertion', () => {
@@ -75,10 +107,26 @@ test('batch summary exposes success and failure counts', () => {
 test('primary toolbar omits the redundant edit-mode button and groups PDF controls', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   assert.match(source, /editActions\.append\(discardButton,saveButton\)/);
-  assert.match(source, /auxiliaryActions\.append\(sync,reorderButton,addMaterial\)/);
+  assert.match(source, /runtimeActions\.append\(sync,windowsButton\)/);
+  assert.match(source, /auxiliaryActions\.append\(runtimeActions,addMaterial,moreActions\)/);
   assert.match(source, /primaryActions\.append\(batch\)/);
   assert.doesNotMatch(source, /actions\.append\([^)]*edit/);
   for (const token of ["'pdf-document-picker'", "'preview-actions'", "'tool-group'", "'viewer-status'"]) assert.ok(source.includes(token));
+});
+
+test('runtime actions use consistent labeled icons and low-frequency reorder lives in overflow', () => {
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  assert.ok(source.includes("sync=button('','sync','secondary toolbar-icon-button')"));
+  assert.ok(source.includes("windowsButton=button('','open-windows','secondary toolbar-icon-button')"));
+  assert.ok(source.includes("windowsButton.setAttribute('aria-label','ウィンドウ一覧を開く')"));
+  assert.ok(source.includes("runtimeActions.setAttribute('aria-label','状態とウィンドウ')"));
+  assert.ok(source.includes("moreSummary.setAttribute('aria-label','その他の操作')"));
+  assert.ok(source.includes('morePanel.append(reorderButton)'));
+  assert.ok(source.includes('if(!moreActions.contains(e.target))moreActions.open=false'));
+  assert.ok(source.includes('moreActions.open=false;if(pdfSearchOpen)'));
+  assert.match(styles,/\.toolbar-icon-button\{width:32px;height:30px!important/);
+  assert.match(styles,/\.toolbar-more-panel\{position:absolute/);
 });
 
 test('PDF toolbar owns direct page input, page total and zoom indicators', () => {
@@ -184,6 +232,14 @@ test('toolbar groups remain stable and material status is lightweight', () => {
   assert.match(styles,/grid-template-columns:minmax\(240px,1fr\) 116px 72px/);
   assert.match(styles,/\.material-row \.row-actions\{position:absolute;right:12px;top:50%;transform:translateY\(-50%\)\}/);
   assert.doesNotMatch(styles,/\.pdf-preview-button\[hidden\]\{display:block/);
+});
+
+test('empty search results provide a clear recovery action', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.ok(source.includes("'empty-state'"));
+  assert.ok(source.includes("'clear-search'"));
+  assert.ok(source.includes("emit('search','')"));
+  assert.ok(source.includes("検索語やグループ名を変えてお試しください。"));
 });
 
 test('DnD confirmation and PDF external fallback are explicit UI actions', () => {

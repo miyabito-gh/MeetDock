@@ -10,7 +10,12 @@ config.groups.push({ id: 'g2', parent_id: null, name: '会議2', order: 2 });
 config.materials.push({ ...config.materials[0], id: 'm2', role: 'reference', path: 'C:\\Fixtures\\second.PDF' });
 export const request1 = '12345678-1234-4234-8234-123456789abc', request2 = '12345678-1234-4234-8234-123456789abd';
 export const run = (s, type, fields = {}) => transition(s, { type, ...fields });
-export const ready = () => run(initialState(), Event.SettingsLoaded, { config }).state;
+export const ready = () => {
+  let state = run(initialState(), Event.SettingsLoaded, { config }).state;
+  const request_id = state.sync.request_id;
+  state = run(state, Event.SyncSucceeded, { request_id, results: [], completed_at: 1 }).state;
+  return run(state, Event.WindowSyncSucceeded, { request_id, response: { request_id, windows: [], exclusions: [] }, completed_at: 1 }).state;
+};
 const dirty = () => run(ready(), Event.EditRequested).state;
 const saving = () => run(dirty(), Event.SaveRequested).state;
 const sync = () => run(ready(), Event.SyncRequested, { request_id: request1 }).state;
@@ -29,7 +34,7 @@ const launched = { material_id: 'm1', outcome: 'launched', error: null };
 // IDs map 1:1 to the rows in MEDIATOR_STATE_TRANSITIONS.md.
 // Each row includes success/effect count and an independent failed guard.
 const rows = [
-  ['M01 settings', initialState, Event.SettingsLoaded, { config }, 0, s => s.lifecycle === Lifecycle.Ready, { config: { ...config, schema_version: 4 } }],
+  ['M01 settings', initialState, Event.SettingsLoaded, { config }, 2, s => s.lifecycle === Lifecycle.Ready && s.sync.kind === 'Running' && s.windowing.sync.kind === 'Running', { config: { ...config, schema_version: 4 } }],
   ['M02 future', initialState, Event.FutureSchemaFound, { response: response('read_only_future_schema') }, 0, s => s.lifecycle === Lifecycle.ReadOnly, { response: { ...response('read_only_future_schema'), source_schema_version: 3 } }],
   ['M03 legacy', initialState, Event.LegacySettingsFound, { response: response('migration_required') }, 0, s => s.lifecycle === Lifecycle.MigrationPending, { response: { ...response('migration_required'), candidates: [] } }],
   ['M04 corrupt', initialState, Event.CorruptSettingsFound, { response: response('recovery_required') }, 0, s => s.lifecycle === Lifecycle.RecoveryPending, { response: {} }],
@@ -44,8 +49,8 @@ const rows = [
   ['M13 conflict', saving, Event.SaveConflict, { error: conflict, generation: 1 }, 0, s => s.edit === Edit.Conflict, { error: conflict, generation: 0 }],
   ['M14 save failed', saving, Event.SaveFailed, { error: io, generation: 1 }, 0, s => s.edit === Edit.Dirty, { error: io, generation: 0 }],
   ['M15 discard', dirty, Event.EditDiscarded, { confirmed: true }, 0, s => s.edit === Edit.Clean && s.state_generation === 2, { confirmed: false }],
-  ['M16 sync idle', ready, Event.SyncRequested, { request_id: request1 }, 1, s => s.sync.request_id === request1, { request_id: 'bad' }],
-  ['M17 sync replace', sync, Event.SyncRequested, { request_id: request2, manual: true }, 1, s => s.sync.request_id === request2, { request_id: request2 }],
+  ['M16 sync idle', ready, Event.SyncRequested, { request_id: request1 }, 2, s => s.sync.request_id === request1 && s.windowing.sync.request_id === request1, { request_id: 'bad' }],
+  ['M17 sync replace', sync, Event.SyncRequested, { request_id: request2, manual: true }, 2, s => s.sync.request_id === request2 && s.windowing.sync.request_id === request2, { request_id: request2 }],
   ['M18 sync success', sync, Event.SyncSucceeded, { request_id: request1, results: [] }, 0, s => s.sync.kind === 'Idle', { request_id: request2, results: [] }],
   ['M19 stale sync', sync, Event.SyncFailed, { request_id: request2, error: io }, 0, s => s.sync.kind === 'Running', { request_id: request2, error: io }],
   ['M20 activate', ready, Event.ActivateRequested, { material_id: 'm1' }, 1, s => s.launch.running.length === 1, { material_id: 'unknown' }],
@@ -88,8 +93,8 @@ test('all documented event alternatives and independent regions', () => {
     const s = { ...ready(), lifecycle: Lifecycle.ReadOnly }, r = run(s, type, { material_id: 'm1', group_id: 'g1' });
     assert.equal(r.state, s); assert.equal(r.notice.code, 'READ_ONLY_SCHEMA'); assert.equal(r.effects.length, 0);
   }
-  assert.equal(run({ ...ready(), lifecycle: Lifecycle.ReadOnly }, Event.SyncRequested, { request_id: request1 }).effects.length, 1);
-  assert.equal(run(sync(), Event.SyncRequested, { request_id: request2, new_auto: true }).effects.length, 1);
+  assert.equal(run({ ...ready(), lifecycle: Lifecycle.ReadOnly }, Event.SyncRequested, { request_id: request1 }).effects.length, 2);
+  assert.equal(run(sync(), Event.SyncRequested, { request_id: request2, new_auto: true }).effects.length, 2);
   assert.equal(run({ ...dirty(), edit: Edit.Conflict }, Event.SaveRequested).effects.length, 1);
   assert.equal(run({ ...dirty(), edit: Edit.Conflict }, Event.EditDiscarded, { confirmed: true }).state.edit, Edit.Clean);
 });

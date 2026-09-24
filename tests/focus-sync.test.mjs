@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createFocusSync, FOCUS_SYNC_COOLDOWN_MS } from '../src/focus-sync.js';
 
 test('focus sync waits for readiness and applies a two-second automatic cooldown', () => {
@@ -31,4 +32,9 @@ test('focus sync does not consume cooldown while the app cannot synchronize', ()
   ready = true;
   assert.equal(focus(), true);
   assert.deepEqual(calls, ['request']);
+});
+
+test('automatic focus sync is suspended while the window dialog is open', () => {
+  const source = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
+  assert.match(source, /\['Ready', 'ReadOnly'\]\.includes\(state\.lifecycle\) && !state\.windowing\.dialog_open/);
 });

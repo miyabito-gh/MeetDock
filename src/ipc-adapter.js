@@ -5,6 +5,10 @@ const commands = Object.freeze({
   resolve_settings_issue: ['ResolveSettingsIssueRequest', 'SettingsLoadResponse'],
   save_settings: ['SaveSettingsRequest', 'SaveSettingsResponse'],
   sync_material_statuses: ['SyncStatusesRequest', 'SyncStatusesResponse'],
+  list_windows: ['ListWindowsRequest', 'ListWindowsResponse'],
+  activate_window: ['WindowActionRequest', 'WindowActionResponse'],
+  close_window: ['WindowActionRequest', 'WindowActionResponse'],
+  save_window_exclusions: ['SaveWindowExclusionsRequest', 'SaveWindowExclusionsResponse'],
   activate_or_launch: ['ActivateOrLaunchRequest', 'LaunchResponse'],
   batch_launch_main: ['BatchLaunchRequest', 'BatchLaunchResponse'],
   open_containing_folder: ['OpenContainingFolderRequest', 'EmptyResponse'],
@@ -31,6 +35,8 @@ export function createIpcAdapter(invoke) {
       try {
         const result = validate(output, response);
         if (command === 'sync_material_statuses' && result.request_id !== dto.request_id) throw new TypeError();
+        if (command === 'list_windows' && result.request_id !== dto.request_id) throw new TypeError();
+        if (['activate_window', 'close_window'].includes(command) && result.window_id !== dto.window_id) throw new TypeError();
         if (command === 'activate_or_launch' && result.material_id !== dto.material_id) throw new TypeError();
         if (command === 'save_settings' && result.revision !== dto.expected_revision + 1) throw new TypeError();
         return result;
