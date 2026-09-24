@@ -50,6 +50,12 @@ struct ReaderDocumentObservation {
     document_path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct OfficeWindowDocumentObservation {
+    hwnd: isize,
+    document_path: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SnapshotRestorability {
@@ -211,6 +217,8 @@ impl WindowService {
         let windows = enumerate_native_windows();
         let excel_paths = excel_window_paths(&windows);
         let reader_paths = reader_window_paths(&windows);
+        let word_paths = word_window_paths(&windows);
+        let powerpoint_paths = powerpoint_window_paths(&windows);
         for entry in windows.into_iter().take(MAX_WINDOWS) {
             let association = associations.iter().find(|association| {
                 association.hwnd == entry.window.identity.hwnd
@@ -250,6 +258,28 @@ impl WindowService {
             } else {
                 None
             };
+            let word_path = if entry
+                .window
+                .executable_name
+                .eq_ignore_ascii_case("winword.exe")
+            {
+                word_paths
+                    .get(&entry.window.identity.hwnd)
+                    .map(String::as_str)
+            } else {
+                None
+            };
+            let powerpoint_path = if entry
+                .window
+                .executable_name
+                .eq_ignore_ascii_case("powerpnt.exe")
+            {
+                powerpoint_paths
+                    .get(&entry.window.identity.hwnd)
+                    .map(String::as_str)
+            } else {
+                None
+            };
             let item = snapshot_item(
                 entry,
                 &exclusions,
@@ -257,6 +287,8 @@ impl WindowService {
                 explorer_path,
                 excel_path,
                 reader_path,
+                word_path,
+                powerpoint_path,
             );
             if item.restorability == SnapshotRestorability::Excluded {
                 excluded_count += 1;
@@ -461,6 +493,8 @@ fn snapshot_item(
     explorer_path: Option<&str>,
     excel_path: Option<&str>,
     reader_path: Option<&str>,
+    word_path: Option<&str>,
+    powerpoint_path: Option<&str>,
 ) -> SnapshotItem {
     let excluded = is_excluded(&entry.window, exclusions);
     let path = Path::new(&entry.full_path);
@@ -489,7 +523,9 @@ fn snapshot_item(
             .map(|value| value.material_path.clone())
             .or_else(|| explorer_path.map(str::to_owned))
             .or_else(|| excel_path.map(str::to_owned))
-            .or_else(|| reader_path.map(str::to_owned)),
+            .or_else(|| reader_path.map(str::to_owned))
+            .or_else(|| word_path.map(str::to_owned))
+            .or_else(|| powerpoint_path.map(str::to_owned)),
         app_name: entry.window.app_name,
         title: entry.window.title,
         executable_name: entry.window.executable_name,
@@ -497,6 +533,39 @@ fn snapshot_item(
         restorability,
         reason,
     }
+}
+
+fn resolve_office_window_paths(
+    windows: &[EnumeratedWindow],
+    executable_name: &str,
+    observations: impl IntoIterator<Item = OfficeWindowDocumentObservation>,
+) -> HashMap<isize, String> {
+    let hwnds: HashSet<_> = windows
+        .iter()
+        .filter(|entry| {
+            entry
+                .window
+                .executable_name
+                .eq_ignore_ascii_case(executable_name)
+        })
+        .map(|entry| entry.window.identity.hwnd)
+        .collect();
+    let mut resolved: HashMap<isize, String> = HashMap::new();
+    let mut ambiguous = HashSet::new();
+    for observation in observations {
+        if !hwnds.contains(&observation.hwnd) || ambiguous.contains(&observation.hwnd) {
+            continue;
+        }
+        if resolved.get(&observation.hwnd).is_some_and(|existing| {
+            snapshot_path_key(existing) != snapshot_path_key(&observation.document_path)
+        }) {
+            resolved.remove(&observation.hwnd);
+            ambiguous.insert(observation.hwnd);
+        } else {
+            resolved.insert(observation.hwnd, observation.document_path);
+        }
+    }
+    resolved
 }
 
 fn resolve_reader_window_paths(
@@ -937,6 +1006,170 @@ fn excel_document_observations() -> Vec<ExcelDocumentObservation> {
         hwnd: hwnd as isize,
         document_path: path,
     }]
+}
+
+#[cfg(windows)]
+fn word_window_paths(windows: &[EnumeratedWindow]) -> HashMap<isize, String> {
+    resolve_office_window_paths(
+        windows,
+        "winword.exe",
+        office_window_document_observations("Word.Application", "Document"),
+    )
+}
+
+#[cfg(not(windows))]
+fn word_window_paths(_: &[EnumeratedWindow]) -> HashMap<isize, String> {
+    HashMap::new()
+}
+
+#[cfg(windows)]
+fn powerpoint_window_paths(windows: &[EnumeratedWindow]) -> HashMap<isize, String> {
+    resolve_office_window_paths(
+        windows,
+        "powerpnt.exe",
+        office_window_document_observations("PowerPoint.Application", "Presentation"),
+    )
+}
+
+#[cfg(not(windows))]
+fn powerpoint_window_paths(_: &[EnumeratedWindow]) -> HashMap<isize, String> {
+    HashMap::new()
+}
+
+#[cfg(windows)]
+fn office_window_document_observations(
+    prog_id: &str,
+    document_property: &str,
+) -> Vec<OfficeWindowDocumentObservation> {
+    use windows::{
+        core::{IUnknown, Interface, BSTR, GUID, PCWSTR},
+        Win32::System::{
+            Com::{
+                CLSIDFromProgID, CoInitializeEx, CoUninitialize, IDispatch,
+                COINIT_APARTMENTTHREADED, DISPATCH_METHOD, DISPATCH_PROPERTYGET, DISPPARAMS,
+            },
+            Ole::GetActiveObject,
+            Variant::VARIANT,
+        },
+    };
+
+    struct ComApartment;
+    impl Drop for ComApartment {
+        fn drop(&mut self) {
+            unsafe { CoUninitialize() }
+        }
+    }
+
+    fn invoke(
+        dispatch: &IDispatch,
+        name: &str,
+        flags: windows::Win32::System::Com::DISPATCH_FLAGS,
+        arguments: &mut [VARIANT],
+    ) -> Option<VARIANT> {
+        let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        let name = PCWSTR(wide.as_ptr());
+        let mut id = 0;
+        unsafe {
+            dispatch
+                .GetIDsOfNames(&GUID::zeroed(), &name, 1, 0, &mut id)
+                .ok()?;
+        }
+        let parameters = DISPPARAMS {
+            rgvarg: arguments.as_mut_ptr(),
+            cArgs: arguments.len() as u32,
+            ..Default::default()
+        };
+        let mut result = VARIANT::default();
+        unsafe {
+            dispatch
+                .Invoke(
+                    id,
+                    &GUID::zeroed(),
+                    0,
+                    flags,
+                    &parameters,
+                    Some(&mut result),
+                    None,
+                    None,
+                )
+                .ok()?;
+        }
+        Some(result)
+    }
+
+    fn property(dispatch: &IDispatch, name: &str) -> Option<VARIANT> {
+        invoke(dispatch, name, DISPATCH_PROPERTYGET, &mut [])
+    }
+
+    fn dispatch_property(dispatch: &IDispatch, name: &str) -> Option<IDispatch> {
+        IDispatch::try_from(&property(dispatch, name)?).ok()
+    }
+
+    fn integer_property(dispatch: &IDispatch, name: &str) -> Option<i32> {
+        i32::try_from(&property(dispatch, name)?).ok()
+    }
+
+    fn string_property(dispatch: &IDispatch, name: &str) -> Option<String> {
+        let value = property(dispatch, name)?;
+        if value.vt() != windows::Win32::System::Variant::VT_BSTR {
+            return None;
+        }
+        let value: &BSTR =
+            unsafe { std::mem::transmute(&value.Anonymous.Anonymous.Anonymous.bstrVal) };
+        Some(value.to_string())
+    }
+
+    if unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_err() {
+        return Vec::new();
+    }
+    let _apartment = ComApartment;
+    let prog_id: Vec<u16> = prog_id.encode_utf16().chain(std::iter::once(0)).collect();
+    let Ok(clsid) = (unsafe { CLSIDFromProgID(PCWSTR(prog_id.as_ptr())) }) else {
+        return Vec::new();
+    };
+    let mut unknown: Option<IUnknown> = None;
+    if unsafe { GetActiveObject(&clsid, None, &mut unknown) }.is_err() {
+        return Vec::new();
+    }
+    let Some(application) = unknown.and_then(|value| value.cast::<IDispatch>().ok()) else {
+        return Vec::new();
+    };
+    let Some(application_windows) = dispatch_property(&application, "Windows") else {
+        return Vec::new();
+    };
+    let Some(count) = integer_property(&application_windows, "Count") else {
+        return Vec::new();
+    };
+    let mut observations = Vec::new();
+    for index in 1..=count.clamp(0, MAX_WINDOWS as i32) {
+        let mut argument = [VARIANT::from(index)];
+        let Some(window) = invoke(
+            &application_windows,
+            "Item",
+            DISPATCH_PROPERTYGET | DISPATCH_METHOD,
+            &mut argument,
+        )
+        .and_then(|value| IDispatch::try_from(&value).ok()) else {
+            continue;
+        };
+        let (Some(hwnd), Some(document)) = (
+            integer_property(&window, "Hwnd"),
+            dispatch_property(&window, document_property),
+        ) else {
+            continue;
+        };
+        let Some(path) = string_property(&document, "FullName") else {
+            continue;
+        };
+        let path = crate::contracts::windows_shell_path(&path);
+        if crate::contracts::windows_absolute_path(&path) && Path::new(&path).is_file() {
+            observations.push(OfficeWindowDocumentObservation {
+                hwnd: hwnd as isize,
+                document_path: path,
+            });
+        }
+    }
+    observations
 }
 
 #[cfg(windows)]
@@ -1492,6 +1725,8 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
         );
         assert_eq!(restorable.restorability, SnapshotRestorability::Restorable);
         assert_eq!(restorable.reason, None);
@@ -1504,8 +1739,16 @@ mod tests {
             pid: associated_window.window.identity.pid,
             process_started: associated_window.window.identity.process_started,
         };
-        let associated =
-            snapshot_item(associated_window, &[], Some(&association), None, None, None);
+        let associated = snapshot_item(
+            associated_window,
+            &[],
+            Some(&association),
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
         assert_eq!(
             associated.material_id.as_ref().map(Id::as_str),
             Some("material-1")
@@ -1515,6 +1758,8 @@ mod tests {
         let conditional = snapshot_item(
             test_window(directory.join("missing.exe").to_string_lossy().into_owned()),
             &[],
+            None,
+            None,
             None,
             None,
             None,
@@ -1529,6 +1774,8 @@ mod tests {
         let excluded = snapshot_item(
             test_window(executable.to_string_lossy().into_owned()),
             &["test.exe".into()],
+            None,
+            None,
             None,
             None,
             None,
@@ -1563,6 +1810,8 @@ mod tests {
             Some(path),
             None,
             None,
+            None,
+            None,
         );
         assert_eq!(item.material_id, None);
         assert_eq!(item.document_path.as_deref(), Some(path));
@@ -1589,6 +1838,21 @@ mod tests {
         entry.window.identity.pid = pid;
         entry.window.executable_name = "AcroRd32.exe".into();
         entry.window.app_name = "Adobe Acrobat Reader".into();
+        entry
+    }
+
+    fn office_window(hwnd: isize, pid: u32, executable_name: &str) -> EnumeratedWindow {
+        let mut entry = test_window(format!(
+            r"C:\Program Files\Microsoft Office\{executable_name}"
+        ));
+        entry.window.identity.hwnd = hwnd;
+        entry.window.identity.pid = pid;
+        entry.window.executable_name = executable_name.into();
+        entry.window.app_name = if executable_name.eq_ignore_ascii_case("winword.exe") {
+            "Microsoft Word".into()
+        } else {
+            "Microsoft PowerPoint".into()
+        };
         entry
     }
 
@@ -1644,6 +1908,8 @@ mod tests {
             None,
             Some(excel_path),
             None,
+            None,
+            None,
         );
         assert_eq!(item.document_path.as_deref(), Some(excel_path));
 
@@ -1660,6 +1926,8 @@ mod tests {
             Some(&association),
             None,
             Some(excel_path),
+            None,
+            None,
             None,
         );
         assert_eq!(
@@ -1717,6 +1985,8 @@ mod tests {
             None,
             None,
             Some(reader_path),
+            None,
+            None,
         );
         assert_eq!(item.document_path.as_deref(), Some(reader_path));
 
@@ -1734,10 +2004,98 @@ mod tests {
             None,
             None,
             Some(reader_path),
+            None,
+            None,
         );
         assert_eq!(
             associated.document_path.as_deref(),
             Some(r"C:\Meetings\registered.pdf")
+        );
+    }
+
+    #[test]
+    fn word_and_powerpoint_paths_require_exact_unique_hwnd_mappings() {
+        for (executable, hwnd, path) in [
+            ("WINWORD.EXE", 301, r"C:\Meetings\agenda.docx"),
+            ("POWERPNT.EXE", 401, r"C:\Meetings\briefing.pptx"),
+        ] {
+            let window = office_window(hwnd, hwnd as u32, executable);
+            let resolved = resolve_office_window_paths(
+                std::slice::from_ref(&window),
+                executable,
+                [OfficeWindowDocumentObservation {
+                    hwnd,
+                    document_path: path.into(),
+                }],
+            );
+            assert_eq!(resolved.get(&hwnd).map(String::as_str), Some(path));
+
+            assert!(resolve_office_window_paths(
+                std::slice::from_ref(&window),
+                executable,
+                [
+                    OfficeWindowDocumentObservation {
+                        hwnd,
+                        document_path: path.into(),
+                    },
+                    OfficeWindowDocumentObservation {
+                        hwnd,
+                        document_path: r"C:\Meetings\other.office".into(),
+                    },
+                ],
+            )
+            .is_empty());
+        }
+    }
+
+    #[test]
+    fn snapshot_uses_word_and_powerpoint_paths_after_registered_association() {
+        let word_path = r"C:\Meetings\external.docx";
+        let word = snapshot_item(
+            office_window(301, 61, "WINWORD.EXE"),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            Some(word_path),
+            None,
+        );
+        assert_eq!(word.document_path.as_deref(), Some(word_path));
+
+        let powerpoint_path = r"C:\Meetings\external.pptx";
+        let powerpoint = snapshot_item(
+            office_window(401, 71, "POWERPNT.EXE"),
+            &[],
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(powerpoint_path),
+        );
+        assert_eq!(powerpoint.document_path.as_deref(), Some(powerpoint_path));
+
+        let association = LaunchAssociation {
+            material_id: Id::try_from("material-word".to_owned()).unwrap(),
+            material_path: r"C:\Meetings\registered.docx".into(),
+            hwnd: 301,
+            pid: 61,
+            process_started: 3,
+        };
+        let associated = snapshot_item(
+            office_window(301, 61, "WINWORD.EXE"),
+            &[],
+            Some(&association),
+            None,
+            None,
+            None,
+            Some(word_path),
+            None,
+        );
+        assert_eq!(
+            associated.document_path.as_deref(),
+            Some(r"C:\Meetings\registered.docx")
         );
     }
 
