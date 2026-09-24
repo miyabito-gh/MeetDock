@@ -58,9 +58,9 @@ test('window inventory dialog balances context and workspace while keeping setti
   assert.ok(source.includes("action==='refresh-windows'"));
   assert.doesNotMatch(source,/windowsDialog\.addEventListener\('close'/);
 });
-test('saved window list exposes individual, all, and group registration actions',()=>{
+test('saved windows appear as a sidebar group with launch and registration actions',()=>{
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  for(const token of ["button('すべて起動','launch-all-window-snapshot','primary')","button('グループへ登録','register-window-snapshot','secondary')","emit('launchAllWindowSnapshot')","emit('registerWindowSnapshot')","emit('launchWindowSnapshot',index)"])assert.ok(source.includes(token));
+  for(const token of ["button('すべて起動','launch-all-window-snapshot','primary')","'一時保存したウィンドウ'","openMenu({kind:'snapshot'","add('グループへ登録','register-window-snapshot')","renderSnapshotMaterials(next)","emit('launchAllWindowSnapshot')","emit('registerWindowSnapshot')","emit('launchWindowSnapshot',index)"])assert.ok(source.includes(token));
 });
 
 test('window inventory groups applications and sorts groups and titles without usage history', () => {

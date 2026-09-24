@@ -4,13 +4,14 @@ const enumeration = names => Object.freeze(Object.fromEntries(names.split(' ').m
 export const Lifecycle = enumeration('Booting Ready ReadOnly RecoveryPending MigrationPending FatalError');
 export const Edit = enumeration('Clean Dirty Saving Conflict');
 export const Pdf = enumeration('Closed Loading Viewing PasswordRequired Failed');
+export const WINDOW_SNAPSHOT_GROUP_ID = 'window-snapshot';
 export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDuplicated GroupMoved GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialMoved MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed WindowSnapshotSaveRequested WindowSnapshotSaved WindowSnapshotSaveFailed WindowSnapshotLoadRequested WindowSnapshotLoaded WindowSnapshotLoadFailed WindowSnapshotLaunchRequested WindowSnapshotLaunchAllRequested WindowSnapshotLaunchSucceeded WindowSnapshotLaunchFailed WindowSnapshotLaunchAllCompleted WindowSnapshotRegisterRequested ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfSidecarSaveRequested PdfSidecarRemoveRequested PdfSidecarLoaded PdfSidecarSaved PdfSidecarRemoved PdfSidecarFailed PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
 export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses SyncWindows ActivateWindow RequestWindowClose SaveWindowExclusions SaveWindowSnapshot LoadWindowSnapshot LaunchWindowSnapshotItem BatchLaunchWindowSnapshot Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit PdfSearch PdfSearchPrevious PdfSearchNext LoadPdfSidecar SavePdfSidecar RemovePdfSidecar CloseWindow');
 
 export function initialState() {
   return { lifecycle: Lifecycle.Booting, edit: Edit.Clean, sync: { kind: 'Idle' },
     launch: { running: [], batch: null }, pdf: { kind: Pdf.Closed }, pdf_sidecars: {},
-    windowing: { dialog_open: false, sync: { kind: 'Idle' }, items: [], exclusions: [], running: [], closing: [], saving_exclusions: false, snapshot_busy:false, snapshot:null, snapshot_running:[], snapshot_batch:false, last_sync_at: null },
+    windowing: { dialog_open: false, sync: { kind: 'Idle' }, items: [], exclusions: [], running: [], closing: [], saving_exclusions: false, snapshot_busy:false, snapshot_focus_after_load:false, snapshot:null, snapshot_running:[], snapshot_batch:false, last_sync_at: null },
     config_revision: 0, state_generation: 0, saved_config: null, draft: null,
     candidates: [], resolution: null, saving: null, selected_group_id: null,
     statuses: [], last_sync_at: null, launch_results: [], query: '', width: null,
@@ -69,7 +70,7 @@ export function transition(s, e) {
         candidates: [], statuses: [], selected_group_id: config.groups[0]?.id ?? null,
         sync: { kind: 'Running', request_id }, windowing: { ...s.windowing, sync: { kind: 'Running', request_id } } },
         [effect(Effect.SyncStatuses, { material_ids: config.materials.map(m => m.id), request_id }, { generation }),
-          effect(Effect.SyncWindows, { request_id }, { generation })]);
+          effect(Effect.SyncWindows, { request_id }, { generation }), effect(Effect.LoadWindowSnapshot,{})]);
     }
     case Event.FutureSchemaFound:
     case Event.LegacySettingsFound:
@@ -270,7 +271,7 @@ export function transition(s, e) {
     }
     case Event.GroupSelected: {
       const generation = bump();
-      if (!group(s, e.group_id) || e.group_id === s.selected_group_id || generation === null) return deny();
+      if (!(group(s, e.group_id) || (e.group_id === WINDOW_SNAPSHOT_GROUP_ID && s.windowing.snapshot?.items?.length)) || e.group_id === s.selected_group_id || generation === null) return deny();
       return result({ ...s, selected_group_id: e.group_id, state_generation: generation, pdf: { kind: Pdf.Closed } },
         s.pdf.kind === Pdf.Closed ? [] : [effect(Effect.ClosePdf, {})]);
     }
@@ -342,16 +343,16 @@ export function transition(s, e) {
         ? result({ ...s, windowing: { ...s.windowing, saving_exclusions: false } }, [], e.error)
         : deny();
     case Event.WindowSnapshotSaveRequested:
-      return s.windowing.snapshot_busy?deny():result({...s,windowing:{...s.windowing,snapshot_busy:true}},[effect(Effect.SaveWindowSnapshot,{})]);
+      return s.windowing.snapshot_busy?deny():result({...s,windowing:{...s.windowing,snapshot_busy:true,snapshot_focus_after_load:true}},[effect(Effect.SaveWindowSnapshot,{})]);
     case Event.WindowSnapshotLoadRequested:
-      return s.windowing.snapshot_busy?deny():result({...s,windowing:{...s.windowing,snapshot_busy:true}},[effect(Effect.LoadWindowSnapshot,{})]);
+      return s.windowing.snapshot_busy?deny():result({...s,windowing:{...s.windowing,snapshot_busy:true,snapshot_focus_after_load:true}},[effect(Effect.LoadWindowSnapshot,{})]);
     case Event.WindowSnapshotSaved:
-      return result({...s,windowing:{...s.windowing,snapshot_busy:false}},[],e.response?.saved?{code:'WINDOW_SNAPSHOT_SAVED'}:appError('VALIDATION_ERROR'));
+      return e.response?.saved?result({...s,windowing:{...s.windowing,dialog_open:false,snapshot_busy:true}},[effect(Effect.LoadWindowSnapshot,{})],{code:'WINDOW_SNAPSHOT_SAVED'}):result({...s,windowing:{...s.windowing,snapshot_busy:false,snapshot_focus_after_load:false}},[],appError('VALIDATION_ERROR'));
     case Event.WindowSnapshotLoaded:
-      return result({...s,windowing:{...s.windowing,snapshot_busy:false,snapshot:e.response??null}});
+      return result({...s,selected_group_id:s.windowing.snapshot_focus_after_load&&e.response?.items?.length?WINDOW_SNAPSHOT_GROUP_ID:s.selected_group_id,windowing:{...s.windowing,snapshot_busy:false,snapshot_focus_after_load:false,snapshot:e.response??null}});
     case Event.WindowSnapshotSaveFailed:
     case Event.WindowSnapshotLoadFailed:
-      return result({...s,windowing:{...s.windowing,snapshot_busy:false}},[],e.error);
+      return result({...s,windowing:{...s.windowing,snapshot_busy:false,snapshot_focus_after_load:false}},[],e.error);
     case Event.WindowSnapshotLaunchRequested: {
       const items=s.windowing.snapshot?.items??[];
       if(!Number.isSafeInteger(e.index)||e.index<0||e.index>=items.length||s.windowing.snapshot_running.includes(e.index)||s.windowing.snapshot_batch)return deny();

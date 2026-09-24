@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { transition, initialState, Event, Effect, Lifecycle, Edit, Pdf } from '../src/model.js';
+import { transition, initialState, Event, Effect, Lifecycle, Edit, Pdf, WINDOW_SNAPSHOT_GROUP_ID } from '../src/model.js';
 import { appError, MAX_SAFE } from '../src/contracts.js';
 
 const fixtures = JSON.parse(readFileSync(new URL('./fixtures/contracts.json', import.meta.url))).fixtures;
@@ -34,7 +34,7 @@ const launched = { material_id: 'm1', outcome: 'launched', error: null };
 // IDs map 1:1 to the rows in MEDIATOR_STATE_TRANSITIONS.md.
 // Each row includes success/effect count and an independent failed guard.
 const rows = [
-  ['M01 settings', initialState, Event.SettingsLoaded, { config }, 2, s => s.lifecycle === Lifecycle.Ready && s.sync.kind === 'Running' && s.windowing.sync.kind === 'Running', { config: { ...config, schema_version: 4 } }],
+  ['M01 settings', initialState, Event.SettingsLoaded, { config }, 3, s => s.lifecycle === Lifecycle.Ready && s.sync.kind === 'Running' && s.windowing.sync.kind === 'Running', { config: { ...config, schema_version: 4 } }],
   ['M02 future', initialState, Event.FutureSchemaFound, { response: response('read_only_future_schema') }, 0, s => s.lifecycle === Lifecycle.ReadOnly, { response: { ...response('read_only_future_schema'), source_schema_version: 3 } }],
   ['M03 legacy', initialState, Event.LegacySettingsFound, { response: response('migration_required') }, 0, s => s.lifecycle === Lifecycle.MigrationPending, { response: { ...response('migration_required'), candidates: [] } }],
   ['M04 corrupt', initialState, Event.CorruptSettingsFound, { response: response('recovery_required') }, 0, s => s.lifecycle === Lifecycle.RecoveryPending, { response: {} }],
@@ -120,6 +120,14 @@ test('saved window snapshot supports individual/all launch and group registratio
   assert.equal(run(all.state,Event.WindowSnapshotLaunchAllCompleted).state.windowing.snapshot_batch,false);
   const registered=run(loaded,Event.WindowSnapshotRegisterRequested);assert.equal(registered.state.edit,Edit.Dirty);assert.equal(registered.state.draft.groups.length,config.groups.length+1);
   const added=registered.state.draft.materials.slice(config.materials.length);assert.deepEqual(added.map(item=>item.path),snapshot.items.map(item=>item.executable_path));assert.ok(added.every(item=>item.role==='main'));
+});
+test('saving a window snapshot closes the dialog, reloads it, and selects its virtual group',()=>{
+  const started=run({...ready(),windowing:{...ready().windowing,dialog_open:true}},Event.WindowSnapshotSaveRequested);
+  const saved=run(started.state,Event.WindowSnapshotSaved,{response:{saved:true,saved_count:1,excluded_count:0,exclusion_reasons:[]}});
+  assert.equal(saved.state.windowing.dialog_open,false);assert.equal(saved.effects[0].type,Effect.LoadWindowSnapshot);
+  const snapshot={schema_version:1,saved_at_unix_ms:1,items:[{app_name:'Editor',title:'Agenda',executable_name:'editor.exe',executable_path:'C:\\Apps\\editor.exe',restorability:'restorable',reason:null}]};
+  const loaded=run(saved.state,Event.WindowSnapshotLoaded,{response:snapshot});
+  assert.equal(loaded.state.selected_group_id,WINDOW_SNAPSHOT_GROUP_ID);assert.equal(loaded.state.windowing.snapshot,snapshot);
 });
 test('revision, request_id and generation cannot substitute for one another', () => {
   const s = sync();
