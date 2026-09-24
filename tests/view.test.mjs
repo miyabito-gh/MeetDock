@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, visibleMaterials } from '../src/view.js';
+import { batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, placeStableRow, visibleMaterials } from '../src/view.js';
 
 const group = (id, name, order) => ({ id, parent_id: null, name, order });
 const material = (id, group_id, name, order) => ({ id, group_id, name, role: 'main', target_type: 'file', path: `C:\\docs\\${id}.pdf`, window_match_pattern: null, order });
@@ -31,6 +31,16 @@ test('notices use specific messages and never show a generic fallback', () => {
   assert.equal(noticeMessage({ outcome: 'launched' }), '資料を開きました。');
   assert.equal(noticeMessage({ outcome: 'unknown-result' }), '');
   assert.equal(noticeMessage(null), '');
+});
+
+test('focus refresh keeps an ordered material row attached so the first icon click survives',()=>{
+  const first={},second={};first.nextSibling=second;second.nextSibling=null;
+  const insertions=[],container={firstChild:first,insertBefore:(row,before)=>insertions.push([row,before])};
+  assert.equal(placeStableRow(container,first,null),first);
+  assert.equal(placeStableRow(container,second,first),second);
+  assert.deepEqual(insertions,[]);
+  const moved={};placeStableRow(container,moved,first);
+  assert.deepEqual(insertions,[[moved,second]]);
 });
 
 test('SEC-01 dynamic view uses textContent and does not inject markup', () => {
