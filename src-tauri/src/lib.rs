@@ -1,17 +1,18 @@
 pub mod contracts;
 pub mod launcher;
 pub mod pdf_protocol;
+pub mod pdf_sidecar;
 pub mod settings;
 pub mod settings_io;
 pub mod status;
 pub mod windowing;
 use contracts::{
     ActivateOrLaunchRequest, AppError, BatchLaunchRequest, BatchLaunchResponse,
-    DroppedFileCandidate, ErrorCode, LaunchResponse, ListWindowsRequest,
-    ListWindowsResponse, OpenContainingFolderRequest, PrepareDroppedFilesRequest,
-    PrepareDroppedFilesResponse, SaveSettingsResponse, SaveWindowExclusionsRequest,
-    SaveWindowExclusionsResponse, SettingsLoadResponse, SyncStatusesRequest,
-    SyncStatusesResponse, WindowActionRequest, WindowActionResponse,
+    DroppedFileCandidate, DroppedFileFailure, ErrorCode, LaunchResponse, ListWindowsRequest, ListWindowsResponse,
+    OpenContainingFolderRequest, PrepareDroppedFilesRequest, PrepareDroppedFilesResponse,
+    SaveSettingsResponse, SaveWindowExclusionsRequest, SaveWindowExclusionsResponse,
+    SettingsLoadResponse, SyncStatusesRequest, SyncStatusesResponse, WindowActionRequest,
+    WindowActionResponse,
 };
 use launcher::NativeLauncher;
 use pdf_protocol::{NativePdfFileOps, PdfAccessError};
@@ -120,6 +121,7 @@ mod ipc_tests {
         let response =
             prepare_dropped_candidates(vec![file.to_string_lossy().into_owned()]).unwrap();
         assert_eq!(response.candidates.len(), 1);
+        assert!(response.failures.is_empty());
         assert_eq!(response.candidates[0].name, "sample.pdf");
         assert_eq!(
             response.candidates[0].target_type,
@@ -150,6 +152,12 @@ mod ipc_tests {
             contracts::windows_shell_path(&long_unc),
             format!("\\\\server\\share\\{}", "a".repeat(30_000))
         );
+        let missing = directory.join("missing.pdf");
+        let partial = prepare_dropped_candidates(vec![file.to_string_lossy().into_owned(), missing.to_string_lossy().into_owned()]).unwrap();
+        assert_eq!(partial.candidates.len(), 1);
+        assert_eq!(partial.failures.len(), 1);
+        assert_eq!(partial.failures[0].reason, "not_found");
+        assert!(prepare_dropped_candidates(vec![missing.to_string_lossy().into_owned()]).is_err());
         std::fs::remove_file(file).unwrap();
         std::fs::remove_dir(directory).unwrap();
     }
@@ -271,9 +279,12 @@ async fn save_window_snapshot(
     window: tauri::WebviewWindow,
     service: tauri::State<'_, WindowService>,
 ) -> Result<windowing::SaveSnapshotResult, AppError> {
-    if window.label() != "main" { return Err(AppError::new(ErrorCode::AccessDenied, None)); }
+    if window.label() != "main" {
+        return Err(AppError::new(ErrorCode::AccessDenied, None));
+    }
     let service = service.inner().clone();
-    tokio::task::spawn_blocking(move || service.save_snapshot()).await
+    tokio::task::spawn_blocking(move || service.save_snapshot())
+        .await
         .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
 }
 
@@ -282,10 +293,41 @@ async fn load_window_snapshot(
     window: tauri::WebviewWindow,
     service: tauri::State<'_, WindowService>,
 ) -> Result<Option<windowing::WindowSnapshot>, AppError> {
-    if window.label() != "main" { return Err(AppError::new(ErrorCode::AccessDenied, None)); }
+    if window.label() != "main" {
+        return Err(AppError::new(ErrorCode::AccessDenied, None));
+    }
     let service = service.inner().clone();
-    tokio::task::spawn_blocking(move || service.load_snapshot()).await
+    tokio::task::spawn_blocking(move || service.load_snapshot())
+        .await
         .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
+}
+
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LaunchWindowSnapshotItemRequest {
+    index: usize,
+}
+
+#[derive(serde::Serialize)]
+struct LaunchWindowSnapshotItemResponse {
+    index: usize,
+}
+
+#[tauri::command]
+async fn launch_window_snapshot_item(
+    window: tauri::WebviewWindow,
+    body: tauri::ipc::Request<'_>,
+    service: tauri::State<'_, WindowService>,
+) -> Result<LaunchWindowSnapshotItemResponse, AppError> {
+    let request: LaunchWindowSnapshotItemRequest =
+        serde_json::from_value(payload(&window, body, true)?)
+            .map_err(|_| AppError::new(ErrorCode::InvalidRequest, None))?;
+    let index = request.index;
+    let service = service.inner().clone();
+    tokio::task::spawn_blocking(move || service.launch_snapshot_item(index))
+        .await
+        .map_err(|_| AppError::new(ErrorCode::InternalError, None))??;
+    Ok(LaunchWindowSnapshotItemResponse { index })
 }
 
 #[tauri::command]
@@ -359,24 +401,21 @@ async fn open_containing_folder(
 
 fn prepare_dropped_candidates(paths: Vec<String>) -> Result<PrepareDroppedFilesResponse, AppError> {
     let mut candidates = Vec::with_capacity(paths.len());
+    let mut failures = Vec::new();
     let mut seen = std::collections::HashSet::new();
     for raw in paths {
-        let path = std::fs::canonicalize(&raw)
-            .map_err(|_| AppError::new(ErrorCode::ValidationError, None))?;
-        let metadata = std::fs::metadata(&path)
-            .map_err(|_| AppError::new(ErrorCode::ValidationError, None))?;
+        let path = match std::fs::canonicalize(&raw) { Ok(value) => value, Err(error) => { failures.push(DroppedFileFailure { path: raw, reason: if error.kind()==std::io::ErrorKind::NotFound { "not_found" } else if error.kind()==std::io::ErrorKind::PermissionDenied { "inaccessible" } else { "invalid_path" }.into() }); continue; } };
+        let metadata = match std::fs::metadata(&path) { Ok(value) => value, Err(error) => { failures.push(DroppedFileFailure { path: raw, reason: if error.kind()==std::io::ErrorKind::PermissionDenied { "inaccessible" } else { "invalid_path" }.into() }); continue; } };
         let target_type = if metadata.is_file() {
             contracts::TargetType::File
         } else if metadata.is_dir() {
             contracts::TargetType::Folder
         } else {
-            return Err(AppError::new(ErrorCode::ValidationError, None));
+            failures.push(DroppedFileFailure { path: raw, reason: "unsupported".into() }); continue;
         };
         let normalized = contracts::windows_shell_path(&path.to_string_lossy());
-        if !contracts::windows_absolute_path(&normalized) || !seen.insert(normalized.to_lowercase())
-        {
-            return Err(AppError::new(ErrorCode::ValidationError, None));
-        }
+        if !contracts::windows_absolute_path(&normalized) { failures.push(DroppedFileFailure { path: raw, reason: "invalid_path".into() }); continue; }
+        if !seen.insert(normalized.to_lowercase()) { failures.push(DroppedFileFailure { path: raw, reason: "duplicate".into() }); continue; }
         let name = path
             .file_name()
             .and_then(|value| value.to_str())
@@ -389,7 +428,8 @@ fn prepare_dropped_candidates(paths: Vec<String>) -> Result<PrepareDroppedFilesR
             target_type,
         });
     }
-    Ok(PrepareDroppedFilesResponse { candidates })
+    if candidates.is_empty() { return Err(AppError::new(ErrorCode::ValidationError, None)); }
+    Ok(PrepareDroppedFilesResponse { candidates, failures })
 }
 
 #[tauri::command]
@@ -485,6 +525,7 @@ pub fn run() {
             save_window_exclusions,
             save_window_snapshot,
             load_window_snapshot,
+            launch_window_snapshot_item,
             activate_or_launch,
             batch_launch_main,
             open_containing_folder,

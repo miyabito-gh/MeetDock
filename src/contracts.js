@@ -161,7 +161,8 @@ export const validators = Object.freeze({
   BatchLaunchResponse: v => object(v, { results: array(launch) }),
   PrepareDroppedFilesRequest: v => { object(v, { paths: array(string) }); requireValue(v.paths.length > 0 && v.paths.length <= 100 && v.paths.every(path => path.length > 0 && path.length <= 32767)); },
   DroppedFileCandidate: droppedCandidate,
-  PrepareDroppedFilesResponse: v => { object(v, { candidates: array(droppedCandidate) }); requireValue(v.candidates.length > 0 && v.candidates.length <= 100); },
+  DroppedFileFailure: v => { object(v, { path: string, reason: member(['not_found','inaccessible','unsupported','duplicate','invalid_path']) }); requireValue(v.path.length > 0 && v.path.length <= 32767); },
+  PrepareDroppedFilesResponse: v => { object(v, { candidates: array(droppedCandidate), failures: array(x => validators.DroppedFileFailure(x)) }); requireValue(v.candidates.length > 0 && v.candidates.length + v.failures.length <= 100); },
   ListWindowsRequest: v => object(v, { request_id: uuid }),
   WindowListItem: windowItem,
   ListWindowsResponse: v => {

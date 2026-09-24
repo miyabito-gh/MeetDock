@@ -106,6 +106,21 @@ test('duplicate save, restore, batch, and overlapping individual/batch cannot is
   assert.equal(run(batch(), Event.ActivateRequested, { material_id: 'm1' }).effects.length, 0);
   assert.equal(run(launch(), Event.BatchLaunchRequested, { group_id: 'g1' }).effects.length, 0);
 });
+test('saved window snapshot supports individual/all launch and group registration', () => {
+  const snapshot={schema_version:1,saved_at_unix_ms:Date.UTC(2026,8,25),items:[
+    {app_name:'Editor',title:'Agenda',executable_name:'editor.exe',executable_path:'C:\\Apps\\editor.exe',restorability:'restorable',reason:null},
+    {app_name:'Browser',title:'Reference',executable_name:'browser.exe',executable_path:'C:\\Apps\\browser.exe',restorability:'conditional',reason:'state may differ'},
+  ]};
+  const loaded=run(ready(),Event.WindowSnapshotLoaded,{response:snapshot}).state;
+  const one=run(loaded,Event.WindowSnapshotLaunchRequested,{index:0});
+  assert.equal(one.effects[0].type,Effect.LaunchWindowSnapshotItem);assert.deepEqual(one.effects[0].request,{index:0});assert.deepEqual(one.state.windowing.snapshot_running,[0]);
+  assert.equal(run(one.state,Event.WindowSnapshotLaunchRequested,{index:0}).effects.length,0);
+  assert.deepEqual(run(one.state,Event.WindowSnapshotLaunchSucceeded,{index:0}).state.windowing.snapshot_running,[]);
+  const all=run(loaded,Event.WindowSnapshotLaunchAllRequested);assert.equal(all.effects[0].type,Effect.BatchLaunchWindowSnapshot);assert.deepEqual(all.effects[0].request.indices,[0,1]);
+  assert.equal(run(all.state,Event.WindowSnapshotLaunchAllCompleted).state.windowing.snapshot_batch,false);
+  const registered=run(loaded,Event.WindowSnapshotRegisterRequested);assert.equal(registered.state.edit,Edit.Dirty);assert.equal(registered.state.draft.groups.length,config.groups.length+1);
+  const added=registered.state.draft.materials.slice(config.materials.length);assert.deepEqual(added.map(item=>item.path),snapshot.items.map(item=>item.executable_path));assert.ok(added.every(item=>item.role==='main'));
+});
 test('revision, request_id and generation cannot substitute for one another', () => {
   const s = sync();
   const switched = run(s, Event.PdfOpenRequested, { material_id: 'm1' }).state;
@@ -342,8 +357,8 @@ test('Saving rejects every config edit event', () => {
 test('DnD is draft-only and execution effects remain ID-only', () => {
   const requested = run(ready(), Event.NativeFilesDropped, { group_id: 'g1', paths: ['C:\\Drop\\drop.pdf'] });
   assert.equal(requested.effects[0].type, Effect.PrepareDroppedFiles);
-  const prepared = run(requested.state, Event.DroppedFilesPrepared, { group_id: 'g1', response: { candidates: [{ name: 'drop.pdf', path: 'C:\\Drop\\drop.pdf', target_type: 'file' }, { name: 'Folder', path: 'C:\\Drop\\Folder', target_type: 'folder' }] } });
-  assert.equal(prepared.state.edit, Edit.Clean); assert.equal(prepared.state.dropped_files.candidates.length, 2);
+  const prepared = run(requested.state, Event.DroppedFilesPrepared, { group_id: 'g1', response: { candidates: [{ name: 'drop.pdf', path: 'C:\\Drop\\drop.pdf', target_type: 'file' }, { name: 'Folder', path: 'C:\\Drop\\Folder', target_type: 'folder' }], failures: [{ path: 'C:\\Drop\\missing.pdf', reason: 'not_found' }] } });
+  assert.equal(prepared.state.edit, Edit.Clean); assert.equal(prepared.state.dropped_files.candidates.length, 2); assert.deepEqual(prepared.state.dropped_files.failures,[{path:'C:\\Drop\\missing.pdf',reason:'not_found'}]);
   const dropped = run(prepared.state, Event.DroppedFilesConfirmed, { group_id: 'g1', role: 'main' });
   assert.equal(dropped.effects.length, 0); assert.equal(dropped.state.edit, Edit.Dirty);
   const added = dropped.state.draft.materials.find(m => m.path === 'C:\\Drop\\drop.pdf');

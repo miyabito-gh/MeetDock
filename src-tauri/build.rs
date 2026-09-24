@@ -12,6 +12,7 @@ fn main() {
             "save_window_exclusions",
             "save_window_snapshot",
             "load_window_snapshot",
+            "launch_window_snapshot_item",
             "activate_or_launch",
             "batch_launch_main",
             "open_containing_folder",

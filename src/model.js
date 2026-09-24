@@ -4,13 +4,13 @@ const enumeration = names => Object.freeze(Object.fromEntries(names.split(' ').m
 export const Lifecycle = enumeration('Booting Ready ReadOnly RecoveryPending MigrationPending FatalError');
 export const Edit = enumeration('Clean Dirty Saving Conflict');
 export const Pdf = enumeration('Closed Loading Viewing PasswordRequired Failed');
-export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDuplicated GroupMoved GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialMoved MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed WindowSnapshotSaveRequested WindowSnapshotSaved WindowSnapshotSaveFailed WindowSnapshotLoadRequested WindowSnapshotLoaded WindowSnapshotLoadFailed ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
-export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses SyncWindows ActivateWindow RequestWindowClose SaveWindowExclusions SaveWindowSnapshot LoadWindowSnapshot Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit PdfSearch PdfSearchPrevious PdfSearchNext CloseWindow');
+export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDuplicated GroupMoved GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialMoved MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed WindowSnapshotSaveRequested WindowSnapshotSaved WindowSnapshotSaveFailed WindowSnapshotLoadRequested WindowSnapshotLoaded WindowSnapshotLoadFailed WindowSnapshotLaunchRequested WindowSnapshotLaunchAllRequested WindowSnapshotLaunchSucceeded WindowSnapshotLaunchFailed WindowSnapshotLaunchAllCompleted WindowSnapshotRegisterRequested ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
+export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses SyncWindows ActivateWindow RequestWindowClose SaveWindowExclusions SaveWindowSnapshot LoadWindowSnapshot LaunchWindowSnapshotItem BatchLaunchWindowSnapshot Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit PdfSearch PdfSearchPrevious PdfSearchNext CloseWindow');
 
 export function initialState() {
   return { lifecycle: Lifecycle.Booting, edit: Edit.Clean, sync: { kind: 'Idle' },
     launch: { running: [], batch: null }, pdf: { kind: Pdf.Closed },
-    windowing: { dialog_open: false, sync: { kind: 'Idle' }, items: [], exclusions: [], running: [], closing: [], saving_exclusions: false, snapshot_busy:false, snapshot:null, last_sync_at: null },
+    windowing: { dialog_open: false, sync: { kind: 'Idle' }, items: [], exclusions: [], running: [], closing: [], saving_exclusions: false, snapshot_busy:false, snapshot:null, snapshot_running:[], snapshot_batch:false, last_sync_at: null },
     config_revision: 0, state_generation: 0, saved_config: null, draft: null,
     candidates: [], resolution: null, saving: null, selected_group_id: null,
     statuses: [], last_sync_at: null, launch_results: [], query: '', width: null,
@@ -220,7 +220,7 @@ export function transition(s, e) {
     }
     case Event.DroppedFilesPrepared:
       if (!editable(s) || !editableConfig(s)?.groups.some(g => g.id === e.group_id) || !e.response?.candidates?.length) return deny();
-      return result({ ...s, dropped_files: { group_id: e.group_id, candidates: structuredClone(e.response.candidates) } });
+      return result({ ...s, dropped_files: { group_id: e.group_id, candidates: structuredClone(e.response.candidates), failures: structuredClone(e.response.failures??[]) } });
     case Event.DroppedFilesPrepareFailed:
       return result(s, [], e.error);
     case Event.DroppedFilesCancelled:
@@ -347,6 +347,31 @@ export function transition(s, e) {
     case Event.WindowSnapshotSaveFailed:
     case Event.WindowSnapshotLoadFailed:
       return result({...s,windowing:{...s.windowing,snapshot_busy:false}},[],e.error);
+    case Event.WindowSnapshotLaunchRequested: {
+      const items=s.windowing.snapshot?.items??[];
+      if(!Number.isSafeInteger(e.index)||e.index<0||e.index>=items.length||s.windowing.snapshot_running.includes(e.index)||s.windowing.snapshot_batch)return deny();
+      return result({...s,windowing:{...s.windowing,snapshot_running:[...s.windowing.snapshot_running,e.index]}},[effect(Effect.LaunchWindowSnapshotItem,{index:e.index})]);
+    }
+    case Event.WindowSnapshotLaunchAllRequested: {
+      const indices=(s.windowing.snapshot?.items??[]).map((_,index)=>index);
+      if(!indices.length||s.windowing.snapshot_batch||s.windowing.snapshot_running.length)return deny();
+      return result({...s,windowing:{...s.windowing,snapshot_batch:true}},[effect(Effect.BatchLaunchWindowSnapshot,{indices})]);
+    }
+    case Event.WindowSnapshotLaunchSucceeded:
+    case Event.WindowSnapshotLaunchFailed:
+      if(!s.windowing.snapshot_running.includes(e.index))return deny();
+      return result({...s,windowing:{...s.windowing,snapshot_running:s.windowing.snapshot_running.filter(index=>index!==e.index)}},[],e.type===Event.WindowSnapshotLaunchFailed?e.error:{code:'WINDOW_SNAPSHOT_LAUNCHED'});
+    case Event.WindowSnapshotLaunchAllCompleted:
+      if(!s.windowing.snapshot_batch)return deny();
+      return result({...s,windowing:{...s.windowing,snapshot_batch:false}},[],e.error??{code:'WINDOW_SNAPSHOT_LAUNCHED'});
+    case Event.WindowSnapshotRegisterRequested: {
+      if(!editable(s)||!s.windowing.snapshot?.items?.length||!s.saved_config)return deny();
+      const config=editableConfig(s),groupId=crypto.randomUUID(),stamp=new Date(s.windowing.snapshot.saved_at_unix_ms).toLocaleString('ja-JP');
+      config.groups.push({id:groupId,parent_id:null,name:`保存ウィンドウ ${stamp}`,order:Number.MAX_SAFE_INTEGER});
+      for(const item of s.windowing.snapshot.items)config.materials.push({id:crypto.randomUUID(),group_id:groupId,name:item.title||item.app_name,role:'main',target_type:'file',path:item.executable_path,window_match_pattern:null,order:Number.MAX_SAFE_INTEGER});
+      reorder(config.groups,g=>g.parent_id??'root');reorder(config.materials,m=>`${m.group_id}\0${m.role}`);
+      return result({...dirtyWith(s,config),selected_group_id:groupId},[],{code:'WINDOW_SNAPSHOT_REGISTERED'});
+    }
     case Event.ActivateRequested:
       if (!editable(s) || !material(s, e.material_id) || s.launch.running.some(x => x.material_id === e.material_id) || s.launch.batch?.material_ids.includes(e.material_id)) return deny();
       return result({ ...s, launch: { ...s.launch, running: [...s.launch.running, { material_id: e.material_id, generation: s.state_generation }] } },
@@ -486,7 +511,7 @@ export function renderModel(result) {
     config: s.draft ?? s.saved_config, statuses: s.statuses, last_sync_at: s.last_sync_at, launch_results: s.launch_results,
     candidates: s.candidates, selected_group_id: s.selected_group_id,
     dropped_files: s.dropped_files, pdf_candidates, pdf_current_name, query: s.query, width: s.width, layout: s.layout,
-    window_dialog_open: s.windowing.dialog_open, window_items: s.windowing.items, window_exclusions: s.windowing.exclusions, window_snapshot_busy:s.windowing.snapshot_busy, window_snapshot:s.windowing.snapshot,
+    window_dialog_open: s.windowing.dialog_open, window_items: s.windowing.items, window_exclusions: s.windowing.exclusions, window_snapshot_busy:s.windowing.snapshot_busy, window_snapshot:s.windowing.snapshot, window_snapshot_running:s.windowing.snapshot_running, window_snapshot_batch:s.windowing.snapshot_batch,
     window_sync: s.windowing.sync, window_operations: s.windowing.running, closing_window_ids: s.windowing.closing,
     window_exclusions_saving: s.windowing.saving_exclusions, window_last_sync_at: s.windowing.last_sync_at,
     refreshing: s.sync.kind === 'Running' || s.windowing.sync.kind === 'Running', notice: result.notice };

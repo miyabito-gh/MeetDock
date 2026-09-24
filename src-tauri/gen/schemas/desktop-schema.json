@@ -207,6 +207,12 @@
           "markdownDescription": "Enables the health_check command without any pre-configured scope."
         },
         {
+          "description": "Enables the launch_window_snapshot_item command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-launch-window-snapshot-item",
+          "markdownDescription": "Enables the launch_window_snapshot_item command without any pre-configured scope."
+        },
+        {
           "description": "Enables the list_windows command without any pre-configured scope.",
           "type": "string",
           "const": "allow-list-windows",
@@ -295,6 +301,12 @@
           "type": "string",
           "const": "deny-health-check",
           "markdownDescription": "Denies the health_check command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the launch_window_snapshot_item command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-launch-window-snapshot-item",
+          "markdownDescription": "Denies the launch_window_snapshot_item command without any pre-configured scope."
         },
         {
           "description": "Denies the list_windows command without any pre-configured scope.",

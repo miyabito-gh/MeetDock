@@ -58,6 +58,10 @@ test('window inventory dialog balances context and workspace while keeping setti
   assert.ok(source.includes("action==='refresh-windows'"));
   assert.doesNotMatch(source,/windowsDialog\.addEventListener\('close'/);
 });
+test('saved window list exposes individual, all, and group registration actions',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  for(const token of ["button('すべて起動','launch-all-window-snapshot','primary')","button('グループへ登録','register-window-snapshot','secondary')","emit('launchAllWindowSnapshot')","emit('registerWindowSnapshot')","emit('launchWindowSnapshot',index)"])assert.ok(source.includes(token));
+});
 
 test('window inventory groups applications and sorts groups and titles without usage history', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
@@ -245,6 +249,7 @@ test('empty search results provide a clear recovery action', () => {
 test('DnD confirmation and PDF external fallback are explicit UI actions', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   for (const token of ["'dnd-confirm'", "'dnd-cancel'", "'confirmDroppedFiles'", "'PDF_FALLBACK_TOO_LARGE'", "'pdf-external'", "'openPdfExternal'"]) assert.ok(source.includes(token));
+  for (const token of ['droppedFailureText',"'dnd-failure'",'件は登録できませんでした','failure.path']) assert.ok(source.includes(token));
 });
 
 test('group and material operations use an accessible in-app dialog with explicit contracts', () => {

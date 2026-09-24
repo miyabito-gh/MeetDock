@@ -19,7 +19,7 @@ const req1 = '12345678-1234-4234-8234-123456789abc', req2 = '12345678-1234-4234-
 function ports() {
   return { settings: { load: async () => fixture('SettingsLoadResponse'), save: async () => fixture('SaveSettingsResponse'), resolve: async () => fixture('SettingsLoadResponse') },
     statuses: { sync: async r => ({ request_id: r.request_id, results: [] }) },
-    windows: { list: async r => ({ request_id: r.request_id, windows: [], exclusions: [] }), activate: async r => r, close: async r => r, saveExclusions: async r => ({ patterns: r.patterns }) },
+    windows: { list: async r => ({ request_id: r.request_id, windows: [], exclusions: [] }), activate: async r => r, close: async r => r, saveExclusions: async r => ({ patterns: r.patterns }), launchSnapshotItem:async r=>r },
     launch: { activate: async () => fixture('LaunchResponse'), batch: async () => fixture('BatchLaunchResponse') },
     pdf: { replace: async () => ({ current_page: 1, total_pages: 3, zoom_percent: 100 }), close: async () => {},
       previous: async () => ({ current_page: 1, total_pages: 3, zoom_percent: 100 }), next: async () => ({ current_page: 2, total_pages: 3, zoom_percent: 100 }),
@@ -84,6 +84,13 @@ test('Runner executes each effect object once, in list order, with no retry', as
   a.reject(appError('LAUNCH_FAILED')); b.resolve({ material_id: 'm2', outcome: 'foreground_denied', error: appError('FOREGROUND_DENIED') });
   await runner.settled();
   assert.deepEqual(events.map(e => e.type), [Event.LaunchFailed, Event.ForegroundDenied]); assert.equal(calls.length, 2);
+});
+test('Runner launches saved window snapshot items individually and sequentially',async()=>{
+  const services=ports(),calls=[],events=[];services.windows.launchSnapshotItem=async request=>{calls.push(request.index);return request};
+  const runner=createEffectRunner(services,event=>events.push(event));runner.run([
+    {type:Effect.LaunchWindowSnapshotItem,request:{index:2},generation:1},
+    {type:Effect.BatchLaunchWindowSnapshot,request:{indices:[0,1]},generation:1},
+  ]);await runner.settled();assert.deepEqual(calls,[2,0,1]);assert.deepEqual(events.map(event=>event.type),[Event.WindowSnapshotLaunchSucceeded,Event.WindowSnapshotLaunchAllCompleted]);
 });
 test('Runner error mapping for every service and malformed response', async () => {
   const cases = [

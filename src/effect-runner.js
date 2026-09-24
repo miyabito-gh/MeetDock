@@ -17,7 +17,7 @@ export function createServices(ipc, pdf, lifecycle) {
   return Object.freeze({
     settings: Object.freeze({ load: () => ipc.call('load_settings'), resolve: r => ipc.call('resolve_settings_issue', r), save: r => ipc.call('save_settings', r) }),
     statuses: Object.freeze({ sync: r => ipc.call('sync_material_statuses', r) }),
-    windows: Object.freeze({ list: r => ipc.call('list_windows', r), activate: r => ipc.call('activate_window', r), close: r => ipc.call('close_window', r), saveExclusions: r => ipc.call('save_window_exclusions', r), saveSnapshot:()=>ipc.call('save_window_snapshot'), loadSnapshot:()=>ipc.call('load_window_snapshot') }),
+    windows: Object.freeze({ list: r => ipc.call('list_windows', r), activate: r => ipc.call('activate_window', r), close: r => ipc.call('close_window', r), saveExclusions: r => ipc.call('save_window_exclusions', r), saveSnapshot:()=>ipc.call('save_window_snapshot'), loadSnapshot:()=>ipc.call('load_window_snapshot'), launchSnapshotItem:r=>ipc.call('launch_window_snapshot_item',r) }),
     launch: Object.freeze({ activate: r => ipc.call('activate_or_launch', r), batch: r => ipc.call('batch_launch_main', r), openContainingFolder: r => ipc.call('open_containing_folder', r) }),
     droppedFiles: Object.freeze({ prepare: r => ipc.call('prepare_dropped_files', r) }),
     pdf, lifecycle,
@@ -31,7 +31,7 @@ export function createServices(ipc, pdf, lifecycle) {
 export function createEffectRunner(services, dispatch, onIdle = () => {}) {
   const seen = new WeakSet(), pending = new Set(), batches = new Map();
   async function execute(f) {
-    const context = { generation: f.generation, material_id: f.request.material_id, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id,
+    const context = { generation: f.generation, material_id: f.request.material_id, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id, index:f.request.index,
       ...(Number.isSafeInteger(f.request.search_generation) ? { search_generation: f.request.search_generation } : {}) };
     let event;
     try {
@@ -70,6 +70,14 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         }
         case Effect.SaveWindowSnapshot: event={type:Event.WindowSnapshotSaved,response:await services.windows.saveSnapshot(),...context};break;
         case Effect.LoadWindowSnapshot: event={type:Event.WindowSnapshotLoaded,response:await services.windows.loadSnapshot(),...context};break;
+        case Effect.LaunchWindowSnapshotItem: {
+          const r=await services.windows.launchSnapshotItem(f.request);if(r?.index!==f.request.index)throw appError('INTERNAL_ERROR');
+          event={type:Event.WindowSnapshotLaunchSucceeded,index:r.index,...context};break;
+        }
+        case Effect.BatchLaunchWindowSnapshot: {
+          let error=null;for(const index of f.request.indices){try{const r=await services.windows.launchSnapshotItem({index});if(r?.index!==index)throw appError('INTERNAL_ERROR')}catch(raw){error=safeError(raw)}}
+          event={type:Event.WindowSnapshotLaunchAllCompleted,error,...context};break;
+        }
         case Effect.Activate: {
           const r = validate('LaunchResponse', await services.launch.activate(f.request));
           if (r.material_id !== f.request.material_id) throw appError('INTERNAL_ERROR');
@@ -125,6 +133,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         [Effect.ActivateWindow]: Event.WindowActivateFailed, [Effect.RequestWindowClose]: Event.WindowCloseFailed,
         [Effect.SaveWindowExclusions]: Event.WindowExclusionsSaveFailed,
         [Effect.SaveWindowSnapshot]: Event.WindowSnapshotSaveFailed, [Effect.LoadWindowSnapshot]: Event.WindowSnapshotLoadFailed,
+        [Effect.LaunchWindowSnapshotItem]: Event.WindowSnapshotLaunchFailed, [Effect.BatchLaunchWindowSnapshot]: Event.WindowSnapshotLaunchAllCompleted,
         [Effect.Activate]: Event.LaunchFailed, [Effect.OpenContainingFolder]: Event.OpenContainingFolderCompleted,
         [Effect.PrepareDroppedFiles]: Event.DroppedFilesPrepareFailed,
         [Effect.BatchLaunch]: Event.BatchLaunchCompleted,

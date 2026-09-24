@@ -228,6 +228,25 @@ impl WindowService {
         load_snapshot_file(&self.snapshot_path())
     }
 
+    pub fn launch_snapshot_item(&self, index: usize) -> Result<(), AppError> {
+        let snapshot = self
+            .load_snapshot()?
+            .ok_or_else(|| AppError::new(ErrorCode::NotFound, None))?;
+        let item = snapshot
+            .items
+            .get(index)
+            .ok_or_else(|| AppError::new(ErrorCode::NotFound, None))?;
+        if item.restorability == SnapshotRestorability::Excluded
+            || item.executable_path.trim().is_empty()
+        {
+            return Err(AppError::new(ErrorCode::UnsupportedTarget, None));
+        }
+        std::process::Command::new(&item.executable_path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|_| AppError::new(ErrorCode::LaunchFailed, None))
+    }
+
     fn snapshot_path(&self) -> PathBuf {
         self.preferences_path.with_file_name("window-snapshot.json")
     }

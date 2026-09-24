@@ -25,6 +25,28 @@ pub trait Foreground: Send + Sync + 'static {
 pub trait TargetLaunch: Send + Sync + 'static {
     fn launch(&self, material: &MaterialItem) -> Result<LaunchReport, ErrorCode>;
     fn reveal(&self, material: &MaterialItem) -> Result<(), ErrorCode>;
+    fn launch_with_explorer_mode(
+        &self,
+        material: &MaterialItem,
+        _mode: ExplorerOpenMode,
+    ) -> Result<LaunchReport, ErrorCode> {
+        self.launch(material)
+    }
+    fn reveal_with_explorer_mode(
+        &self,
+        material: &MaterialItem,
+        _mode: ExplorerOpenMode,
+    ) -> Result<(), ErrorCode> {
+        self.reveal(material)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExplorerOpenMode {
+    #[default]
+    NewWindow,
+    ExistingTab,
 }
 
 /// Kept inside the launcher only.  It deliberately has no serde implementation.
@@ -111,6 +133,14 @@ impl<D: WindowDetection, F: Foreground, L: TargetLaunch> Launcher<D, F, L> {
     }
 
     pub fn activate_or_launch(&self, material: MaterialItem) -> LaunchResponse {
+        self.activate_or_launch_with_explorer_mode(material, ExplorerOpenMode::NewWindow)
+    }
+
+    pub fn activate_or_launch_with_explorer_mode(
+        &self,
+        material: MaterialItem,
+        explorer_mode: ExplorerOpenMode,
+    ) -> LaunchResponse {
         let id = material.id.clone();
         let failure = |outcome, code| LaunchResponse {
             material_id: id.clone(),
@@ -124,6 +154,20 @@ impl<D: WindowDetection, F: Foreground, L: TargetLaunch> Launcher<D, F, L> {
                     outcome: LaunchOutcome::NotTrackable,
                     error: None,
                 },
+                Err(code) => failure(LaunchOutcome::Failed, code),
+            };
+        }
+        if material.target_type == TargetType::Folder {
+            return match self
+                .target
+                .launch_with_explorer_mode(&material, explorer_mode)
+            {
+                Ok(_) => LaunchResponse {
+                    material_id: id,
+                    outcome: LaunchOutcome::Launched,
+                    error: None,
+                },
+                Err(ErrorCode::NotFound) => failure(LaunchOutcome::NotFound, ErrorCode::NotFound),
                 Err(code) => failure(LaunchOutcome::Failed, code),
             };
         }
@@ -145,7 +189,9 @@ impl<D: WindowDetection, F: Foreground, L: TargetLaunch> Launcher<D, F, L> {
                 }
             }
             Detection::Unknown => failure(LaunchOutcome::Failed, ErrorCode::WindowNotFound),
-            Detection::NotDetected | Detection::NotTrackable => match self.target.launch(&material)
+            Detection::NotDetected | Detection::NotTrackable => match self
+                .target
+                .launch_with_explorer_mode(&material, explorer_mode)
             {
                 Ok(_) => LaunchResponse {
                     material_id: id,
@@ -159,6 +205,14 @@ impl<D: WindowDetection, F: Foreground, L: TargetLaunch> Launcher<D, F, L> {
     }
 
     pub fn reveal(&self, material: MaterialItem) -> Result<EmptyResponse, AppError> {
+        self.reveal_with_explorer_mode(material, ExplorerOpenMode::NewWindow)
+    }
+
+    pub fn reveal_with_explorer_mode(
+        &self,
+        material: MaterialItem,
+        explorer_mode: ExplorerOpenMode,
+    ) -> Result<EmptyResponse, AppError> {
         if material.target_type == TargetType::Url {
             return Err(AppError::new(
                 ErrorCode::UnsupportedTarget,
@@ -166,7 +220,7 @@ impl<D: WindowDetection, F: Foreground, L: TargetLaunch> Launcher<D, F, L> {
             ));
         }
         self.target
-            .reveal(&material)
+            .reveal_with_explorer_mode(&material, explorer_mode)
             .map_err(|code| AppError::new(code, Some(material.id)))?;
         Ok(EmptyResponse {})
     }
@@ -392,6 +446,52 @@ impl Foreground for NativeForeground {
 pub struct NativeTargetLaunch {
     state: SharedSessionState,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ExplorerWindowObservation {
+    hwnd: isize,
+    class_name: String,
+    folder_path: Option<String>,
+}
+
+fn normalize_explorer_path(path: &str) -> String {
+    let mut normalized = path.trim().replace('/', "\\");
+    while normalized.len() > 3 && normalized.ends_with('\\') {
+        normalized.pop();
+    }
+    normalized.to_lowercase()
+}
+
+fn matching_explorer_window(
+    requested_path: &str,
+    windows: &[ExplorerWindowObservation],
+) -> Option<isize> {
+    let requested = normalize_explorer_path(requested_path);
+    if requested.is_empty() {
+        return None;
+    }
+    let mut matches = windows.iter().filter(|window| {
+        matches!(
+            window.class_name.as_str(),
+            "CabinetWClass" | "ExploreWClass"
+        ) && window
+            .folder_path
+            .as_deref()
+            .map(normalize_explorer_path)
+            .is_some_and(|path| path == requested)
+    });
+    let hwnd = matches.next()?.hwnd;
+    matches.next().is_none().then_some(hwnd)
+}
+
+#[cfg(windows)]
+fn existing_explorer_window(_requested_path: &str) -> Option<isize> {
+    // EnumWindows can establish that a window is Explorer, but it cannot safely expose
+    // the active tab's filesystem path. Until that path is available from a supported
+    // shell API, do not guess from the title; let Explorer perform the normal open.
+    matching_explorer_window(_requested_path, &[])
+}
+
 #[cfg(windows)]
 impl TargetLaunch for NativeTargetLaunch {
     fn launch(&self, material: &MaterialItem) -> Result<LaunchReport, ErrorCode> {
@@ -454,12 +554,55 @@ impl TargetLaunch for NativeTargetLaunch {
         }
     }
     fn reveal(&self, material: &MaterialItem) -> Result<(), ErrorCode> {
+        self.reveal_with_explorer_mode(material, ExplorerOpenMode::NewWindow)
+    }
+    fn launch_with_explorer_mode(
+        &self,
+        material: &MaterialItem,
+        mode: ExplorerOpenMode,
+    ) -> Result<LaunchReport, ErrorCode> {
+        if material.target_type != TargetType::Folder {
+            return self.launch(material);
+        }
+        self.open_in_explorer(material, mode, false)?;
+        Ok(LaunchReport::NotTrackable)
+    }
+    fn reveal_with_explorer_mode(
+        &self,
+        material: &MaterialItem,
+        mode: ExplorerOpenMode,
+    ) -> Result<(), ErrorCode> {
+        self.open_in_explorer(material, mode, material.target_type != TargetType::Folder)
+    }
+}
+
+#[cfg(windows)]
+impl NativeTargetLaunch {
+    fn open_in_explorer(
+        &self,
+        material: &MaterialItem,
+        mode: ExplorerOpenMode,
+        select_file: bool,
+    ) -> Result<(), ErrorCode> {
         let shell_path = crate::contracts::windows_shell_path(&material.path);
         let path = Path::new(&shell_path);
-        let argument = if material.target_type == TargetType::Folder {
-            shell_path.clone()
+        let folder_path = if select_file {
+            path.parent().and_then(Path::to_str).unwrap_or(&shell_path)
         } else {
+            &shell_path
+        };
+        if mode == ExplorerOpenMode::ExistingTab {
+            if let Some(hwnd) = existing_explorer_window(folder_path) {
+                NativeForeground.activate(hwnd)?;
+                return Ok(());
+            }
+        }
+        let argument = if select_file {
             format!("/select,{shell_path}")
+        } else if mode == ExplorerOpenMode::NewWindow {
+            format!("/n,{shell_path}")
+        } else {
+            shell_path.clone()
         };
         std::process::Command::new("explorer.exe")
             .arg(argument)
@@ -733,5 +876,90 @@ mod tests {
         let response_json = serde_json::to_value(response).unwrap();
         assert!(response_json.get("pid").is_none());
         assert!(response_json.get("hwnd").is_none());
+    }
+
+    #[test]
+    fn explorer_mode_uses_stable_snake_case_values_and_defaults_to_new_window() {
+        assert_eq!(ExplorerOpenMode::default(), ExplorerOpenMode::NewWindow);
+        assert_eq!(
+            serde_json::to_value(ExplorerOpenMode::NewWindow).unwrap(),
+            "new_window"
+        );
+        assert_eq!(
+            serde_json::from_str::<ExplorerOpenMode>("\"existing_tab\"").unwrap(),
+            ExplorerOpenMode::ExistingTab
+        );
+    }
+
+    #[test]
+    fn explorer_window_matching_requires_real_path_and_explorer_class() {
+        let windows = vec![
+            ExplorerWindowObservation {
+                hwnd: 10,
+                class_name: "NotExplorer".into(),
+                folder_path: Some("C:\\Meetings\\Current".into()),
+            },
+            ExplorerWindowObservation {
+                hwnd: 20,
+                class_name: "CabinetWClass".into(),
+                folder_path: None,
+            },
+            ExplorerWindowObservation {
+                hwnd: 30,
+                class_name: "CabinetWClass".into(),
+                folder_path: Some("c:/meetings/current/".into()),
+            },
+        ];
+        assert_eq!(
+            matching_explorer_window("C:\\MEETINGS\\Current", &windows),
+            Some(30)
+        );
+        assert_eq!(
+            matching_explorer_window("C:\\Meetings\\Other", &windows),
+            None
+        );
+    }
+
+    #[test]
+    fn explorer_window_matching_rejects_ambiguous_exact_paths() {
+        let windows = [41, 42].map(|hwnd| ExplorerWindowObservation {
+            hwnd,
+            class_name: "CabinetWClass".into(),
+            folder_path: Some("C:\\Meetings".into()),
+        });
+        assert_eq!(matching_explorer_window("c:/meetings/", &windows), None);
+    }
+
+    #[test]
+    fn folder_launch_receives_requested_mode_while_legacy_api_keeps_new_window() {
+        #[derive(Clone, Default)]
+        struct ModeLaunch(Arc<Mutex<Vec<ExplorerOpenMode>>>);
+        impl TargetLaunch for ModeLaunch {
+            fn launch(&self, _: &MaterialItem) -> Result<LaunchReport, ErrorCode> {
+                Ok(LaunchReport::NotTrackable)
+            }
+            fn reveal(&self, _: &MaterialItem) -> Result<(), ErrorCode> {
+                Ok(())
+            }
+            fn launch_with_explorer_mode(
+                &self,
+                _: &MaterialItem,
+                mode: ExplorerOpenMode,
+            ) -> Result<LaunchReport, ErrorCode> {
+                self.0.lock().unwrap().push(mode);
+                Ok(LaunchReport::NotTrackable)
+            }
+        }
+        let target = ModeLaunch::default();
+        let service = Launcher::new(Detect(Detection::Exact(99)), Front(Ok(())), target.clone());
+        service.activate_or_launch(item("folder-1", TargetType::Folder));
+        service.activate_or_launch_with_explorer_mode(
+            item("folder-2", TargetType::Folder),
+            ExplorerOpenMode::ExistingTab,
+        );
+        assert_eq!(
+            &*target.0.lock().unwrap(),
+            &[ExplorerOpenMode::NewWindow, ExplorerOpenMode::ExistingTab]
+        );
     }
 }

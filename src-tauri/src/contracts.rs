@@ -286,8 +286,11 @@ dto!(DroppedFileCandidate {
     path: String,
     target_type: TargetType
 });
-dto!(PrepareDroppedFilesResponse { candidates: Vec<DroppedFileCandidate> });
-dto!(ListWindowsRequest { request_id: RequestId });
+dto!(DroppedFileFailure { path: String, reason: String });
+dto!(PrepareDroppedFilesResponse { candidates: Vec<DroppedFileCandidate>, failures: Vec<DroppedFileFailure> });
+dto!(ListWindowsRequest {
+    request_id: RequestId
+});
 dto!(WindowListItem {
     window_id: Id,
     app_name: String,
@@ -409,12 +412,19 @@ impl Validate for DroppedFileCandidate {
         ensure(windows_absolute_path(&self.path))
     }
 }
+impl Validate for DroppedFileFailure {
+    fn validate(&mut self) -> Result<(), AppError> {
+        ensure(!self.path.is_empty() && self.path.len() <= 32_767)?;
+        ensure(matches!(self.reason.as_str(), "not_found" | "inaccessible" | "unsupported" | "duplicate" | "invalid_path"))
+    }
+}
 impl Validate for PrepareDroppedFilesResponse {
     fn validate(&mut self) -> Result<(), AppError> {
-        ensure(!self.candidates.is_empty() && self.candidates.len() <= 100)?;
+        ensure(!self.candidates.is_empty() && self.candidates.len() + self.failures.len() <= 100)?;
         for candidate in &mut self.candidates {
             candidate.validate()?;
         }
+        for failure in &mut self.failures { failure.validate()?; }
         Ok(())
     }
 }
