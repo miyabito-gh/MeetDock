@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, placeStableRow, visibleMaterials } from '../src/view.js';
+import { batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, placeStableRow, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
 
 const group = (id, name, order) => ({ id, parent_id: null, name, order });
 const material = (id, group_id, name, order) => ({ id, group_id, name, role: 'main', target_type: 'file', path: `C:\\docs\\${id}.pdf`, window_match_pattern: null, order });
@@ -211,6 +211,17 @@ test('material icons are stable by target type and common extension', () => {
   assert.deepEqual(materialIcon({ target_type: 'file', path: 'C:\\manual.pdf' }), { label: 'PDF', kind: 'pdf' });
 });
 
+test('saved window rows reuse material icons and the left icon owns activate-or-launch',()=>{
+  assert.deepEqual(materialIcon(snapshotMaterialTarget({executable_name:'explorer.exe',executable_path:'C:\\Windows\\explorer.exe',document_path:'C:\\Meetings'})),{label:'📁',kind:'folder'});
+  assert.deepEqual(materialIcon(snapshotMaterialTarget({executable_name:'WINWORD.EXE',executable_path:'C:\\Office\\WINWORD.EXE',document_path:'C:\\Meetings\\agenda.docx'})),{label:'W',kind:'word'});
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  assert.ok(source.includes("button('','launch-window-snapshot','file-icon')"));
+  assert.ok(source.includes('snapshotRows=new Map()'));
+  assert.ok(source.includes('placeStableRow(mainRole.list,row,previous)'));
+  assert.ok(source.includes('開いていない場合は外部アプリで開きます'));
+  assert.ok(!source.includes("next.window_snapshot_running.includes(index)?'起動中…':'開く'"));
+});
+
 test('groups and materials expose internal drag reorder affordances', () => {
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   for(const token of ["'toggle-reorder'",'reorderMode','applyReorderMode',"el('span','drag-handle','⠿')",'elementFromPoint',"addEventListener('pointerdown'","addEventListener('pointermove'",'finishReorder','reorderGroup','reorderMaterial'])assert.ok(source.includes(token));
@@ -234,7 +245,7 @@ test('temporary window group stays separated at the bottom and never exposes reo
   assert.ok(source.includes("row.classList.contains('snapshot-group')"));
   assert.ok(source.includes('groups.append(row)'));
   assert.ok(source.includes("previousEdit==='Saving'&&next.edit==='Clean'"));
-  assert.ok(source.includes("querySelectorAll('.snapshot-material-row')"));
+  assert.ok(source.includes('for(const row of snapshotRows.values())row.remove()'));
   assert.match(styles,/\.snapshot-group\{[^}]*border-top:1px solid var\(--line\)/);
   assert.match(styles,/\.reorder-mode \.snapshot-group\{[^}]*grid-template-columns:26px minmax\(0,1fr\) 28px/);
 });

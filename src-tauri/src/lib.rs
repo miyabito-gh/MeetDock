@@ -364,13 +364,15 @@ async fn launch_window_snapshot_item(
     window: tauri::WebviewWindow,
     body: tauri::ipc::Request<'_>,
     service: tauri::State<'_, WindowService>,
+    launcher: tauri::State<'_, NativeLauncher>,
 ) -> Result<LaunchWindowSnapshotItemResponse, AppError> {
     let request: LaunchWindowSnapshotItemRequest =
         serde_json::from_value(payload(&window, body, true)?)
             .map_err(|_| AppError::new(ErrorCode::InvalidRequest, None))?;
     let index = request.index;
     let service = service.inner().clone();
-    tokio::task::spawn_blocking(move || service.launch_snapshot_item(index))
+    let associations = launcher.launch_associations();
+    tokio::task::spawn_blocking(move || service.launch_snapshot_item(index, &associations))
         .await
         .map_err(|_| AppError::new(ErrorCode::InternalError, None))??;
     Ok(LaunchWindowSnapshotItemResponse { index })

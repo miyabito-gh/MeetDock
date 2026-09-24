@@ -258,7 +258,11 @@ impl WindowService {
         clear_snapshot_file(&self.snapshot_path())
     }
 
-    pub fn launch_snapshot_item(&self, index: usize) -> Result<(), AppError> {
+    pub(crate) fn launch_snapshot_item(
+        &self,
+        index: usize,
+        associations: &[LaunchAssociation],
+    ) -> Result<(), AppError> {
         let snapshot = self
             .load_snapshot()?
             .ok_or_else(|| AppError::new(ErrorCode::NotFound, None))?;
@@ -270,6 +274,28 @@ impl WindowService {
             || item.executable_path.trim().is_empty()
         {
             return Err(AppError::new(ErrorCode::UnsupportedTarget, None));
+        }
+        if let Some(identity) =
+            snapshot_associated_identity(item, associations).filter(validate_native_identity)
+        {
+            match activate_native(&identity) {
+                Ok(()) => return Ok(()),
+                Err(error) if error.code == ErrorCode::WindowNotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
+        let windows = enumerate_native_windows();
+        let explorer_paths = item
+            .executable_name
+            .eq_ignore_ascii_case("explorer.exe")
+            .then(explorer_window_paths)
+            .unwrap_or_default();
+        if let Some(identity) = snapshot_window_identity(item, &windows, &explorer_paths) {
+            match activate_native(&identity) {
+                Ok(()) => return Ok(()),
+                Err(error) if error.code == ErrorCode::WindowNotFound => {}
+                Err(error) => return Err(error),
+            }
         }
         snapshot_launch_command(item)
             .spawn()
@@ -334,6 +360,54 @@ fn snapshot_launch_command(item: &SnapshotItem) -> std::process::Command {
         return command;
     }
     std::process::Command::new(&item.executable_path)
+}
+
+fn snapshot_path_key(path: &str) -> String {
+    crate::contracts::windows_shell_path(path)
+        .trim_end_matches('\\')
+        .to_lowercase()
+}
+
+fn snapshot_associated_identity(
+    item: &SnapshotItem,
+    associations: &[LaunchAssociation],
+) -> Option<WindowIdentity> {
+    let material_id = item.material_id.as_ref()?;
+    associations
+        .iter()
+        .find(|association| &association.material_id == material_id)
+        .map(|association| WindowIdentity {
+            hwnd: association.hwnd,
+            pid: association.pid,
+            process_started: association.process_started,
+        })
+}
+
+fn snapshot_window_identity(
+    item: &SnapshotItem,
+    windows: &[EnumeratedWindow],
+    explorer_paths: &HashMap<isize, String>,
+) -> Option<WindowIdentity> {
+    let executable = snapshot_path_key(&item.executable_path);
+    let explorer_path = item
+        .executable_name
+        .eq_ignore_ascii_case("explorer.exe")
+        .then(|| item.document_path.as_deref())
+        .flatten()
+        .map(snapshot_path_key);
+    let mut matches = windows.iter().filter(|entry| {
+        if snapshot_path_key(&entry.full_path) != executable {
+            return false;
+        }
+        if let Some(path) = explorer_path.as_deref() {
+            return explorer_paths
+                .get(&entry.window.identity.hwnd)
+                .is_some_and(|current| snapshot_path_key(current) == path);
+        }
+        entry.window.title.eq_ignore_ascii_case(&item.title)
+    });
+    let identity = matches.next()?.window.identity.clone();
+    matches.next().is_none().then_some(identity)
 }
 
 fn snapshot_item(
@@ -1049,6 +1123,76 @@ mod tests {
             items: vec![item],
         })
         .is_ok());
+    }
+
+    #[test]
+    fn snapshot_window_matching_is_exact_unique_and_path_aware_for_explorer() {
+        let item = SnapshotItem {
+            material_id: None,
+            document_path: None,
+            app_name: "Editor".into(),
+            title: "資料".into(),
+            executable_name: "editor.exe".into(),
+            executable_path: r"C:\Apps\editor.exe".into(),
+            restorability: SnapshotRestorability::Restorable,
+            reason: None,
+        };
+        let current = test_window(r"c:/apps/EDITOR.exe".into());
+        assert_eq!(
+            snapshot_window_identity(&item, std::slice::from_ref(&current), &HashMap::new()),
+            Some(current.window.identity.clone())
+        );
+        let mut duplicate = current.clone();
+        duplicate.window.identity.hwnd = 4;
+        assert_eq!(
+            snapshot_window_identity(&item, &[current, duplicate], &HashMap::new()),
+            None
+        );
+
+        let explorer_item = SnapshotItem {
+            document_path: Some(r"C:\Meetings\資料".into()),
+            executable_name: "explorer.exe".into(),
+            executable_path: r"C:\Windows\explorer.exe".into(),
+            ..item
+        };
+        let mut explorer = test_window(r"C:\Windows\explorer.exe".into());
+        explorer.window.executable_name = "explorer.exe".into();
+        explorer.window.title = "タイトルには依存しない".into();
+        let paths = HashMap::from([(explorer.window.identity.hwnd, r"c:/meetings/資料/".into())]);
+        assert_eq!(
+            snapshot_window_identity(&explorer_item, std::slice::from_ref(&explorer), &paths),
+            Some(explorer.window.identity)
+        );
+    }
+
+    #[test]
+    fn snapshot_prefers_a_live_material_association() {
+        let material_id = Id::try_from("material-1".to_owned()).unwrap();
+        let item = SnapshotItem {
+            material_id: Some(material_id.clone()),
+            document_path: Some(r"C:\Meetings\agenda.docx".into()),
+            app_name: "Editor".into(),
+            title: "Agenda".into(),
+            executable_name: "editor.exe".into(),
+            executable_path: r"C:\Apps\editor.exe".into(),
+            restorability: SnapshotRestorability::Restorable,
+            reason: None,
+        };
+        let association = LaunchAssociation {
+            material_id,
+            material_path: r"C:\Meetings\agenda.docx".into(),
+            hwnd: 11,
+            pid: 22,
+            process_started: 33,
+        };
+        assert_eq!(
+            snapshot_associated_identity(&item, &[association]),
+            Some(WindowIdentity {
+                hwnd: 11,
+                pid: 22,
+                process_started: 33,
+            })
+        );
     }
 
     #[test]
