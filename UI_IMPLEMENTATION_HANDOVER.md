@@ -865,9 +865,12 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 - `f222582`: 外部起動Excel Workbookの完全パス取得。
 - `8657e04`: Adobe Acrobat ReaderのAccessibility DOMからPDF完全パス取得。
-- `648afa6`: Word DocumentおよびPowerPoint Presentationの完全パス取得。このコミットは2026-09-25時点で未push。
-- Rust全テストはWord／PowerPoint追加後に41件成功、`cargo check` 成功。実機UI確認は未実施。
-- 既存の未追跡ファイル `src-tauri/.gotodo/`、`src-tauri/gotodo.toml`、`src-tauri/todo.jsonl` は変更・削除しない。
+- `648afa6`: Word DocumentおよびPowerPoint Presentationの完全パス取得。
+- `546f9d7`: 同一復元対象の二重保存・二重登録防止。Windowsパス表記を正規化した復元対象キーをRust／JavaScriptに追加し、保存・読み込み・全件起動・グループ登録で重複を除外する。異なる完全パスの文書は別項目として保持する。
+- `2e1ee2e`: Serde既定値フィールドを省略可能にしつつ、必須フィールド欠落・未知フィールド・位置配列入力を拒否する厳格性を維持。
+- `2e5534e`: `AGENTS.md` にMeetDock全体の共通作業指示とモデル選定基準を追加。引継ぎでは共通指示を再掲せず、このファイル固有の進捗・設計・未解決事項だけを記載する。
+- 上記修正後、Rust全テスト71件、JavaScript全テスト579件、`cargo check`、`git diff --check` が成功している。
+- 実機UI確認は未実施。
 
 ### 14.8 残項目
 
@@ -886,21 +889,28 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - 同じShell parsing nameのExplorerだけを一意に再利用し、曖昧時は新規起動または安全な未復元とする。
 - 不正な任意文字列をShellロケーションとして起動しない厳格な検証と単体テストがある。
 
-#### 14.8.2 同一復元対象の二重保存・二重登録防止
+#### 14.8.2 Adobe Acrobat Proの外部起動PDFパス取得
 
-- ファイル名を取得できず `document_path` がない複数ウィンドウでは、フォールバック先が同じ `executable_path` となり、復元時に同じアプリ／ウィンドウを複数回開く可能性がある。
-- 大文字小文字、`/` と `\\`、末尾区切り、`\\?\\` 表現を正規化した復元対象キーを作る。
-- `document_path` または `shell_location` がある場合は、その確定対象と実行ファイルの組をキーにする。
-- 確定対象がなく同一 `executable_path` にフォールバックする項目は、一時保存内で1件だけ残す。タイトルが異なるだけでは別の復元対象と見なさない。
-- 一時保存からグループへ登録する処理でも同じ正規化キーを使い、同じ対象を二重に追加しない。既存グループ内に同じ対象がある場合の扱いもテストで固定する。
-- 異なる完全パスを取得できた文書は、同じアプリでも別項目として保持する。
+- Reader向けのAccessibility DOM取得実装をそのままProへ広げず、Acrobat Proの実際の実行ファイル名、ウィンドウ階層、Accessibility構造を調査してから対応する。
+- HWNDとPDF完全パスを一意に対応できる場合だけ保存する。タイトル文字列だけからパスを推測しない。
+- ReaderとProが同時に存在する場合でも、実行ファイルとHWNDの対応を混同しない。
 
 完了条件:
 
-- `document_path` なし・同一実行ファイルの複数項目から同じウィンドウを二重起動しない。
-- 表記だけ異なる同一パスを二重保存・二重登録しない。
-- 同じOffice／PDFアプリで異なる完全パスを持つ文書は重複扱いしない。
-- スナップショット保存、読み込み、全件起動、グループ登録の各境界に単体テストがある。
+- Acrobat Proで開いているPDFの完全パスを、対象HWNDへ一意に関連付けて保存できる。
+- 曖昧または取得不能な対応は保存せず、Readerの既存挙動を壊さない。
+- Pro固有の観測を純粋な解決処理へ渡す境界と単体テストがある。
+
+#### 14.8.3 ブラウザー内PDFのパス取得可否調査
+
+- Chrome、Edge等のブラウザー内PDFは、タブタイトルやアドレスバー表示だけでローカル完全パスを断定しない。
+- ブラウザー、タブ、トップレベルHWND、PDF URL／ローカルパスを安全に一意対応できる公式または安定した境界があるかを先に調査する。
+- 一意対応できない場合は実装せず、取得不能と判断した根拠と代替案だけを文書化する。
+
+完了条件:
+
+- 対応可否と安全性の根拠が文書化されている。
+- 実装する場合は、任意URL・表示名・タイトルからローカルパスを推測せず、曖昧時に保存しないテストがある。
 
 ### 14.9 次チャット用引継ぎプロンプト
 
@@ -909,13 +919,14 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ```text
 MeetDockの残項目から、次の1項目だけを選んで実装・テスト・差分確認・コミットまで完了し、他の残項目へ進まず停止してください。
 
+リポジトリ共通の作業規則はAGENTS.mdに従ってください。このプロンプトでは重複して列挙しません。
+
 残項目:
 1. Explorerのホーム等の仮想フォルダーを、通常のdocument_pathと分離したShellロケーションとして保存・復元する。
-2. ファイル名を取得できない場合などに復元対象が同一になる項目を、一時保存およびグループ登録で二重登録・二重起動しない。
-3. Adobe Acrobat Proの外部起動PDFパス取得。
-4. ブラウザー内PDFのパス取得可否調査と、安全に一意対応できる場合だけの実装。
+2. Adobe Acrobat Proの外部起動PDFパス取得。
+3. ブラウザー内PDFのパス取得可否調査と、安全に一意対応できる場合だけの実装。
 
-最初にAGENTS.md、UI_IMPLEMENTATION_HANDOVER.mdの14.7〜14.9、git status --short、git diff、git log -5を確認してください。
+UI_IMPLEMENTATION_HANDOVER.mdの14.7〜14.9で、現在の進捗、選択項目の設計、完了条件を確認してください。
 
 主な対象ファイル:
 - src-tauri/src/windowing.rs
@@ -925,21 +936,13 @@ MeetDockの残項目から、次の1項目だけを選んで実装・テスト�
 - src/contracts.js
 - 関連するRust／JavaScriptテスト
 
-既存制約:
-- MeetDock起動資料関連付けを最優先にする。
-- Explorerのexisting_tab内部設定とShellWindows取得を壊さない。
-- タイトルや表示名だけから完全パス／Shellロケーションを推測しない。
-- 曖昧なHWND対応は保存しない。
-- 実機UIは明示許可があるまで起動しない。
-- src-tauri/.gotodo/、src-tauri/gotodo.toml、src-tauri/todo.jsonlを変更・削除しない。
-- 完了後は対象テスト、必要な全体テスト、cargo check、git diff --checkを実行する。
-
 実施済み確認:
 - Excel、Reader、Word、PowerPointの取得実装済み。
-- Word／PowerPoint追加後のRust全41テスト成功、cargo check成功。
-- 最新ローカルコミット648afa6は未push。
+- 同一復元対象の二重保存・二重登録防止は546f9d7で実装済み。
+- Serde既定値と厳格なRust契約読込の両立は2e1ee2eで修正済み。
+- 共通作業指示とモデル選定基準は2e5534eでAGENTS.mdへ反映済み。
+- Rust全71件、JavaScript全579件、cargo check、git diff --check成功。
+- 実機UI確認は未実施。
 
-推奨モデル: gpt-5.6-sol、reasoning effortはmedium。Windows Shell／スナップショット／JavaScript登録処理をまたぐ通常規模の実装とレビューに十分な推論・ツール利用能力があり、単一チャットで1残項目を完結しやすいため。gpt-6-astraは使用しない。
+推奨モデル: gpt-5.6-sol、reasoning effortはmedium。残項目はいずれもWindows固有API、スナップショット、契約テストを横断する通常規模の実装または調査であり、複雑な専門作業向けのモデルを標準的な推論量で使うのが適している。
 ```
-
-モデル情報はOpenAI公式の `gpt-5.6-sol` モデルページで、複雑な専門作業向けのモデルであり、`medium` が既定のreasoning effortとして確認済み: https://developers.openai.com/api/docs/models/gpt-5.6-sol
