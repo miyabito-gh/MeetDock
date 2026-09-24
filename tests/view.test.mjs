@@ -276,6 +276,7 @@ test('group and material operations use an accessible in-app dialog with explici
 
 test('data transfer and save-before-create stay inside the existing operation UI',()=>{
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  for(const token of ["exportBundle(model.config","importBundle(model.config","'export-all'","'export-group'","'import-data'","requestGroupCreate(null)","pendingGroupCreation&&next.edit==='Clean'","pendingGroupCreation={parentId,name}","parent_id:pending.parentId,name:pending.name","既存データは置き換えません"])assert.ok(source.includes(token));
+  for(const token of ["exportBundle(model.config","showSaveFilePicker({suggestedName","handle.createWritable()","writable.write(JSON.stringify(bundle,null,2))","error?.name==='AbortError'","'export-all'","'export-group'","'import-data'","requestGroupCreate(null)","pendingGroupCreation&&next.edit==='Clean'","pendingGroupCreation={parentId,name}","parent_id:pending.parentId,name:pending.name","既存データは置き換えません"])assert.ok(source.includes(token));
+  assert.doesNotMatch(source,/anchor\.download=/);
   assert.doesNotMatch(source,/prompt\([^)]*(?:グループ|インポート|エクスポート)/);
 });
