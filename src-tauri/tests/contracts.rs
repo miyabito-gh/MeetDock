@@ -67,3 +67,30 @@ fn revision_cannot_overflow_and_errors_are_safe() {
     assert_eq!(e.code, ErrorCode::InvalidRequest);
     assert!(!e.message.contains("secret"));
 }
+
+#[test]
+fn serde_defaults_preserve_strict_object_contracts() {
+    let config = serde_json::json!({
+        "schema_version": 3,
+        "app_version": "0.1.0",
+        "revision": 1,
+        "last_updated": "2026-09-25T00:00:00Z",
+        "groups": [{"id":"g1","parent_id":null,"name":"会議","order":1}],
+        "materials": []
+    });
+    let decoded = decode::<AppConfig>(config.clone(), ErrorCode::ValidationError).unwrap();
+    assert_eq!(decoded.explorer_open_mode, ExplorerOpenMode::NewWindow);
+    assert_eq!(
+        decoded.groups[0].explorer_open_mode,
+        GroupExplorerOpenMode::Inherit
+    );
+
+    let mut missing_required = config.clone();
+    missing_required.as_object_mut().unwrap().remove("groups");
+    assert!(decode::<AppConfig>(missing_required, ErrorCode::ValidationError).is_err());
+    assert!(decode::<GroupItem>(
+        serde_json::json!(["g1", null, "会議", 1]),
+        ErrorCode::ValidationError
+    )
+    .is_err());
+}

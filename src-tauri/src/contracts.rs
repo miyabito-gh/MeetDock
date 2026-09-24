@@ -697,12 +697,14 @@ pub fn decode<T: DeserializeOwned + Serialize + Validate>(
     let mut dto: T =
         serde_json::from_value(value.clone()).map_err(|_| AppError::new(error_code, None))?;
     // Serde's derive can accept positional arrays for structs. JSON IPC permits objects only.
+    // Check fields supplied by the caller so #[serde(default)] fields may be omitted.
+    // Missing required and unknown fields are still rejected by Serde before this check.
     fn object_shapes(input: &Value, canonical: &Value) -> bool {
         match canonical {
             Value::Object(fields) => input.as_object().is_some_and(|obj| {
-                fields
+                obj
                     .iter()
-                    .all(|(k, v)| obj.get(k).is_some_and(|i| object_shapes(i, v)))
+                    .all(|(k, i)| fields.get(k).is_some_and(|v| object_shapes(i, v)))
             }),
             Value::Array(items) => input.as_array().is_some_and(|a| {
                 a.len() == items.len() && a.iter().zip(items).all(|(i, v)| object_shapes(i, v))
