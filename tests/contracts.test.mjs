@@ -22,6 +22,24 @@ test('adapter: exact command envelope, no generation on wire', async () => {
   await api.call('load_settings'); await api.call('activate_or_launch', { material_id: 'm1' });
   assert.deepEqual(calls, [['load_settings', {}], ['activate_or_launch', { request: { material_id: 'm1', explorer_open_mode: 'new_window' } }]]);
 });
+
+test('window snapshot commands reach native IPC with exact envelopes', async () => {
+  const snapshot = { schema_version: 1, saved_at_unix_ms: 1, items: [] };
+  const calls = [], responses = {
+    save_window_snapshot: { saved: true, saved_count: 1, excluded_count: 0, exclusion_reasons: [] },
+    load_window_snapshot: snapshot,
+    launch_window_snapshot_item: { index: 2 },
+  };
+  const api = createIpcAdapter(async (command, payload) => { calls.push([command, payload]); return responses[command]; });
+  assert.equal((await api.call('save_window_snapshot')).saved, true);
+  assert.deepEqual(await api.call('load_window_snapshot'), snapshot);
+  assert.deepEqual(await api.call('launch_window_snapshot_item', { index: 2 }), { index: 2 });
+  assert.deepEqual(calls, [
+    ['save_window_snapshot', {}],
+    ['load_window_snapshot', {}],
+    ['launch_window_snapshot_item', { request: { index: 2 } }],
+  ]);
+});
 test('adapter rejects invalid request before I/O and sanitizes malformed errors/results', async () => {
   let calls = 0;
   const api = createIpcAdapter(async () => { calls++; throw 'C:\\secret OS details'; });

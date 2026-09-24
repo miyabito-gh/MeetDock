@@ -147,6 +147,22 @@ const pdfSidecar = v => {
   object(v, { format: member(['meetdock-pdf-sidecar']), version: member([1]), material_id: id, pdf_identity: string, strokes: array(() => {}), bookmarks: array(() => {}) });
   requireValue(v.pdf_identity.length > 0);
 };
+const snapshotItem = v => {
+  requireValue(v !== null && typeof v === 'object' && !Array.isArray(v));
+  const optional = ['material_id', 'document_path'];
+  requireValue(Object.keys(v).every(key => [...optional, 'app_name', 'title', 'executable_name', 'executable_path', 'restorability', 'reason'].includes(key)));
+  object({
+    app_name: v.app_name, title: v.title, executable_name: v.executable_name,
+    executable_path: v.executable_path, restorability: v.restorability, reason: v.reason,
+  }, { app_name: string, title: string, executable_name: string, executable_path: string,
+    restorability: member(['restorable', 'conditional', 'excluded']), reason: nullable(string) });
+  if (Object.hasOwn(v, 'material_id')) id(v.material_id);
+  if (Object.hasOwn(v, 'document_path')) string(v.document_path);
+};
+const windowSnapshot = v => {
+  object(v, { schema_version: member([1]), saved_at_unix_ms: safe, items: array(snapshotItem) });
+  requireValue(v.items.length <= 512);
+};
 export const validators = Object.freeze({
   AppConfig: config, GroupItem: group, MaterialItem: material, SettingsCandidate: candidate,
   SettingsLoadResponse: settings, AppError: error, MaterialStatusResult: status, LaunchResponse: launch,
@@ -154,6 +170,12 @@ export const validators = Object.freeze({
   PdfSidecarKey: pdfSidecarKey, PdfSidecar: pdfSidecar,
   OptionalPdfSidecar: v => { if (v !== null) pdfSidecar(v); },
   BooleanResponse: bool,
+  SaveWindowSnapshotRequest: empty,
+  SaveWindowSnapshotResponse: v => object(v, { saved: bool, saved_count: safe, excluded_count: safe, exclusion_reasons: array(string) }),
+  LoadWindowSnapshotRequest: empty,
+  OptionalWindowSnapshot: v => { if (v !== null) windowSnapshot(v); },
+  LaunchWindowSnapshotItemRequest: v => object(v, { index: safe }),
+  LaunchWindowSnapshotItemResponse: v => object(v, { index: safe }),
   ResolveSettingsIssueRequest(v) {
     object(v, { action: member(enums.action), candidate_id: nullable(id) });
     requireValue(['restore_candidate', 'import_legacy'].includes(v.action) === (v.candidate_id !== null));

@@ -9,6 +9,9 @@ const commands = Object.freeze({
   activate_window: ['WindowActionRequest', 'WindowActionResponse'],
   close_window: ['WindowActionRequest', 'WindowActionResponse'],
   save_window_exclusions: ['SaveWindowExclusionsRequest', 'SaveWindowExclusionsResponse'],
+  save_window_snapshot: ['SaveWindowSnapshotRequest', 'SaveWindowSnapshotResponse'],
+  load_window_snapshot: ['LoadWindowSnapshotRequest', 'OptionalWindowSnapshot'],
+  launch_window_snapshot_item: ['LaunchWindowSnapshotItemRequest', 'LaunchWindowSnapshotItemResponse'],
   activate_or_launch: ['ActivateOrLaunchRequest', 'LaunchResponse'],
   batch_launch_main: ['BatchLaunchRequest', 'BatchLaunchResponse'],
   open_containing_folder: ['OpenContainingFolderRequest', 'EmptyResponse'],
@@ -28,7 +31,7 @@ export function createIpcAdapter(invoke) {
       try { dto = validate(input, request); }
       catch { throw appError(command === 'save_settings' ? 'VALIDATION_ERROR' : 'INVALID_REQUEST'); }
       let response;
-      try { response = await invoke(command, command === 'load_settings' ? {} : { request: dto }); }
+      try { response = await invoke(command, ['load_settings', 'save_window_snapshot', 'load_window_snapshot'].includes(command) ? {} : { request: dto }); }
       catch (error) {
         let checked;
         try { checked = validate('AppError', error); }
@@ -40,6 +43,7 @@ export function createIpcAdapter(invoke) {
         if (command === 'sync_material_statuses' && result.request_id !== dto.request_id) throw new TypeError();
         if (command === 'list_windows' && result.request_id !== dto.request_id) throw new TypeError();
         if (['activate_window', 'close_window'].includes(command) && result.window_id !== dto.window_id) throw new TypeError();
+        if (command === 'launch_window_snapshot_item' && result.index !== dto.index) throw new TypeError();
         if (command === 'activate_or_launch' && result.material_id !== dto.material_id) throw new TypeError();
         if (command === 'save_settings' && result.revision !== dto.expected_revision + 1) throw new TypeError();
         return result;
