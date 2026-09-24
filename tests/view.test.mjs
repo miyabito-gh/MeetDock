@@ -212,7 +212,7 @@ test('material pointer reorder can move across roles at an explicit position or 
   assert.ok(source.includes("ratio=index===candidates.length-1 ? .35 : .5"));
   assert.ok(source.includes("y>=rect.bottom&&y<=rect.bottom+14"));
   assert.ok(source.includes("before=tailSection?null:"));
-  assert.doesNotMatch(styles,/\.reorder-mode \.materials\{[^}]*padding-bottom/);
+  assert.match(styles,/\.reorder-mode \.materials\{[^}]*min-height:10px;[^}]*padding-bottom:10px/);
 });
 
 test('unsaved state uses a title indicator and toolbar actions without a floating popup', () => {
