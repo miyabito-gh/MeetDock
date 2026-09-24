@@ -160,7 +160,7 @@ test('material rows expose a persistent PDF preview action and current-row state
   assert.ok(source.includes('pdf-preview-button'));
   assert.ok(source.includes("r.setAttribute('aria-current','true')"));
   assert.ok(source.includes("icon=button('','activate','file-icon')"));
-  assert.ok(source.includes("acts.append(openFolder,pdfPreview,more)"));
+  assert.ok(source.includes("acts.append(openFolder,pdfPreview,remove,more)"));
   assert.ok(source.includes('開いていない場合は外部アプリで開きます'));
   assert.ok(source.includes("add('外部で開く','activate')"));
   assert.doesNotMatch(source, /button\('開く','activate','primary'\)/);
@@ -202,6 +202,15 @@ test('groups and materials expose internal drag reorder affordances', () => {
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   for(const token of ["'toggle-reorder'",'reorderMode','applyReorderMode',"el('span','drag-handle','⠿')",'elementFromPoint',"addEventListener('pointerdown'","addEventListener('pointermove'",'finishReorder','reorderGroup','reorderMaterial'])assert.ok(source.includes(token));
   assert.doesNotMatch(source,/addEventListener\('dragstart'/);
+});
+
+test('reorder mode exposes direct material deletion with the standard confirmation',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  for(const token of ["actionIcon('delete-material','reorder-delete-button danger'","else if(a==='delete-material')","emit('deleteMaterial',item.id,true)",'実ファイルは削除されません'])assert.ok(source.includes(token));
+  assert.match(styles,/\.reorder-delete-button\{display:none\}/);
+  assert.match(styles,/\.reorder-mode \.material-row\[data-material-id\]/);
+  assert.match(styles,/\.reorder-mode \.reorder-delete-button\{display:grid\}/);
 });
 
 test('temporary window group stays separated at the bottom and never exposes reorder affordance',()=>{
@@ -283,6 +292,13 @@ test('group and material operations use an accessible in-app dialog with explici
   assert.match(styles,/\.operation-dialog-text\{[^}]*line-height:1\.6/);
   assert.match(styles,/\.operation-dialog \.field\[hidden\]\{display:none!important\}/);
   assert.match(styles,/\.danger-button\{[^}]*background:var\(--danger\)/);
+});
+
+test('confirmation-only operations do not leave a hidden required input blocking submit',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  assert.ok(source.includes('operationInput.hidden=Boolean(options)||!label'));
+  assert.ok(source.includes('operationInput.required=Boolean(label&&!options)'));
+  assert.ok(source.includes('(options?operationSelect:label?operationInput:operationSubmit).focus()'));
 });
 
 test('data transfer and save-before-create stay inside the existing operation UI',()=>{
