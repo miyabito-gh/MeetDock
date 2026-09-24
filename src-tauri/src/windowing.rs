@@ -44,6 +44,12 @@ struct ExcelDocumentObservation {
     document_path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ReaderDocumentObservation {
+    hwnd: isize,
+    document_path: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SnapshotRestorability {
@@ -204,6 +210,7 @@ impl WindowService {
         let explorer_paths = explorer_window_paths();
         let windows = enumerate_native_windows();
         let excel_paths = excel_window_paths(&windows);
+        let reader_paths = reader_window_paths(&windows);
         for entry in windows.into_iter().take(MAX_WINDOWS) {
             let association = associations.iter().find(|association| {
                 association.hwnd == entry.window.identity.hwnd
@@ -232,7 +239,25 @@ impl WindowService {
             } else {
                 None
             };
-            let item = snapshot_item(entry, &exclusions, association, explorer_path, excel_path);
+            let reader_path = if entry
+                .window
+                .executable_name
+                .eq_ignore_ascii_case("acrord32.exe")
+            {
+                reader_paths
+                    .get(&entry.window.identity.hwnd)
+                    .map(String::as_str)
+            } else {
+                None
+            };
+            let item = snapshot_item(
+                entry,
+                &exclusions,
+                association,
+                explorer_path,
+                excel_path,
+                reader_path,
+            );
             if item.restorability == SnapshotRestorability::Excluded {
                 excluded_count += 1;
                 if let Some(reason) = &item.reason {
@@ -435,6 +460,7 @@ fn snapshot_item(
     association: Option<&LaunchAssociation>,
     explorer_path: Option<&str>,
     excel_path: Option<&str>,
+    reader_path: Option<&str>,
 ) -> SnapshotItem {
     let excluded = is_excluded(&entry.window, exclusions);
     let path = Path::new(&entry.full_path);
@@ -462,7 +488,8 @@ fn snapshot_item(
         document_path: association
             .map(|value| value.material_path.clone())
             .or_else(|| explorer_path.map(str::to_owned))
-            .or_else(|| excel_path.map(str::to_owned)),
+            .or_else(|| excel_path.map(str::to_owned))
+            .or_else(|| reader_path.map(str::to_owned)),
         app_name: entry.window.app_name,
         title: entry.window.title,
         executable_name: entry.window.executable_name,
@@ -470,6 +497,38 @@ fn snapshot_item(
         restorability,
         reason,
     }
+}
+
+fn resolve_reader_window_paths(
+    windows: &[EnumeratedWindow],
+    observations: impl IntoIterator<Item = ReaderDocumentObservation>,
+) -> HashMap<isize, String> {
+    let reader_hwnds: HashSet<_> = windows
+        .iter()
+        .filter(|entry| {
+            entry
+                .window
+                .executable_name
+                .eq_ignore_ascii_case("acrord32.exe")
+        })
+        .map(|entry| entry.window.identity.hwnd)
+        .collect();
+    let mut resolved: HashMap<isize, String> = HashMap::new();
+    let mut ambiguous = HashSet::new();
+    for observation in observations {
+        if !reader_hwnds.contains(&observation.hwnd) || ambiguous.contains(&observation.hwnd) {
+            continue;
+        }
+        if resolved.get(&observation.hwnd).is_some_and(|existing| {
+            snapshot_path_key(existing) != snapshot_path_key(&observation.document_path)
+        }) {
+            resolved.remove(&observation.hwnd);
+            ambiguous.insert(observation.hwnd);
+        } else {
+            resolved.insert(observation.hwnd, observation.document_path);
+        }
+    }
+    resolved
 }
 
 fn resolve_excel_window_paths(
@@ -881,6 +940,178 @@ fn excel_document_observations() -> Vec<ExcelDocumentObservation> {
 }
 
 #[cfg(windows)]
+fn reader_window_paths(windows: &[EnumeratedWindow]) -> HashMap<isize, String> {
+    resolve_reader_window_paths(windows, reader_document_observations(windows))
+}
+
+#[cfg(not(windows))]
+fn reader_window_paths(_: &[EnumeratedWindow]) -> HashMap<isize, String> {
+    HashMap::new()
+}
+
+#[cfg(windows)]
+fn reader_document_observations(windows: &[EnumeratedWindow]) -> Vec<ReaderDocumentObservation> {
+    use std::{ffi::c_void, mem::ManuallyDrop};
+    use windows::{
+        core::{Interface, BOOL, BSTR, GUID, PCWSTR},
+        Win32::{
+            Foundation::{HWND, LPARAM},
+            System::{
+                Com::{
+                    CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, DISPATCH_METHOD,
+                    DISPPARAMS,
+                },
+                Variant::{
+                    VARENUM, VARIANT, VARIANT_0, VARIANT_0_0, VARIANT_0_0_0, VT_BSTR, VT_BYREF,
+                    VT_I4,
+                },
+            },
+            UI::{
+                Accessibility::AccessibleObjectFromWindow,
+                WindowsAndMessaging::{EnumChildWindows, OBJID_NATIVEOM},
+            },
+        },
+    };
+
+    struct ComApartment;
+    impl Drop for ComApartment {
+        fn drop(&mut self) {
+            unsafe { CoUninitialize() }
+        }
+    }
+
+    fn document_path(hwnd: isize) -> Option<String> {
+        use windows::Win32::System::Com::IDispatch;
+
+        let mut object: *mut c_void = std::ptr::null_mut();
+        unsafe {
+            AccessibleObjectFromWindow(
+                HWND(hwnd as *mut c_void),
+                OBJID_NATIVEOM.0 as u32,
+                &IDispatch::IID,
+                &mut object,
+            )
+            .ok()?;
+        }
+        if object.is_null() {
+            return None;
+        }
+        let dispatch = unsafe { IDispatch::from_raw(object) };
+        let wide: Vec<u16> = "GetDocInfo"
+            .encode_utf16()
+            .chain(std::iter::once(0))
+            .collect();
+        let name = PCWSTR(wide.as_ptr());
+        let mut id = 0;
+        unsafe {
+            dispatch
+                .GetIDsOfNames(&GUID::zeroed(), &name, 1, 0, &mut id)
+                .ok()?;
+        }
+
+        let mut file_name = BSTR::new();
+        let mut page_count = 0i32;
+        let mut first_visible_page = 0i32;
+        let mut last_visible_page = 0i32;
+        let mut status = -1i32;
+        let mut language = BSTR::new();
+        let byref_type = |value: VARENUM| VARENUM(VT_BYREF.0 | value.0);
+        let byref_i32 = |value: &mut i32| VARIANT {
+            Anonymous: VARIANT_0 {
+                Anonymous: ManuallyDrop::new(VARIANT_0_0 {
+                    vt: byref_type(VT_I4),
+                    Anonymous: VARIANT_0_0_0 { plVal: value },
+                    ..Default::default()
+                }),
+            },
+        };
+        let byref_bstr = |value: &mut BSTR| VARIANT {
+            Anonymous: VARIANT_0 {
+                Anonymous: ManuallyDrop::new(VARIANT_0_0 {
+                    vt: byref_type(VT_BSTR),
+                    Anonymous: VARIANT_0_0_0 { pbstrVal: value },
+                    ..Default::default()
+                }),
+            },
+        };
+        // IDispatch arguments are stored in reverse declaration order.
+        let mut arguments = [
+            byref_bstr(&mut language),
+            byref_i32(&mut status),
+            byref_i32(&mut last_visible_page),
+            byref_i32(&mut first_visible_page),
+            byref_i32(&mut page_count),
+            byref_bstr(&mut file_name),
+        ];
+        let parameters = DISPPARAMS {
+            rgvarg: arguments.as_mut_ptr(),
+            cArgs: arguments.len() as u32,
+            ..Default::default()
+        };
+        unsafe {
+            dispatch
+                .Invoke(
+                    id,
+                    &GUID::zeroed(),
+                    0,
+                    DISPATCH_METHOD,
+                    &parameters,
+                    None,
+                    None,
+                    None,
+                )
+                .ok()?;
+        }
+        if status != 0 {
+            return None;
+        }
+        let path = crate::contracts::windows_shell_path(&file_name.to_string());
+        (crate::contracts::windows_absolute_path(&path) && Path::new(&path).is_file())
+            .then_some(path)
+    }
+
+    unsafe extern "system" fn collect_child(hwnd: HWND, parameter: LPARAM) -> BOOL {
+        let children = unsafe { &mut *(parameter.0 as *mut Vec<isize>) };
+        if children.len() >= MAX_WINDOWS {
+            return false.into();
+        }
+        children.push(hwnd.0 as isize);
+        true.into()
+    }
+
+    if unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_err() {
+        return Vec::new();
+    }
+    let _apartment = ComApartment;
+    let mut observations = Vec::new();
+    for entry in windows.iter().filter(|entry| {
+        entry
+            .window
+            .executable_name
+            .eq_ignore_ascii_case("acrord32.exe")
+    }) {
+        let top_level = entry.window.identity.hwnd;
+        let mut candidates = vec![top_level];
+        unsafe {
+            let _ = EnumChildWindows(
+                Some(HWND(top_level as *mut c_void)),
+                Some(collect_child),
+                LPARAM(&mut candidates as *mut Vec<isize> as isize),
+            );
+        }
+        for hwnd in candidates {
+            if let Some(path) = document_path(hwnd) {
+                observations.push(ReaderDocumentObservation {
+                    hwnd: top_level,
+                    document_path: path,
+                });
+            }
+        }
+    }
+    observations
+}
+
+#[cfg(windows)]
 fn explorer_window_paths() -> HashMap<isize, String> {
     use std::mem::ManuallyDrop;
     use windows::{
@@ -1260,6 +1491,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
         assert_eq!(restorable.restorability, SnapshotRestorability::Restorable);
         assert_eq!(restorable.reason, None);
@@ -1272,7 +1504,8 @@ mod tests {
             pid: associated_window.window.identity.pid,
             process_started: associated_window.window.identity.process_started,
         };
-        let associated = snapshot_item(associated_window, &[], Some(&association), None, None);
+        let associated =
+            snapshot_item(associated_window, &[], Some(&association), None, None, None);
         assert_eq!(
             associated.material_id.as_ref().map(Id::as_str),
             Some("material-1")
@@ -1282,6 +1515,7 @@ mod tests {
         let conditional = snapshot_item(
             test_window(directory.join("missing.exe").to_string_lossy().into_owned()),
             &[],
+            None,
             None,
             None,
             None,
@@ -1295,6 +1529,7 @@ mod tests {
         let excluded = snapshot_item(
             test_window(executable.to_string_lossy().into_owned()),
             &["test.exe".into()],
+            None,
             None,
             None,
             None,
@@ -1327,6 +1562,7 @@ mod tests {
             None,
             Some(path),
             None,
+            None,
         );
         assert_eq!(item.material_id, None);
         assert_eq!(item.document_path.as_deref(), Some(path));
@@ -1344,6 +1580,15 @@ mod tests {
         entry.window.identity.pid = pid;
         entry.window.executable_name = "EXCEL.EXE".into();
         entry.window.app_name = "Microsoft Excel".into();
+        entry
+    }
+
+    fn reader_window(hwnd: isize, pid: u32) -> EnumeratedWindow {
+        let mut entry = test_window(r"C:\Program Files\Adobe\Acrobat Reader\AcroRd32.exe".into());
+        entry.window.identity.hwnd = hwnd;
+        entry.window.identity.pid = pid;
+        entry.window.executable_name = "AcroRd32.exe".into();
+        entry.window.app_name = "Adobe Acrobat Reader".into();
         entry
     }
 
@@ -1392,7 +1637,14 @@ mod tests {
     #[test]
     fn snapshot_uses_excel_path_only_as_the_last_fallback() {
         let excel_path = r"C:\Meetings\external.xlsx";
-        let item = snapshot_item(excel_window(101, 42), &[], None, None, Some(excel_path));
+        let item = snapshot_item(
+            excel_window(101, 42),
+            &[],
+            None,
+            None,
+            Some(excel_path),
+            None,
+        );
         assert_eq!(item.document_path.as_deref(), Some(excel_path));
 
         let association = LaunchAssociation {
@@ -1408,10 +1660,84 @@ mod tests {
             Some(&association),
             None,
             Some(excel_path),
+            None,
         );
         assert_eq!(
             associated.document_path.as_deref(),
             Some(r"C:\Meetings\registered.xlsx")
+        );
+    }
+
+    #[test]
+    fn reader_document_path_requires_one_distinct_path_per_window() {
+        let reader = reader_window(201, 52);
+        let resolved = resolve_reader_window_paths(
+            std::slice::from_ref(&reader),
+            [ReaderDocumentObservation {
+                hwnd: 201,
+                document_path: r"C:\Meetings\agenda.pdf".into(),
+            }],
+        );
+        assert_eq!(
+            resolved.get(&201).map(String::as_str),
+            Some(r"C:\Meetings\agenda.pdf")
+        );
+
+        assert!(resolve_reader_window_paths(
+            std::slice::from_ref(&reader),
+            [
+                ReaderDocumentObservation {
+                    hwnd: 201,
+                    document_path: r"C:\Meetings\agenda.pdf".into(),
+                },
+                ReaderDocumentObservation {
+                    hwnd: 201,
+                    document_path: r"C:\Meetings\other.pdf".into(),
+                },
+            ],
+        )
+        .is_empty());
+        assert!(resolve_reader_window_paths(
+            std::slice::from_ref(&reader),
+            [ReaderDocumentObservation {
+                hwnd: 999,
+                document_path: r"C:\Meetings\agenda.pdf".into(),
+            }],
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn snapshot_uses_reader_path_after_registered_association() {
+        let reader_path = r"C:\Meetings\external.pdf";
+        let item = snapshot_item(
+            reader_window(201, 52),
+            &[],
+            None,
+            None,
+            None,
+            Some(reader_path),
+        );
+        assert_eq!(item.document_path.as_deref(), Some(reader_path));
+
+        let association = LaunchAssociation {
+            material_id: Id::try_from("material-reader".to_owned()).unwrap(),
+            material_path: r"C:\Meetings\registered.pdf".into(),
+            hwnd: 201,
+            pid: 52,
+            process_started: 3,
+        };
+        let associated = snapshot_item(
+            reader_window(201, 52),
+            &[],
+            Some(&association),
+            None,
+            None,
+            Some(reader_path),
+        );
+        assert_eq!(
+            associated.document_path.as_deref(),
+            Some(r"C:\Meetings\registered.pdf")
         );
     }
 
