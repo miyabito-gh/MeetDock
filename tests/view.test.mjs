@@ -210,6 +210,8 @@ test('material pointer reorder can move across roles at an explicit position or 
   for (const token of ["s.dataset.role=role", "closest('.role-section')", "beforeId:before?.dataset.materialId??null", "emit('moveMaterial',sourceId,target.groupId,target.role,target.beforeId)", "'drop-tail'"])
     assert.ok(source.includes(token), token);
   assert.ok(source.includes("ratio=index===candidates.length-1 ? .35 : .5"));
+  assert.ok(source.includes("y>=rect.bottom&&y<=rect.bottom+14"));
+  assert.ok(source.includes("before=tailSection?null:"));
   assert.doesNotMatch(styles,/\.reorder-mode \.materials\{[^}]*padding-bottom/);
 });
 
