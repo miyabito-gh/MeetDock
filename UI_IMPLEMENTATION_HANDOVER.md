@@ -813,21 +813,26 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ### 14.2 実装順序
 
-実装はアプリごとに順番に行い、各段階で停止する。最初はExcelだけを実装し、Excelの実装・テスト・差分確認・コミットが完了した時点で次の指示を待つ。ユーザーの明示指示があるまでWord、PowerPoint、Acrobat、ブラウザーPDFには進まない。
+実装はアプリごとに順番に行い、各段階で停止する。2026-09-25時点でExcel、Adobe Acrobat Reader、Word、PowerPointは実装・テスト・コミット済み。Adobe Acrobat Pro、ブラウザーPDF、Explorer仮想フォルダー、重複登録防止は未実装であり、次チャットでは残項目ごとに調査・実装・テスト・コミットして停止する。
 
-1. Excel（`EXCEL.EXE`）
-2. ユーザーの指示後にWord（`WINWORD.EXE`）
-3. ユーザーの指示後にPowerPoint（`POWERPNT.EXE`）
-4. ユーザーの指示後にAdobe Acrobat／Reader
-5. ユーザーの指示後にブラウザー内PDF
+1. 実装済み: Excel（`EXCEL.EXE`）
+2. 実装済み: Adobe Acrobat Reader（`AcroRd32.exe`）
+3. 実装済み: Word（`WINWORD.EXE`）
+4. 実装済み: PowerPoint（`POWERPNT.EXE`）
+5. 未実装: Adobe Acrobat Pro
+6. 未実装: ブラウザー内PDF
+7. 未実装: Explorerのホーム等の仮想フォルダー
+8. 未実装: 同一復元対象の二重保存・二重登録防止
 
 ### 14.3 対象アプリと推奨方式
 
 - Word（`WINWORD.EXE`）: Office COM APIで開いているDocumentの `FullName` を取得する。
 - Excel（`EXCEL.EXE`）: Office COM APIで開いているWorkbookの `FullName` を取得する。
 - PowerPoint（`POWERPNT.EXE`）: Office COM APIで開いているPresentationの `FullName` を取得する。
-- Adobe Acrobat／Reader: 利用可能なAcrobat COM APIから開いているPDFのパスを取得する。
+- Adobe Acrobat Reader: Accessibility DOMの `GetDocInfo` から開いているPDFの完全パスを取得する（実装済み）。
+- Adobe Acrobat Pro: 利用可能なAcrobat COM APIから開いているPDFのパスを取得する（未実装）。
 - ブラウザー内PDF: まず対象外または条件付き対象とし、UI Automation等で確実性を検証してから扱う。タイトル推測だけで完全パスとして保存しない。
+- Explorer仮想フォルダー: PIDLからShellの正規parsing nameを取得し、通常の `document_path` とは別のShellロケーションとして保存する。ホーム、PC、ごみ箱等を表示名だけで判定しない。
 
 ### 14.4 実装方針
 
@@ -855,3 +860,86 @@ cargo test --manifest-path src-tauri/Cargo.toml
 4. Excel用パス取得アダプター、曖昧一致、権限不足、取得不能、復元のテストを追加・実行する。
 5. Excelの実装・テスト・差分確認・コミットまで完了したら停止し、次のアプリへ進まずユーザーの指示を待つ。
 6. 実機UIは明示許可があるまで起動しない。実Excelでの取得確認が必要な場合は、コード・テスト完了後に別途許可を得る。
+
+### 14.7 実装済み状況
+
+- `f222582`: 外部起動Excel Workbookの完全パス取得。
+- `8657e04`: Adobe Acrobat ReaderのAccessibility DOMからPDF完全パス取得。
+- `648afa6`: Word DocumentおよびPowerPoint Presentationの完全パス取得。このコミットは2026-09-25時点で未push。
+- Rust全テストはWord／PowerPoint追加後に41件成功、`cargo check` 成功。実機UI確認は未実施。
+- 既存の未追跡ファイル `src-tauri/.gotodo/`、`src-tauri/gotodo.toml`、`src-tauri/todo.jsonl` は変更・削除しない。
+
+### 14.8 残項目
+
+#### 14.8.1 Explorerのホーム等の仮想フォルダー
+
+- 現在の `explorer_window_paths` は `IWebBrowser2.LocationURL` が `file:///` または `file://` の場合だけ通常の絶対パスへ変換している。
+- ホーム、PC、ごみ箱等はファイルシステム上の絶対パスを持たないため、既存の `document_path` 検証を緩めて格納しない。
+- 対象Explorer HWNDのPIDLを取得し、`SHGetNameFromIDList` と `SIGDN_DESKTOPABSOLUTEPARSING` で正規parsing nameを取得する。ファイルシステムパスを持つKnown Folderは `SIGDN_FILESYSPATH` またはKnown Folder APIで従来の絶対パスへ変換する。
+- 仮想フォルダー用に `shell_location` 等の明示的な保存フィールド／種別を追加し、起動・既存ウィンドウ一致・スナップショット検証を通常パスと分離する。
+- 表示名、ローカライズされた「ホーム」文字列、ウィンドウタイトルだけで復元対象を推測しない。
+
+完了条件:
+
+- ホーム等の仮想フォルダーを保存・復元できる。
+- DocumentsやDownloads等、実体パスを持つKnown Folderは従来のフォルダーパスとして扱える。
+- 同じShell parsing nameのExplorerだけを一意に再利用し、曖昧時は新規起動または安全な未復元とする。
+- 不正な任意文字列をShellロケーションとして起動しない厳格な検証と単体テストがある。
+
+#### 14.8.2 同一復元対象の二重保存・二重登録防止
+
+- ファイル名を取得できず `document_path` がない複数ウィンドウでは、フォールバック先が同じ `executable_path` となり、復元時に同じアプリ／ウィンドウを複数回開く可能性がある。
+- 大文字小文字、`/` と `\\`、末尾区切り、`\\?\\` 表現を正規化した復元対象キーを作る。
+- `document_path` または `shell_location` がある場合は、その確定対象と実行ファイルの組をキーにする。
+- 確定対象がなく同一 `executable_path` にフォールバックする項目は、一時保存内で1件だけ残す。タイトルが異なるだけでは別の復元対象と見なさない。
+- 一時保存からグループへ登録する処理でも同じ正規化キーを使い、同じ対象を二重に追加しない。既存グループ内に同じ対象がある場合の扱いもテストで固定する。
+- 異なる完全パスを取得できた文書は、同じアプリでも別項目として保持する。
+
+完了条件:
+
+- `document_path` なし・同一実行ファイルの複数項目から同じウィンドウを二重起動しない。
+- 表記だけ異なる同一パスを二重保存・二重登録しない。
+- 同じOffice／PDFアプリで異なる完全パスを持つ文書は重複扱いしない。
+- スナップショット保存、読み込み、全件起動、グループ登録の各境界に単体テストがある。
+
+### 14.9 次チャット用引継ぎプロンプト
+
+以下を次チャットへそのまま貼り付ける。
+
+```text
+MeetDockの残項目から、次の1項目だけを選んで実装・テスト・差分確認・コミットまで完了し、他の残項目へ進まず停止してください。
+
+残項目:
+1. Explorerのホーム等の仮想フォルダーを、通常のdocument_pathと分離したShellロケーションとして保存・復元する。
+2. ファイル名を取得できない場合などに復元対象が同一になる項目を、一時保存およびグループ登録で二重登録・二重起動しない。
+3. Adobe Acrobat Proの外部起動PDFパス取得。
+4. ブラウザー内PDFのパス取得可否調査と、安全に一意対応できる場合だけの実装。
+
+最初にAGENTS.md、UI_IMPLEMENTATION_HANDOVER.mdの14.7〜14.9、git status --short、git diff、git log -5を確認してください。
+
+主な対象ファイル:
+- src-tauri/src/windowing.rs
+- src-tauri/src/contracts.rs
+- src-tauri/src/lib.rs
+- src/model.js
+- src/contracts.js
+- 関連するRust／JavaScriptテスト
+
+既存制約:
+- MeetDock起動資料関連付けを最優先にする。
+- Explorerのexisting_tab内部設定とShellWindows取得を壊さない。
+- タイトルや表示名だけから完全パス／Shellロケーションを推測しない。
+- 曖昧なHWND対応は保存しない。
+- 実機UIは明示許可があるまで起動しない。
+- src-tauri/.gotodo/、src-tauri/gotodo.toml、src-tauri/todo.jsonlを変更・削除しない。
+- 完了後は対象テスト、必要な全体テスト、cargo check、git diff --checkを実行する。
+
+実施済み確認:
+- Excel、Reader、Word、PowerPointの取得実装済み。
+- Word／PowerPoint追加後のRust全41テスト成功、cargo check成功。
+- 最新ローカルコミット648afa6は未push。
+
+推奨モデル: gpt-5.6-sol、reasoning effortはmedium。Windows Shell／スナップショット／JavaScript登録処理をまたぐ通常規模の実装とレビューに十分な推論・ツール利用能力があり、単一チャットで1残項目を完結しやすいため。gpt-6-astraは使用しない。
+```
+
+モデル情報はOpenAI公式の `gpt-5.6-sol` モデルページで、複雑な専門作業向けのモデルであり、`medium` が既定のreasoning effortとして確認済み: https://developers.openai.com/api/docs/models/gpt-5.6-sol
