@@ -378,7 +378,7 @@ export function transition(s, e) {
       if(!editable(s)||!s.windowing.snapshot?.items?.length||!s.saved_config)return deny();
       const config=editableConfig(s),groupId=crypto.randomUUID(),stamp=new Date(s.windowing.snapshot.saved_at_unix_ms).toLocaleString('ja-JP');
       config.groups.push({id:groupId,parent_id:null,name:`保存ウィンドウ ${stamp}`,order:Number.MAX_SAFE_INTEGER});
-      for(const item of s.windowing.snapshot.items)config.materials.push({id:crypto.randomUUID(),group_id:groupId,name:item.title||item.app_name,role:'main',target_type:'file',path:item.document_path??item.executable_path,window_match_pattern:null,order:Number.MAX_SAFE_INTEGER});
+      for(const item of s.windowing.snapshot.items)config.materials.push({id:crypto.randomUUID(),group_id:groupId,name:item.title||item.app_name,role:'main',target_type:item.executable_name.toLocaleLowerCase('ja')==='explorer.exe'&&item.document_path?'folder':'file',path:item.document_path??item.executable_path,window_match_pattern:null,order:Number.MAX_SAFE_INTEGER});
       reorder(config.groups,g=>g.parent_id??'root');reorder(config.materials,m=>`${m.group_id}\0${m.role}`);
       const next=dirtyWith(s,config);
       return result({...next,selected_group_id:groupId,windowing:{...next.windowing,snapshot:null,snapshot_focus_after_load:false}},[effect(Effect.ClearWindowSnapshot,{})],{code:'WINDOW_SNAPSHOT_REGISTERED'});

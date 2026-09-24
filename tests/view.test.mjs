@@ -204,10 +204,12 @@ test('groups and materials expose internal drag reorder affordances', () => {
   assert.doesNotMatch(source,/addEventListener\('dragstart'/);
 });
 
-test('reorder mode exposes direct material deletion with the standard confirmation',()=>{
+test('reorder mode deletes material registration without confirmation',()=>{
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
-  for(const token of ["actionIcon('delete-material','reorder-delete-button danger'","else if(a==='delete-material')","emit('deleteMaterial',item.id,true)",'実ファイルは削除されません'])assert.ok(source.includes(token));
+  assert.ok(source.includes("actionIcon('delete-material','reorder-delete-button danger'"));
+  assert.match(source,/else if\(a==='delete-material'\)emit\('deleteMaterial',id,true\)/);
+  assert.ok(source.includes("else if(a==='delete-material')openOperation({title:'資料の登録を削除'"));
   assert.match(styles,/\.reorder-delete-button\{display:none\}/);
   assert.match(styles,/\.reorder-mode \.material-row\[data-material-id\]/);
   assert.match(styles,/\.reorder-mode \.reorder-delete-button\{display:grid\}/);

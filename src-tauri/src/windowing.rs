@@ -4,6 +4,7 @@ use crate::contracts::{
     SaveWindowExclusionsResponse, WindowActionResponse, WindowListItem,
 };
 use crate::launcher::LaunchAssociation;
+use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
@@ -181,7 +182,10 @@ impl WindowService {
         })
     }
 
-    pub(crate) fn save_snapshot(&self, associations: &[LaunchAssociation]) -> Result<SaveSnapshotResult, AppError> {
+    pub(crate) fn save_snapshot(
+        &self,
+        associations: &[LaunchAssociation],
+    ) -> Result<SaveSnapshotResult, AppError> {
         let exclusions = self
             .state
             .lock()
@@ -191,13 +195,25 @@ impl WindowService {
         let mut reasons = Vec::new();
         let mut items = Vec::new();
         let mut excluded_count = 0;
+        let explorer_paths = explorer_window_paths();
         for entry in enumerate_native_windows().into_iter().take(MAX_WINDOWS) {
             let association = associations.iter().find(|association| {
                 association.hwnd == entry.window.identity.hwnd
                     && association.pid == entry.window.identity.pid
                     && association.process_started == entry.window.identity.process_started
             });
-            let item = snapshot_item(entry, &exclusions, association);
+            let explorer_path = if entry
+                .window
+                .executable_name
+                .eq_ignore_ascii_case("explorer.exe")
+            {
+                explorer_paths
+                    .get(&entry.window.identity.hwnd)
+                    .map(String::as_str)
+            } else {
+                None
+            };
+            let item = snapshot_item(entry, &exclusions, association, explorer_path);
             if item.restorability == SnapshotRestorability::Excluded {
                 excluded_count += 1;
                 if let Some(reason) = &item.reason {
@@ -308,7 +324,11 @@ impl WindowService {
 
 fn snapshot_launch_command(item: &SnapshotItem) -> std::process::Command {
     #[cfg(windows)]
-    if let Some(path) = item.document_path.as_deref().filter(|path| !path.trim().is_empty()) {
+    if let Some(path) = item
+        .document_path
+        .as_deref()
+        .filter(|path| !path.trim().is_empty())
+    {
         let mut command = std::process::Command::new("explorer.exe");
         command.arg(path);
         return command;
@@ -316,7 +336,12 @@ fn snapshot_launch_command(item: &SnapshotItem) -> std::process::Command {
     std::process::Command::new(&item.executable_path)
 }
 
-fn snapshot_item(entry: EnumeratedWindow, exclusions: &[String], association: Option<&LaunchAssociation>) -> SnapshotItem {
+fn snapshot_item(
+    entry: EnumeratedWindow,
+    exclusions: &[String],
+    association: Option<&LaunchAssociation>,
+    explorer_path: Option<&str>,
+) -> SnapshotItem {
     let excluded = is_excluded(&entry.window, exclusions);
     let path = Path::new(&entry.full_path);
     let (restorability, reason) = if excluded {
@@ -340,7 +365,9 @@ fn snapshot_item(entry: EnumeratedWindow, exclusions: &[String], association: Op
     };
     SnapshotItem {
         material_id: association.map(|value| value.material_id.clone()),
-        document_path: association.map(|value| value.material_path.clone()),
+        document_path: association
+            .map(|value| value.material_path.clone())
+            .or_else(|| explorer_path.map(str::to_owned)),
         app_name: entry.window.app_name,
         title: entry.window.title,
         executable_name: entry.window.executable_name,
@@ -383,10 +410,11 @@ fn validate_snapshot(snapshot: &WindowSnapshot) -> Result<(), AppError> {
             || item.executable_name.trim().is_empty()
             || item.executable_path.trim().is_empty()
             || !Path::new(&item.executable_path).is_absolute()
-            || item.document_path.as_deref().is_some_and(|path| {
-                path.trim().is_empty() || !Path::new(path).is_absolute()
-            })
-            || (item.material_id.is_some() != item.document_path.is_some())
+            || item
+                .document_path
+                .as_deref()
+                .is_some_and(|path| path.trim().is_empty() || !Path::new(path).is_absolute())
+            || (item.material_id.is_some() && item.document_path.is_none())
             || (item.restorability == SnapshotRestorability::Restorable && item.reason.is_some())
             || (item.restorability != SnapshotRestorability::Restorable
                 && item.reason.as_deref().is_none_or(str::is_empty))
@@ -543,6 +571,110 @@ fn display_parts(executable_name: &str, title: &str) -> (String, String) {
         parsed
     };
     (app_name, parsed)
+}
+
+fn explorer_file_url_to_path(url: &str) -> Option<String> {
+    let (encoded, unc) = if url
+        .get(..8)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("file:///"))
+    {
+        (&url[8..], false)
+    } else if url
+        .get(..7)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("file://"))
+    {
+        (&url[7..], true)
+    } else {
+        return None;
+    };
+    let decoded = percent_decode_str(encoded).decode_utf8().ok()?;
+    let normalized = decoded.replace('/', "\\");
+    let path = if unc {
+        format!("\\\\{}", normalized.trim_start_matches('\\'))
+    } else {
+        normalized
+    };
+    (!path.is_empty() && Path::new(&path).is_absolute()).then_some(path)
+}
+
+#[cfg(windows)]
+fn explorer_window_paths() -> HashMap<isize, String> {
+    use std::mem::ManuallyDrop;
+    use windows::{
+        core::Interface,
+        Win32::{
+            System::{
+                Com::{
+                    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_LOCAL_SERVER,
+                    COINIT_APARTMENTTHREADED,
+                },
+                Variant::{VARIANT, VARIANT_0, VARIANT_0_0, VARIANT_0_0_0, VT_I4},
+            },
+            UI::Shell::{IShellWindows, IWebBrowser2, ShellWindows},
+        },
+    };
+
+    struct ComApartment;
+    impl Drop for ComApartment {
+        fn drop(&mut self) {
+            unsafe { CoUninitialize() }
+        }
+    }
+
+    if unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_err() {
+        return HashMap::new();
+    }
+    let _apartment = ComApartment;
+    let Ok(shell_windows): Result<IShellWindows, _> =
+        (unsafe { CoCreateInstance(&ShellWindows, None, CLSCTX_LOCAL_SERVER) })
+    else {
+        return HashMap::new();
+    };
+    let Ok(count) = (unsafe { shell_windows.Count() }) else {
+        return HashMap::new();
+    };
+    let mut paths = HashMap::new();
+    let mut ambiguous = HashSet::new();
+    for index in 0..count.clamp(0, MAX_WINDOWS as i32) {
+        let index = VARIANT {
+            Anonymous: VARIANT_0 {
+                Anonymous: ManuallyDrop::new(VARIANT_0_0 {
+                    vt: VT_I4,
+                    Anonymous: VARIANT_0_0_0 { lVal: index },
+                    ..Default::default()
+                }),
+            },
+        };
+        let Ok(dispatch) = (unsafe { shell_windows.Item(&index) }) else {
+            continue;
+        };
+        let Ok(browser): Result<IWebBrowser2, _> = dispatch.cast() else {
+            continue;
+        };
+        let (Ok(hwnd), Ok(location)) =
+            (unsafe { browser.HWND() }, unsafe { browser.LocationURL() })
+        else {
+            continue;
+        };
+        if let Some(path) = explorer_file_url_to_path(&location.to_string()) {
+            let hwnd = hwnd.0;
+            if ambiguous.contains(&hwnd) {
+                continue;
+            }
+            if paths.get(&hwnd).is_some_and(|existing| existing != &path) {
+                paths.remove(&hwnd);
+                ambiguous.insert(hwnd);
+            } else {
+                paths.insert(hwnd, path);
+            }
+        }
+    }
+    paths
+}
+
+#[cfg(not(windows))]
+fn explorer_window_paths() -> HashMap<isize, String> {
+    HashMap::new()
 }
 
 #[cfg(windows)]
@@ -839,7 +971,12 @@ mod tests {
         let executable = directory.join("test.exe");
         std::fs::write(&executable, b"test").unwrap();
 
-        let restorable = snapshot_item(test_window(executable.to_string_lossy().into_owned()), &[], None);
+        let restorable = snapshot_item(
+            test_window(executable.to_string_lossy().into_owned()),
+            &[],
+            None,
+            None,
+        );
         assert_eq!(restorable.restorability, SnapshotRestorability::Restorable);
         assert_eq!(restorable.reason, None);
 
@@ -851,13 +988,17 @@ mod tests {
             pid: associated_window.window.identity.pid,
             process_started: associated_window.window.identity.process_started,
         };
-        let associated = snapshot_item(associated_window, &[], Some(&association));
-        assert_eq!(associated.material_id.as_ref().map(Id::as_str), Some("material-1"));
+        let associated = snapshot_item(associated_window, &[], Some(&association), None);
+        assert_eq!(
+            associated.material_id.as_ref().map(Id::as_str),
+            Some("material-1")
+        );
         assert_eq!(associated.document_path, Some(association.material_path));
 
         let conditional = snapshot_item(
             test_window(directory.join("missing.exe").to_string_lossy().into_owned()),
             &[],
+            None,
             None,
         );
         assert_eq!(
@@ -870,10 +1011,44 @@ mod tests {
             test_window(executable.to_string_lossy().into_owned()),
             &["test.exe".into()],
             None,
+            None,
         );
         assert_eq!(excluded.restorability, SnapshotRestorability::Excluded);
         assert!(excluded.reason.is_some());
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn explorer_file_urls_decode_only_absolute_filesystem_paths() {
+        assert_eq!(
+            explorer_file_url_to_path("file:///C:/Meetings/%E8%B3%87%E6%96%99"),
+            Some(r"C:\Meetings\資料".into())
+        );
+        assert_eq!(
+            explorer_file_url_to_path("file://server/share/Agenda"),
+            Some(r"\\server\share\Agenda".into())
+        );
+        assert_eq!(explorer_file_url_to_path("search-ms:query=test"), None);
+        assert_eq!(explorer_file_url_to_path("file:///relative"), None);
+    }
+
+    #[test]
+    fn snapshot_uses_explorer_path_without_material_association() {
+        let path = r"C:\Meetings\資料";
+        let item = snapshot_item(
+            test_window(r"C:\Windows\explorer.exe".into()),
+            &[],
+            None,
+            Some(path),
+        );
+        assert_eq!(item.material_id, None);
+        assert_eq!(item.document_path.as_deref(), Some(path));
+        assert!(validate_snapshot(&WindowSnapshot {
+            schema_version: SNAPSHOT_SCHEMA_VERSION,
+            saved_at_unix_ms: 1,
+            items: vec![item],
+        })
+        .is_ok());
     }
 
     #[test]

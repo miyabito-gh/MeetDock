@@ -110,16 +110,17 @@ test('saved window snapshot supports individual/all launch and group registratio
   const snapshot={schema_version:1,saved_at_unix_ms:Date.UTC(2026,8,25),items:[
     {app_name:'Editor',title:'Agenda',executable_name:'editor.exe',executable_path:'C:\\Apps\\editor.exe',restorability:'restorable',reason:null},
     {app_name:'Browser',title:'Reference',executable_name:'browser.exe',executable_path:'C:\\Apps\\browser.exe',restorability:'conditional',reason:'state may differ'},
+    {app_name:'エクスプローラー',title:'資料',executable_name:'explorer.exe',executable_path:'C:\\Windows\\explorer.exe',document_path:'C:\\Meetings\\資料',restorability:'restorable',reason:null},
   ]};
   const loaded=run(ready(),Event.WindowSnapshotLoaded,{response:snapshot}).state;
   const one=run(loaded,Event.WindowSnapshotLaunchRequested,{index:0});
   assert.equal(one.effects[0].type,Effect.LaunchWindowSnapshotItem);assert.deepEqual(one.effects[0].request,{index:0});assert.deepEqual(one.state.windowing.snapshot_running,[0]);
   assert.equal(run(one.state,Event.WindowSnapshotLaunchRequested,{index:0}).effects.length,0);
   assert.deepEqual(run(one.state,Event.WindowSnapshotLaunchSucceeded,{index:0}).state.windowing.snapshot_running,[]);
-  const all=run(loaded,Event.WindowSnapshotLaunchAllRequested);assert.equal(all.effects[0].type,Effect.BatchLaunchWindowSnapshot);assert.deepEqual(all.effects[0].request.indices,[0,1]);
+  const all=run(loaded,Event.WindowSnapshotLaunchAllRequested);assert.equal(all.effects[0].type,Effect.BatchLaunchWindowSnapshot);assert.deepEqual(all.effects[0].request.indices,[0,1,2]);
   assert.equal(run(all.state,Event.WindowSnapshotLaunchAllCompleted).state.windowing.snapshot_batch,false);
   const registered=run(loaded,Event.WindowSnapshotRegisterRequested);assert.equal(registered.state.edit,Edit.Dirty);assert.equal(registered.state.draft.groups.length,config.groups.length+1);
-  const added=registered.state.draft.materials.slice(config.materials.length);assert.deepEqual(added.map(item=>item.path),snapshot.items.map(item=>item.executable_path));assert.ok(added.every(item=>item.role==='main'));
+  const added=registered.state.draft.materials.slice(config.materials.length);assert.deepEqual(added.map(item=>item.path),snapshot.items.map(item=>item.document_path??item.executable_path));assert.ok(added.every(item=>item.role==='main'));assert.deepEqual(added.map(item=>item.target_type),['file','file','folder']);
   assert.equal(registered.state.windowing.snapshot,null);assert.equal(registered.effects[0].type,Effect.ClearWindowSnapshot);assert.equal(registered.state.selected_group_id,registered.state.draft.groups.at(-1).id);
   assert.equal(run(registered.state,Event.WindowSnapshotClearSucceeded,{removed:true}).state.windowing.snapshot,null);
 });
