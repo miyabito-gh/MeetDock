@@ -2,7 +2,40 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { batchButtonAction, batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, placeStableRow, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+import { batchButtonAction, batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, reorderPlacement, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+
+test('pointer release dispatches reorder, role move and empty drop correctly',()=>{
+  const source={group_id:'g1',role:'main'};
+  assert.deepEqual(reorderDropAction('group','g2',null,{beforeId:'g1'}),{action:'reorderGroup',args:['g2','g1']});
+  assert.deepEqual(reorderDropAction('material','m2',source,{beforeId:'m1',groupId:'g1',role:'main'}),{action:'reorderMaterial',args:['m2','m1']});
+  assert.deepEqual(reorderDropAction('material','m2',source,{beforeId:null,groupId:'g1',role:'reference'}),{action:'moveMaterial',args:['m2','g1','reference',null]});
+  assert.equal(reorderDropAction('material','m2',source,null),null);
+});
+
+test('keyboard placement covers each boundary and matches pointer insertion targets',()=>{
+  const peers=[{id:'a'},{id:'b'},{id:'c'},{id:'d'}];
+  assert.deepEqual(reorderPlacement(peers,'c','first'),{beforeId:'a'});
+  assert.deepEqual(reorderPlacement(peers,'c','up'),{beforeId:'b'});
+  assert.deepEqual(reorderPlacement(peers,'b','down'),{beforeId:'d'});
+  assert.deepEqual(reorderPlacement(peers,'c','down'),{beforeId:null});
+  assert.deepEqual(reorderPlacement(peers,'a','last'),{beforeId:null});
+  assert.equal(reorderPlacement(peers,'a','up'),null);
+  assert.equal(reorderPlacement(peers,'d','down'),null);
+});
+
+test('reorder entry follows edit, search and snapshot states',()=>{
+  const state={can_edit:true,edit:'Clean',query:'',selected_group_id:'g1'};
+  assert.equal(reorderAvailable(state),true);
+  for(const changed of [{can_edit:false},{edit:'Saving'},{query:'report'},{selected_group_id:'window-snapshot'}])assert.equal(reorderAvailable({...state,...changed}),false);
+});
+
+test('search heading and role panels follow the visible result set',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  assert.ok(source.includes("title.textContent=next.query?'検索結果':selected?.name??'資料'"));
+  assert.ok(source.includes('mainRole.s.hidden=!mainCount&&!(reorderMode&&source.length);refRole.s.hidden=!referenceCount&&!(reorderMode&&source.length);emptyState.hidden=!noResults'));
+  assert.ok(source.includes('mainRole.s.hidden=!items.length'));
+  assert.ok(source.includes('if(next.selected_group_id!==WINDOW_SNAPSHOT_GROUP_ID||next.query)'));
+});
 
 test('stop button targets the running batch after navigation',()=>{
   const model={selected_group_id:'g2',launch:{batch:{group_id:'g1'}}};
@@ -145,7 +178,9 @@ test('runtime actions use consistent labeled icons and low-frequency reorder liv
   assert.ok(source.includes("windowsButton.setAttribute('aria-label','ウィンドウ一覧を開く')"));
   assert.ok(source.includes("runtimeActions.setAttribute('aria-label','状態とウィンドウ')"));
   assert.ok(source.includes("moreSummary.setAttribute('aria-label','その他の操作')"));
-  assert.ok(source.includes('morePanel.append(reorderButton)'));
+  assert.ok(source.includes("morePanel.append(el('div','toolbar-menu-heading','配置'),reorderButton)"));
+  assert.ok(source.includes("el('div','toolbar-menu-heading','データ')"));
+  assert.ok(source.includes("reorderControls.append(reorderHint,reorderDone,reorderCancel)"));
   assert.ok(source.includes('if(!moreActions.contains(e.target))moreActions.open=false'));
   assert.ok(source.includes('moreActions.open=false;if(pdfSearchOpen)'));
   assert.match(styles,/\.toolbar-icon-button\{width:32px;height:30px!important/);
@@ -231,7 +266,7 @@ test('saved window rows reuse material icons and the left icon owns activate-or-
 test('groups and materials expose internal drag reorder affordances', () => {
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
-  for(const token of ["'toggle-reorder'",'reorderMode','applyReorderMode',"el('span','drag-handle','⠿')",'elementFromPoint',"addEventListener('pointerdown'","addEventListener('pointermove'",'finishReorder','reorderGroup','reorderMaterial'])assert.ok(source.includes(token));
+  for(const token of ["'toggle-reorder'",'reorderMode','applyReorderMode',"el('button','drag-handle','⠿')",'elementFromPoint',"addEventListener('pointerdown'","addEventListener('pointermove'",'finishReorder','reorderGroup','reorderMaterial','reorderPlacement','cancelReorder'])assert.ok(source.includes(token));
   assert.doesNotMatch(source,/addEventListener\('dragstart'/);
   assert.match(styles,/\.drag-handle\{[^}]*width:24px;[^}]*flex:0 0 24px/);
 });
@@ -261,7 +296,7 @@ test('temporary window group stays separated at the bottom and never exposes reo
 test('material pointer reorder can move across roles at an explicit position or section tail', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
-  for (const token of ["s.dataset.role=role", "closest('.role-section')", "beforeId:before?.dataset.materialId??null", "emit('moveMaterial',sourceId,target.groupId,target.role,target.beforeId)", "'drop-tail'"])
+  for (const token of ["s.dataset.role=role", "closest('.role-section')", "beforeId:before?.dataset.materialId??null", "reorderDropAction(kind,sourceId,source,target)", "'drop-tail'"])
     assert.ok(source.includes(token), token);
   assert.ok(source.includes("ratio=index===candidates.length-1 ? .35 : .5"));
   assert.ok(source.includes("y>=rect.bottom&&y<=rect.bottom+14"));

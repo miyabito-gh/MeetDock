@@ -17,6 +17,8 @@ export function createPresenter(view, dispatch) {
     duplicateGroup(group_id) { id(group_id); dispatch({ type: Event.GroupDuplicated, group_id }); },
     moveGroup(group_id, parent_id) { id(group_id); if (parent_id !== null) id(parent_id); dispatch({ type: Event.GroupMoved, group_id, parent_id }); },
     reorderGroup(group_id, before_group_id) { id(group_id); id(before_group_id); dispatch({ type: Event.GroupReordered, group_id, before_group_id }); },
+    moveGroupToEnd(group_id) { id(group_id); dispatch({ type: Event.GroupMovedToEnd, group_id }); },
+    cancelReorder(groups, materials, edit) { dispatch({ type: Event.ReorderCancelled, groups: structuredClone(groups), materials: structuredClone(materials), edit }); },
     addMaterial(material) { const value=structuredClone(material);value.path=normalizeMaterialPath(value.path);dispatch({ type: Event.MaterialAdded, material:value }); },
     updateMaterial(material) { id(material.id); const value=structuredClone(material);value.path=normalizeMaterialPath(value.path);dispatch({ type: Event.MaterialUpdated, material:value }); },
     deleteMaterial(material_id, confirmed) { id(material_id); dispatch({ type: Event.MaterialDeleted, material_id, confirmed }); },

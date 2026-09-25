@@ -438,6 +438,7 @@ test('Saving rejects every config edit event', () => {
     [Event.DraftChanged, { config }], [Event.GroupAdded, { group: { id: 'g3', parent_id: null, name: '追加' } }],
     [Event.GroupRenamed, { group_id: 'g1', name: '変更' }], [Event.GroupDuplicated, { group_id: 'g1' }],
     [Event.GroupMoved, { group_id: 'g1', parent_id: 'g2' }], [Event.GroupDeleted, { group_id: 'g1', confirmed: true }],
+    [Event.GroupMovedToEnd, { group_id: 'g1' }], [Event.ReorderCancelled, { groups: [], materials: [], edit: Edit.Clean }],
     [Event.MaterialAdded, { material: { ...config.materials[0], id: 'm3' } }], [Event.MaterialUpdated, { material: config.materials[0] }],
     [Event.MaterialMoved, { material_id: 'm1', group_id: 'g1', role: 'reference' }], [Event.MaterialDeleted, { material_id: 'm1', confirmed: true }],
   ]) assert.equal(run(state, type, fields).state, state, type);
@@ -489,4 +490,21 @@ test('drag reorder is draft-only and limited to the same parent or material sect
   const tail=run(materials,Event.MaterialMoved,{material_id:'m3',group_id:'g1',role:'main',before_material_id:null}).state;
   assert.deepEqual(tail.draft.materials.filter(m=>m.group_id==='g1'&&m.role==='main').sort((a,b)=>a.order-b.order).map(m=>m.id),['m1','m3']);
   assert.equal(run(withPeers,Event.MaterialReordered,{material_id:'m2',before_material_id:'m1'}).state,withPeers);
+});
+
+test('keyboard and pointer reorder use the same model boundary and cancel restores placement',()=>{
+  const s=ready(),base={...s,saved_config:structuredClone(s.saved_config)};
+  base.saved_config.groups.push({id:'g3',parent_id:null,name:'会議3',order:3});
+  base.saved_config.materials.push({...base.saved_config.materials[0],id:'m3',order:2});
+  const groups=base.saved_config.groups.map(({id,parent_id,order})=>({id,parent_id,order}));
+  const materials=base.saved_config.materials.map(({id,group_id,role,order})=>({id,group_id,role,order}));
+  const moved=run(base,Event.GroupReordered,{group_id:'g3',before_group_id:'g1'}).state;
+  const tail=run(moved,Event.GroupMovedToEnd,{group_id:'g3'}).state;
+  assert.deepEqual(tail.draft.groups.sort((a,b)=>a.order-b.order).map(g=>g.id),['g1','g2','g3']);
+  const changed=run(moved,Event.MaterialReordered,{material_id:'m3',before_material_id:'m1'}).state;
+  const restored=run(changed,Event.ReorderCancelled,{groups,materials,edit:Edit.Clean}).state;
+  assert.equal(restored.edit,Edit.Clean);
+  assert.equal(restored.draft,null);
+  assert.equal(run({...changed,edit:Edit.Saving},Event.ReorderCancelled,{groups,materials,edit:Edit.Clean}).state.edit,Edit.Saving);
+  assert.equal(run(changed,Event.ReorderCancelled,{groups:[],materials,edit:Edit.Clean}).state,changed);
 });
