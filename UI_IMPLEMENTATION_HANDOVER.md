@@ -872,6 +872,8 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - ブラウザー内PDFは公式資料を調査し、通常起動したChrome／Edgeのタブ、PDF URL、トップレベルHWNDを安全に一意対応できる契約がないため実装対象外と判断。条件付きの代替案を14.8.3へ記録した。
 - Adobe Acrobat Pro（`Acrobat.exe`）をReaderと同じAccessibility DOM境界で観測し、実行ファイルとトップレベルHWNDが一致する一意なPDFパスだけを保存する対応を実装した。
 - Explorerの仮想フォルダーを、通常パスの `document_path` と排他的な `shell_location` として保存・復元する対応を実装した。Shell APIで正規化し、厳格なGUID parsing nameだけを許可する。
+- `f39eafa`: 引継ぎ依頼時に引継ぎ文書を更新し、同じ引継ぎ指示文をチャットにも全文出力する規則を `AGENTS.md` へ追加。
+- `1db3700`: `git add` と `git commit` を常設承認済みとして扱い、チャットで都度確認しない規則を `AGENTS.md` へ追加。
 - 上記修正後、Rust全テスト75件、JavaScript全テスト581件、`cargo check`、`git diff --check` が成功している。
 - 実機UI確認は未実施。特にAdobe Acrobat Readerのパス取得は自動テストのみ成功しており、実環境での動作確認と原因限定が未完了。
 
@@ -950,6 +952,11 @@ cargo test --manifest-path src-tauri/Cargo.toml
 MeetDockの作業を継続してください。
 
 リポジトリ共通の作業規則とモデル選定基準はAGENTS.mdに従ってください。最初にAGENTS.md、UI_IMPLEMENTATION_HANDOVER.mdの14.7〜14.9、git status --short、git diff、git log -5を確認してください。
+
+現在のGit状態:
+- 作業ツリーはクリーン。
+- origin/masterは972b908。
+- f39eafa（引継ぎ文書とチャット出力の必須化）、1db3700（git add／commitの常設承認）、および今回の引継ぎ文書更新はローカル未push。ユーザーからpush依頼がない限りpushしない。
 
 最優先の目的:
 Adobe Acrobat Reader（AcroRd32.exe）で開いているPDFの完全パスが、一時保存スナップショットのdocument_pathへ入らないという報告を再現・調査し、原因を限定してください。原因が実装範囲内で確定した場合は修正、対象テスト、必要な全体テスト、cargo check、git diff --check、コミットまで完了してください。他の機能へは進まないでください。
