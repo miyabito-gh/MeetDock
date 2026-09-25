@@ -1,6 +1,6 @@
 # MeetDock UI・PDF機能 実装引継ぎ
 
-更新日: 2026-09-24
+更新日: 2026-09-25
 
 ## 1. 目的
 
@@ -1003,4 +1003,451 @@ Adobe Acrobat Reader（AcroRd32.exe）で開いているPDFの完全パスが、
 推奨モデル: gpt-6-astra
 reasoning effort: high
 理由: Windows Accessibility／COM、Reader固有のウィンドウ階層、HWNDと文書パスの安全な一意対応を横断して実環境との差を原因限定する難しい調査であるため。
+```
+
+## 15. 2026-09-25 UI/UX静的検証結果――全件を修正対象とする
+
+### 15.1 検証条件
+
+`src/`を中心に、メイン画面、ツールバー、グループ／資料一覧、メニュー、5種のdialog、ウィンドウ一覧、一時保存一覧、PDFプレビュー・検索・注釈・しおり、空状態・通知、レスポンシブCSSを静的に確認した。ユーザーの指示により、以下は重大度にかかわらずすべて修正対象とする。
+
+コード変更、コミット、実機UI起動は行っていない。検証開始時の作業ツリーはクリーンだった。次の51テストは成功したが、`tests/view.test.mjs`の多くはソース文字列確認であり、実DOMイベント、フォーカス、スクリーンリーダー、見た目は保証しない。
+
+```text
+node --test tests/view.test.mjs tests/pdf-view-adapter.test.mjs tests/pdf-wheel.test.mjs
+```
+
+### 15.2 全修正対象
+
+1. **P1: PDFマーカーとパンのpointer capture競合**
+   - `src/view.js`のannotation overlayで描画開始後、イベントがcanvas wrapへ伝播し、親もパンとして同じpointerをcaptureする。
+   - マーカーツール中は描画だけ、未選択時はパンだけが動くよう分離し、cancel／capture喪失もテストする。
+2. **P1: 一時保存一覧からの空グループエクスポート**
+   - `WINDOW_SNAPSHOT_GROUP_ID`選択中も「選択グループをエクスポート」が有効で、グループ0件・資料0件の正常に見えるファイルを作る。
+   - 通常グループ以外では無効化／非表示にし、`src/data-transfer.js`側または呼出境界でも存在しないIDをテストする。
+3. **P1: 並べ替えがpointer専用で、終了導線も隠れる**
+   - フォーカス不能な`span`ハンドルとpointer操作しかなく、開始後は「並べ替え終了」が閉じたmore menu内に隠れる。
+   - 常時見える完了／キャンセル、上・下・先頭・末尾等のキーボード代替を設ける。読み取り専用、保存中、検索中、一時保存一覧では入口を無効化／非表示にする。
+4. **P1: PDF本文が支援技術へ公開されない**
+   - PDFはcanvas描画だけで、検索用に抽出した本文もアクセシビリティツリーへ出ない。
+   - 表示ページの読み順を保った代替テキストを提供し、canvasとの二重読み上げ、ページ更新通知、巨大PDFの性能を検証する。
+5. **P1: メニュー項目が状態・対象種別に追従しない**
+   - 読み取り専用でも並べ替え、インポート、編集、移動、削除等が表示され、モデル側で黙って拒否される経路がある。
+   - 「保存場所を開く」はURLやフォルダーにも出る一方、直接ボタンはファイルだけで不一致。
+   - `can_edit`、`can_launch`、保存状態、選択対象、target typeに応じて無効化／非表示にし、モデル側の拒否境界も維持する。
+6. **P2: 全dialogに明示的なアクセシブル名がない**
+   - material、operation、issue、DnD、windowsの各dialogを固有見出しへ`aria-labelledby`等で関連付ける。
+   - 動的タイトル、初期フォーカス、Tab範囲、閉じた後のフォーカス復帰を確認する。
+7. **P2: コンテキストメニューのARIA・キーボード・フォーカス管理が不完全**
+   - 親は`role="menu"`だが項目に`menuitem`がなく、矢印、Home、End、閉じた後のフォーカス復帰がない。
+   - WAI-ARIA menu patternまたは通常のボタンポップオーバーへ統一し、マウス、ContextMenuキー、Shift+F10、Esc、Tab、外側クリックをテストする。
+8. **P2: PDFのLoading／PasswordRequired／Failedがプレビュー内で分からない**
+   - 読込中は空canvasと無効操作だけで、失敗通知は資料一覧側にあり、最大化中に見えない可能性がある。
+   - プレビュー内へ状態、再試行／外部で開く導線、`aria-live`通知を置き、次のPDFへ古い状態を残さない。
+9. **P2: DnD全件失敗でも確認操作が有効**
+   - 候補0件では「draftへ追加」を無効化し、候補のみ、候補＋失敗、全失敗をテストする。
+10. **P3: 完全な空状態でも空の役割パネルが残る**
+    - 資料0件／検索結果0件では空状態を主役にし、空のメイン／参考パネルを不要に並べない。一方だけ0件の場合の規則も定める。
+11. **P3: toolbar more menuの情報設計が弱い**
+    - 状態モードの「並べ替え」とデータ管理の入出力を、区切り、見出し、並び順のいずれかで目的別に整理する。
+
+主な対象は`src/view.js`、`src/model.js`、`src/data-transfer.js`、`src/pdf-view-adapter.js`、`src/mock-styles.css`、`tests/view.test.mjs`、`tests/model.test.mjs`、`tests/data-transfer.test.mjs`、`tests/pdf-view-adapter.test.mjs`。
+
+### 15.3 維持する既存の良い点
+
+- 「資料を追加」「メイン資料を開く」等の主要操作をツールバーに残し、低頻度操作をmore menuへ置く大枠。
+- 「登録のみ削除」「実ファイルは残す」等、削除対象と影響を明示して確認dialogを挟むこと。
+- グループ選択と表示中PDFの視覚表示＋`aria-current`。
+- ウィンドウ一覧のアプリ別グルーピング、件数、更新時刻、除外設定の配置。
+- タイトルからパスや復元対象を推測しない既存制約。
+
+### 15.4 工程分割とモデル
+
+全件を一変更へ混ぜず、各工程で対象テストと`git diff --check`まで完了して停止する。コミットは、その工程についてユーザーから明示依頼がある場合だけ行う。
+
+1. **工程A: 機能・状態整合** — 上記1、2、3、5、9。
+2. **工程B: アクセシビリティとPDF状態** — 上記4、6、7、8。
+3. **工程C: 空状態・メニュー情報設計・実機確認** — 上記10、11。実機UIは明示許可後のみ。
+
+推奨モデルは全工程`gpt-5.6-sol`。reasoning effortは工程A・Bが`high`、工程Cが`medium`。既存文書に記録されたユーザー指定に従い、`gpt-6-astra`は使用しない。
+
+### 15.5 次チャット用引継ぎプロンプト――工程A
+
+```text
+MeetDockのUI/UX修正・工程Aを実施してください。
+
+目的:
+2026-09-25の静的UI/UX検証で修正対象になった機能・状態整合の問題を直す。対象はPDFマーカーとパンの競合、一時保存一覧からの空グループエクスポート、並べ替えの入口・出口とキーボード代替、メニュー項目の状態／対象種別との不整合、全件失敗DnDの確認操作である。他のUI課題へは進まない。
+
+最初に行うこと:
+- ルートのAGENTS.mdを読む。
+- UI_IMPLEMENTATION_HANDOVER.mdの15.1〜15.5を読む。
+- git status --short、対象範囲のgit diff、必要ならgit log -5を確認する。
+- 既存変更はユーザーの作業として保持する。
+
+主な対象ファイル:
+- src/view.js
+- src/model.js
+- src/data-transfer.js
+- src/mock-styles.css
+- tests/view.test.mjs
+- tests/model.test.mjs
+- tests/data-transfer.test.mjs
+
+実装要件:
+- マーカーツール中はoverlay描画だけを行い、canvas wrapのパンを開始しない。ツール未選択時のパンは維持し、pointer cancel／capture喪失も処理する。
+- WINDOW_SNAPSHOT_GROUP_IDや存在しないgroup IDから、見かけ上正常な空の「選択グループ」エクスポートを作らない。
+- 並べ替え中は終了／キャンセルを常時見える位置へ出し、ドラッグ以外にキーボードで上・下・先頭・末尾へ移動できる操作を用意する。
+- 読み取り専用、保存中、検索中、一時保存一覧では、並べ替え、インポート、編集、移動、削除等を状態に応じて無効化または非表示にする。
+- 「保存場所を開く」は対応するtarget typeだけに表示する。URL、フォルダー、ファイル、PDFをテストする。
+- DnD候補0件では「draftへ追加」を実行できない。候補のみ、候補＋失敗、全失敗をテストする。
+- モデル側の拒否境界を維持し、UI制御だけに依存しない。未保存パスをIPCへ渡さず、厳格な契約を緩めない。
+
+完了条件:
+- 文字列存在確認だけではない振る舞いテストを追加する。
+- node --test tests/view.test.mjs tests/model.test.mjs tests/data-transfer.test.mjs が成功する。
+- 必要な場合だけ関連する追加テストを実行し、git diff --checkを成功させる。
+- 変更ファイル、テスト、未解決事項を報告し、工程Bへ進まない。
+- コミットや実機UI起動はユーザーの明示依頼がない限り行わない。
+
+推奨モデル: gpt-5.6-sol
+reasoning effort: high
+理由: DOM pointerイベント、モデル状態、データ出力、キーボード操作を横断して安全に修正する必要があるため。
+```
+
+### 15.6 次チャット用引継ぎプロンプト――工程B
+
+```text
+MeetDockのUI/UX修正・工程Bを実施してください。工程Aが完了していることをgit diffとテスト結果で確認してから着手してください。
+
+目的:
+アクセシビリティとPDF状態表示を直す。対象はPDF本文の支援技術向け代替、全dialogのアクセシブル名、コンテキストメニューのキーボード／フォーカス管理、PDFのLoading・PasswordRequired・Failed表示である。空状態とメニューの視覚整理、実機確認へは進まない。
+
+最初に行うこと:
+- ルートのAGENTS.mdを読む。
+- UI_IMPLEMENTATION_HANDOVER.mdの15.1〜15.4と15.6を読む。
+- git status --short、対象範囲のgit diff、必要ならgit log -5を確認する。
+- 工程Aの変更を上書きしない。
+
+主な対象ファイル:
+- src/view.js
+- src/pdf-view-adapter.js
+- src/model.js
+- src/mock-styles.css
+- tests/view.test.mjs
+- tests/pdf-view-adapter.test.mjs
+- tests/model.test.mjs
+
+実装要件:
+- 表示中PDFページのテキストを、読み順と性能に配慮して支援技術へ提供し、canvasとの二重読み上げを防ぐ。
+- 全dialogへ動的見出しと一致するアクセシブル名を設定し、初期フォーカス、Tab範囲、閉じた後のフォーカス復帰を扱う。
+- コンテキストメニューをWAI-ARIA menu patternに沿わせるか、通常のボタンポップオーバーへ統一する。矢印、Home、End、Esc、ContextMenuキー、Shift+F10、外側クリック、実行後をテストする。
+- PDFプレビュー内にLoading、PasswordRequired、Failedを表示し、最大化中もエラー内容と再試行／外部で開く操作へ到達できるようにする。
+- ページ移動、検索、エラー、次のPDFへの切替で古い読み上げ内容やエラーを残さない。
+
+完了条件:
+- DOM状態とキーボード操作の振る舞いテストを追加する。
+- node --test tests/view.test.mjs tests/pdf-view-adapter.test.mjs tests/model.test.mjs が成功する。
+- 必要な場合だけ関連テストを実行し、git diff --checkを成功させる。
+- 変更ファイル、テスト、未解決事項を報告し、工程Cへ進まない。
+- コミットや実機UI起動はユーザーの明示依頼がない限り行わない。
+
+推奨モデル: gpt-5.6-sol
+reasoning effort: high
+理由: PDF.jsのテキスト境界、ARIA、フォーカス管理、状態機械を一貫させる必要があるため。
+```
+
+### 15.7 次チャット用引継ぎプロンプト――工程C
+
+```text
+MeetDockのUI/UX修正・工程Cを実施してください。工程A・Bが完了していることをgit diffとテスト結果で確認してから着手してください。
+
+目的:
+残った表示調整を完了する。完全な空状態で空の役割パネルを主役にしないこと、toolbar more menuを目的別に走査しやすくすることが対象である。自動テスト後、実機UI確認が必要な項目を整理する。
+
+最初に行うこと:
+- ルートのAGENTS.mdを読む。
+- UI_IMPLEMENTATION_HANDOVER.mdの15.1〜15.4と15.7を読む。
+- git status --short、対象範囲のgit diff、必要ならgit log -5を確認する。
+- 工程A・Bの変更を上書きしない。
+
+主な対象ファイル:
+- src/view.js
+- src/mock-styles.css
+- tests/view.test.mjs
+
+実装要件:
+- 資料0件／検索結果0件では空状態を主役にし、空のメイン／参考パネルを不要に並べない。一方だけ0件の場合の規則も決める。
+- toolbar more menuの「並べ替え」と「エクスポート／インポート」を、区切り、見出し、並び順のいずれかで整理する。
+- 主要操作はツールバーに残し、既存の視覚階層、状態色、選択表示、ウィンドウ一覧のグルーピングを維持する。
+
+自動テスト後の実機確認候補:
+- Windows表示倍率100%／150%と狭幅でのメニュー位置、折返し、欠け。
+- Tab順序、フォーカス表示、Esc、Shift+F10、ContextMenuキー。
+- スクリーンリーダーでのdialog名、menu項目、PDF本文と状態通知。
+- PDFマーカー描画とパンの分離、PDF通常／最大化での状態・復帰操作。
+- 読み取り専用、検索中、一時保存一覧で不適切なメニュー操作ができないこと。
+- 色コントラストの計測。
+
+完了条件:
+- node --test tests/view.test.mjs が成功する。
+- 工程A・Bを含む関連テストを必要に応じて実行し、git diff --checkを成功させる。
+- 実機UIはユーザーの明示許可を得るまで起動せず、未確認事項として報告する。
+- 変更ファイル、テスト、未解決事項を報告する。コミットは明示依頼がない限り行わない。
+
+推奨モデル: gpt-5.6-sol
+reasoning effort: medium
+理由: 主作業は表示規則と情報設計だが、先行工程との回帰確認が必要なため。
+```
+
+### 15.8 既知の大規模UI課題の再監査
+
+ユーザー指示により、セクション4の旧13件を2026-09-25の現行コードとテストへ再照合した。未実装または部分実装は、セクション15.2の11件と合わせてすべて修正対象とする。
+
+実装済みと判定したもの:
+
+1. **旧P0-1 保存中編集と保存完了の取りこぼし**
+   - `editable(s)`は`Edit.Saving`を除外し、保存開始時のconfig／generationを保持している。
+   - 画面切替後の保存成功は保存済みconfigを更新し、保持中draftをrebaseする。
+   - `Saving rejects every config edit event`等のモデルテストがある。
+2. **旧P1-5 フォーカス復帰時の最初のクリック消費へのコード対策**
+   - 資料行を再生成せず`placeStableRow`で維持する実装と回帰テストがある。
+   - 実機での最終確認は未実施なので、工程Dの確認項目には残す。
+
+未実装または部分実装として追加する10件:
+
+1. **下書き表示と保存済み実行対象の不一致**
+   - 表示は`draft ?? saved_config`だが、起動／PDF対象は`saved_config`である。
+   - 未保存の新規資料は有効に見えて拒否され、既存資料のパス変更後は画面と実行対象が異なりうる。
+   - 未保存パスをIPCへ渡さない制約を維持しつつ、「保存後に利用可能」を資料単位で示す。
+2. **未保存終了の保護がない**
+   - `CloseRequested`の処理はあるが、`src/main.js`にTauriの`onCloseRequested`登録がない。
+   - Dirty／Conflict／Savingで保存・破棄・キャンセルを選べる終了フローを追加する。
+3. **一括起動中に別グループへ移ると停止できない**
+   - Viewは現在の`selected_group_id`でcancelを送るが、Modelは開始時のbatch group IDだけを受理する。
+   - 停止操作は進行中batchの識別子を使う。
+4. **PDF最大化の状態・表示・Esc・再表示が不整合**
+   - ボタンは常に「全画面」、Escは最大化解除でなくPDFを閉じ、`PdfClosed`は`pdf_maximized`を解除しない。
+   - 表示、`aria-pressed`、Esc、閉じる、再度開くを一貫させる。
+5. **サイドバー折り畳み時にPDF最大化が全幅にならないCSS競合**
+   - `.app-shell.sidebar-collapsed .preview`の詳細度が`.preview.maximized`より高く、`max-width`が残る。
+   - 状態組合せを実DOM／computed style相当でテストする。
+6. **PDF全画面がWebView内だけでネイティブタイトル領域を使わない**
+   - `setFullscreen`連携が存在しない。
+   - Tauriのネイティブ全画面を第一候補に、成功／失敗とモデル状態を同期する。権限・IPC契約への影響を確認する。
+7. **折り畳みサイドバーとPDF最大化背後の不可視コントロールがフォーカス可能**
+   - 幅やz-indexだけを変え、`inert`等を設定していない。
+   - 非表示領域をTab順から除外し、トグルにラベルと展開状態を設定する。
+8. **検索中の見出しと検索範囲が一致しない**
+   - 検索は全グループ対象だが、選択グループ名が見出しで優先される。
+   - 検索中は「検索結果」と全グループ対象の文脈を表示するか、グループ選択時に検索を解除する。
+9. **復旧／移行dialogをEscで閉じるとモデルと表示がずれる**
+   - issue dialogに`cancel`処理がなく、必須選択前にDOMだけ閉じられる可能性がある。
+   - Escを無効化するか明示イベントへ変換し、状態とdialogを同期する。
+10. **単体起動と一括起動の結果表示が混ざる**
+    - 単体結果も`launch_results`へ1件配列で入り、Viewは常に「一括起動」と要約する。
+    - 単体通知、一括進捗／結果を分離し、新規操作開始時に古い結果を消す。
+
+再監査で実行したテスト:
+
+```text
+node --test tests/model.test.mjs tests/view.test.mjs tests/event-chain.test.mjs tests/focus-sync.test.mjs
+```
+
+154件すべて成功。既存動作の回帰確認にはなるが、上記未実装項目がないことは証明しない。
+
+### 15.9 最新の工程分割――15.4〜15.7を置き換える
+
+修正対象は、15.2の11件と15.8の追加10件を合わせた21件とする。以下の4工程を最新版とし、15.4〜15.7の旧3工程プロンプトは使用しない。
+
+1. **工程A: 設定・実行・終了の状態整合**
+   - 空グループエクスポート、状態に追従しないメニュー、DnD全件失敗、下書きと保存済み対象、未保存終了、一括起動停止、起動結果分離。
+2. **工程B: 並べ替え・検索・空状態・メニュー構成**
+   - pointer専用並べ替えと終了導線、検索見出し、空の役割パネル、toolbar moreの分類。
+3. **工程C: PDF操作・全画面・アクセシビリティ**
+   - マーカー／パン競合、PDF本文、PDF状態表示、最大化状態、CSS競合、ネイティブ全画面、背後／折り畳み領域のフォーカス。
+4. **工程D: dialog・コンテキストメニュー・実機確認**
+   - dialog名、menu pattern、フォーカス復帰、issue dialogのEsc、全工程の実機確認。
+
+推奨モデルは全工程`gpt-5.6-sol`。reasoning effortは工程A・Cが`high`、工程B・Dが`medium`。既存のユーザー指定に従い`gpt-6-astra`は使用しない。
+
+### 15.10 次チャット用引継ぎプロンプト――最新版工程A
+
+```text
+MeetDockのUI/UX修正・最新版工程Aを実施してください。
+
+目的:
+設定・実行・終了に関する状態整合を修正する。対象は、一時保存一覧からの空グループエクスポート、状態に追従しないメニュー、DnD全件失敗、下書き表示と保存済み実行対象の不一致、未保存終了、一括起動停止、単体／一括起動結果の混在である。他工程へは進まない。
+
+最初に行うこと:
+- AGENTS.mdを読む。
+- UI_IMPLEMENTATION_HANDOVER.mdの15.1〜15.3、15.8〜15.10を読む。15.4〜15.7の旧工程は使用しない。
+- git status --short、対象範囲のgit diff、必要ならgit log -5を確認する。
+- 既存変更をユーザーの作業として保持する。
+
+主な対象ファイル:
+- src/model.js
+- src/view.js
+- src/main.js
+- src/event-chain.js
+- src/data-transfer.js
+- tests/model.test.mjs
+- tests/view.test.mjs
+- tests/event-chain.test.mjs
+- tests/data-transfer.test.mjs
+
+実装要件:
+- 通常グループ以外から空の「選択グループ」エクスポートを作らない。
+- can_edit、can_launch、保存状態、選択対象、target typeに合わせてメニュー項目を無効化／非表示にし、モデル側の拒否境界も維持する。
+- DnD候補0件では追加を実行できない。
+- draft表示中、新規／変更済み資料の起動とPDF操作は「保存後に利用可能」と明示して無効化する。未保存パスをIPCへ渡さない。
+- Tauriの終了要求を捕捉し、Dirty／Conflict／Savingでは保存・破棄・キャンセルを選べるようにする。Cleanは通常終了し、再入ループを防ぐ。
+- 一括起動の停止は現在選択中グループでなく進行中batchを対象にする。
+- 単体操作は単体通知、一括操作は一括進捗／結果として分離し、新規操作時に古い結果を残さない。
+
+完了条件:
+- 文字列確認だけでなく状態遷移と利用者操作をテストする。
+- node --test tests/model.test.mjs tests/view.test.mjs tests/event-chain.test.mjs tests/data-transfer.test.mjs が成功する。
+- 契約変更時はtests/contracts.test.mjsとsrc-tauri/tests/contracts.rsも確認する。
+- git diff --checkを成功させ、変更ファイル、テスト、未解決事項を報告して工程Bへ進まない。
+- コミットと実機UI起動はユーザーの明示依頼がない限り行わない。
+
+推奨モデル: gpt-5.6-sol
+reasoning effort: high
+理由: 状態機械、非同期保存／起動、Tauri終了処理、セキュリティ境界を横断するため。
+```
+
+### 15.11 次チャット用引継ぎプロンプト――最新版工程B
+
+```text
+MeetDockのUI/UX修正・最新版工程Bを実施してください。最新版工程Aの完了を差分とテスト結果で確認してから着手してください。
+
+目的:
+並べ替え、検索文脈、空状態、toolbar moreの情報設計を修正する。他工程へは進まない。
+
+最初に行うこと:
+- AGENTS.mdを読む。
+- UI_IMPLEMENTATION_HANDOVER.mdの15.1〜15.3、15.8〜15.9、15.11を読む。15.4〜15.7の旧工程は使用しない。
+- git status --short、対象範囲のgit diff、必要ならgit log -5を確認する。
+- 工程Aの変更を上書きしない。
+
+主な対象ファイル:
+- src/view.js
+- src/model.js
+- src/mock-styles.css
+- tests/view.test.mjs
+- tests/model.test.mjs
+
+実装要件:
+- 並べ替え中は完了／キャンセルを常時表示し、上・下・先頭・末尾等のキーボード代替を提供する。
+- 読み取り専用、保存中、検索中、一時保存一覧では並べ替え入口を状態に合わせて無効化／非表示にする。
+- 検索中は全グループ対象であることと一致する見出し・文脈を表示する。
+- 資料0件／検索結果0件では空状態を主役にし、空パネルを不要に並べない。一方の役割だけ0件の場合も定義する。
+- toolbar moreを「配置」「データ」等で整理し、主要操作はツールバーに残す。
+
+完了条件:
+- pointerとキーボード双方の振る舞いテストを追加する。
+- node --test tests/view.test.mjs tests/model.test.mjs が成功する。
+- git diff --checkを成功させ、変更ファイル、テスト、未解決事項を報告して工程Cへ進まない。
+- コミットと実機UI起動はユーザーの明示依頼がない限り行わない。
+
+推奨モデル: gpt-5.6-sol
+reasoning effort: medium
+理由: DOM操作と表示文脈を整えつつ、工程Aの状態制御を維持する必要があるため。
+```
+
+### 15.12 次チャット用引継ぎプロンプト――最新版工程C
+
+```text
+MeetDockのUI/UX修正・最新版工程Cを実施してください。最新版工程A・Bの完了を差分とテスト結果で確認してから着手してください。
+
+目的:
+PDF操作、全画面、PDFアクセシビリティを修正する。対象はマーカー／パン競合、PDF本文の代替、Loading／PasswordRequired／Failed表示、最大化状態とEsc、CSS詳細度、ネイティブ全画面、背後／折り畳み領域のフォーカスである。他工程へは進まない。
+
+最初に行うこと:
+- AGENTS.mdを読む。
+- UI_IMPLEMENTATION_HANDOVER.mdの15.1〜15.3、15.8〜15.9、15.12を読む。15.4〜15.7の旧工程は使用しない。
+- git status --short、対象範囲のgit diff、必要ならgit log -5を確認する。
+- 工程A・Bの変更を上書きしない。
+
+主な対象ファイル:
+- src/view.js
+- src/model.js
+- src/pdf-view-adapter.js
+- src/main.js
+- src/effect-runner.js
+- src/mock-styles.css
+- 必要な場合のみsrc-tauri/src/とTauri capability
+- tests/view.test.mjs
+- tests/model.test.mjs
+- tests/pdf-view-adapter.test.mjs
+- tests/event-chain.test.mjs
+
+実装要件:
+- マーカーツール中は描画だけ、未選択時はパンだけが動くようpointer captureを分離する。
+- 表示PDFページの本文を読み順と性能に配慮して支援技術へ提供し、canvasとの二重読み上げを防ぐ。
+- プレビュー内へLoading、PasswordRequired、Failed、再試行／外部で開く導線を表示する。
+- 最大化ボタンの表示とaria-pressed、Esc、PDFを閉じる、再度開くを一貫させる。
+- サイドバー折り畳みとのCSS詳細度競合を解消し、全幅を覆うことを組合せテストする。
+- TauriのネイティブsetFullscreenを第一候補に、成功／失敗とモデル状態を同期する。必要な権限だけを追加する。
+- 折り畳みサイドバーと最大化背後をinert等でTab順から除外し、トグルへラベルと展開状態を設定する。
+
+完了条件:
+- DOMイベント、状態遷移、PDF adapter、ネイティブ失敗経路をテストする。
+- node --test tests/view.test.mjs tests/model.test.mjs tests/pdf-view-adapter.test.mjs tests/event-chain.test.mjs が成功する。
+- Rust／capability変更時は対応テストとcargo check --manifest-path src-tauri/Cargo.tomlを実行する。
+- git diff --checkを成功させ、変更ファイル、テスト、未解決事項を報告して工程Dへ進まない。
+- コミットと実機UI起動はユーザーの明示依頼がない限り行わない。
+
+推奨モデル: gpt-5.6-sol
+reasoning effort: high
+理由: PDF.js、DOM pointer／focus、CSS、Tauriネイティブ全画面を単一状態として整合させる必要があるため。
+```
+
+### 15.13 次チャット用引継ぎプロンプト――最新版工程D
+
+```text
+MeetDockのUI/UX修正・最新版工程Dを実施してください。最新版工程A〜Cの完了を差分とテスト結果で確認してから着手してください。
+
+目的:
+dialogとコンテキストメニューのアクセシビリティを完成させ、自動テスト後の実機確認計画を確定する。対象は全dialogの名前・初期フォーカス・復帰、menu pattern、issue dialogのEsc同期、全工程の実機確認である。
+
+最初に行うこと:
+- AGENTS.mdを読む。
+- UI_IMPLEMENTATION_HANDOVER.mdの15.1〜15.3、15.8〜15.9、15.13を読む。15.4〜15.7の旧工程は使用しない。
+- git status --short、対象範囲のgit diff、必要ならgit log -5を確認する。
+- 工程A〜Cの変更を上書きしない。
+
+主な対象ファイル:
+- src/view.js
+- src/model.js
+- src/mock-styles.css
+- tests/view.test.mjs
+- tests/model.test.mjs
+
+実装要件:
+- material、operation、issue、DnD、windowsの全dialogを動的見出しへ関連付ける。
+- 初期フォーカス、Tab範囲、閉じた後の起点へのフォーカス復帰を扱う。
+- コンテキストメニューをWAI-ARIA menu patternまたは通常のボタンポップオーバーへ一貫させ、矢印、Home、End、Esc、ContextMenuキー、Shift+F10、外側クリック、実行後をテストする。
+- RecoveryPending／MigrationPendingのissue dialogは、EscでDOMだけ閉じないようモデル状態と同期する。
+- コード対策済みの「非アクティブ状態からの最初の資料アイコンクリック」も実機確認項目に含める。
+
+自動テスト後の実機確認候補:
+- Windows表示倍率100%／150%、狭幅、メニュー端位置、Tab順序、フォーカス表示。
+- スクリーンリーダーでのdialog名、menu項目、PDF本文と状態通知。
+- PDFマーカーとパン、通常／最大化／ネイティブ全画面、Esc、終了復帰。
+- 読み取り専用、保存中、検索中、一時保存一覧のメニュー状態。
+- 未保存終了の保存／破棄／キャンセル、一括起動停止、単体／一括結果表示。
+- 非アクティブMeetDockで資料アイコンを1回押した際の一度だけの実行。
+- 色コントラスト。
+
+完了条件:
+- node --test tests/view.test.mjs tests/model.test.mjs が成功する。
+- 工程A〜Cを含む関連テストを必要に応じて実行し、git diff --checkを成功させる。
+- 実機UIはユーザーの明示許可を得るまで起動せず、許可がなければ確認項目を未解決として報告する。
+- 変更ファイル、テスト、未解決事項を報告する。コミットは明示依頼がない限り行わない。
+
+推奨モデル: gpt-5.6-sol
+reasoning effort: medium
+理由: 主にARIAとフォーカス管理だが、全工程の統合確認と実機検証設計が必要なため。
 ```
