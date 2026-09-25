@@ -56,6 +56,12 @@ struct OfficeWindowDocumentObservation {
     document_path: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+struct OfficeDocumentObservations {
+    mapped: Vec<OfficeWindowDocumentObservation>,
+    unbound_paths: Vec<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ExplorerLocation {
     document_path: Option<String>,
@@ -650,6 +656,56 @@ fn resolve_office_window_paths(
     resolved
 }
 
+fn resolve_office_window_paths_with_unbound(
+    windows: &[EnumeratedWindow],
+    executable_name: &str,
+    observations: OfficeDocumentObservations,
+) -> HashMap<isize, String> {
+    let mapped_hwnds: HashSet<_> = observations.mapped.iter().map(|item| item.hwnd).collect();
+    let resolved = resolve_office_window_paths(windows, executable_name, observations.mapped);
+    resolve_unbound_office_paths(
+        windows,
+        executable_name,
+        resolved,
+        &mapped_hwnds,
+        observations.unbound_paths,
+    )
+}
+
+fn resolve_unbound_office_paths(
+    windows: &[EnumeratedWindow],
+    executable_name: &str,
+    mut resolved: HashMap<isize, String>,
+    reserved_hwnds: &HashSet<isize>,
+    unbound_paths: impl IntoIterator<Item = String>,
+) -> HashMap<isize, String> {
+    let unresolved_hwnds: Vec<_> = windows
+        .iter()
+        .filter(|entry| {
+            entry
+                .window
+                .executable_name
+                .eq_ignore_ascii_case(executable_name)
+                && !resolved.contains_key(&entry.window.identity.hwnd)
+                && !reserved_hwnds.contains(&entry.window.identity.hwnd)
+        })
+        .map(|entry| entry.window.identity.hwnd)
+        .collect();
+    let mut distinct_paths: HashMap<String, String> = HashMap::new();
+    for path in unbound_paths {
+        distinct_paths
+            .entry(snapshot_path_key(&path))
+            .or_insert(path);
+    }
+    if unresolved_hwnds.len() == 1 && distinct_paths.len() == 1 {
+        resolved.insert(
+            unresolved_hwnds[0],
+            distinct_paths.into_values().next().unwrap_or_default(),
+        );
+    }
+    resolved
+}
+
 fn resolve_reader_window_paths(
     windows: &[EnumeratedWindow],
     observations: impl IntoIterator<Item = ReaderDocumentObservation>,
@@ -962,7 +1018,15 @@ fn explorer_file_url_to_path(url: &str) -> Option<String> {
 
 #[cfg(windows)]
 fn excel_window_paths(windows: &[EnumeratedWindow]) -> HashMap<isize, String> {
-    resolve_excel_window_paths(windows, excel_document_observations())
+    let resolved = resolve_excel_window_paths(windows, excel_document_observations());
+    let protected = office_document_observations("Excel.Application", "Workbook", false, false);
+    resolve_unbound_office_paths(
+        windows,
+        "excel.exe",
+        resolved,
+        &HashSet::new(),
+        protected.unbound_paths,
+    )
 }
 
 #[cfg(not(windows))]
@@ -1098,10 +1162,10 @@ fn excel_document_observations() -> Vec<ExcelDocumentObservation> {
 
 #[cfg(windows)]
 fn word_window_paths(windows: &[EnumeratedWindow]) -> HashMap<isize, String> {
-    resolve_office_window_paths(
+    resolve_office_window_paths_with_unbound(
         windows,
         "winword.exe",
-        office_window_document_observations("Word.Application", "Document"),
+        office_document_observations("Word.Application", "Document", true, true),
     )
 }
 
@@ -1112,10 +1176,10 @@ fn word_window_paths(_: &[EnumeratedWindow]) -> HashMap<isize, String> {
 
 #[cfg(windows)]
 fn powerpoint_window_paths(windows: &[EnumeratedWindow]) -> HashMap<isize, String> {
-    resolve_office_window_paths(
+    resolve_office_window_paths_with_unbound(
         windows,
         "powerpnt.exe",
-        office_window_document_observations("PowerPoint.Application", "Presentation"),
+        office_document_observations("PowerPoint.Application", "Presentation", false, true),
     )
 }
 
@@ -1125,10 +1189,12 @@ fn powerpoint_window_paths(_: &[EnumeratedWindow]) -> HashMap<isize, String> {
 }
 
 #[cfg(windows)]
-fn office_window_document_observations(
+fn office_document_observations(
     prog_id: &str,
     document_property: &str,
-) -> Vec<OfficeWindowDocumentObservation> {
+    window_has_hwnd: bool,
+    include_normal_windows: bool,
+) -> OfficeDocumentObservations {
     use windows::{
         core::{IUnknown, Interface, BSTR, GUID, PCWSTR},
         Win32::System::{
@@ -1208,53 +1274,88 @@ fn office_window_document_observations(
     }
 
     if unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_err() {
-        return Vec::new();
+        return OfficeDocumentObservations::default();
     }
     let _apartment = ComApartment;
     let prog_id: Vec<u16> = prog_id.encode_utf16().chain(std::iter::once(0)).collect();
     let Ok(clsid) = (unsafe { CLSIDFromProgID(PCWSTR(prog_id.as_ptr())) }) else {
-        return Vec::new();
+        return OfficeDocumentObservations::default();
     };
     let mut unknown: Option<IUnknown> = None;
     if unsafe { GetActiveObject(&clsid, None, &mut unknown) }.is_err() {
-        return Vec::new();
+        return OfficeDocumentObservations::default();
     }
     let Some(application) = unknown.and_then(|value| value.cast::<IDispatch>().ok()) else {
-        return Vec::new();
+        return OfficeDocumentObservations::default();
     };
-    let Some(application_windows) = dispatch_property(&application, "Windows") else {
-        return Vec::new();
-    };
-    let Some(count) = integer_property(&application_windows, "Count") else {
-        return Vec::new();
-    };
-    let mut observations = Vec::new();
-    for index in 1..=count.clamp(0, MAX_WINDOWS as i32) {
-        let mut argument = [VARIANT::from(index)];
-        let Some(window) = invoke(
-            &application_windows,
-            "Item",
-            DISPATCH_PROPERTYGET | DISPATCH_METHOD,
-            &mut argument,
-        )
-        .and_then(|value| IDispatch::try_from(&value).ok()) else {
-            continue;
-        };
-        let (Some(hwnd), Some(document)) = (
-            integer_property(&window, "Hwnd"),
-            dispatch_property(&window, document_property),
-        ) else {
-            continue;
-        };
-        let Some(path) = string_property(&document, "FullName") else {
-            continue;
-        };
-        let path = crate::contracts::windows_shell_path(&path);
-        if crate::contracts::windows_absolute_path(&path) && Path::new(&path).is_file() {
-            observations.push(OfficeWindowDocumentObservation {
-                hwnd: hwnd as isize,
-                document_path: path,
-            });
+    let mut observations = OfficeDocumentObservations::default();
+    if include_normal_windows {
+        if let Some(application_windows) = dispatch_property(&application, "Windows") {
+            if let Some(count) = integer_property(&application_windows, "Count") {
+                for index in 1..=count.clamp(0, MAX_WINDOWS as i32) {
+                    let mut argument = [VARIANT::from(index)];
+                    let Some(window) = invoke(
+                        &application_windows,
+                        "Item",
+                        DISPATCH_PROPERTYGET | DISPATCH_METHOD,
+                        &mut argument,
+                    )
+                    .and_then(|value| IDispatch::try_from(&value).ok()) else {
+                        continue;
+                    };
+                    let Some(document) = dispatch_property(&window, document_property) else {
+                        continue;
+                    };
+                    let Some(path) = string_property(&document, "FullName") else {
+                        continue;
+                    };
+                    let path = crate::contracts::windows_shell_path(&path);
+                    if !crate::contracts::windows_absolute_path(&path)
+                        || !Path::new(&path).is_file()
+                    {
+                        continue;
+                    }
+                    if window_has_hwnd {
+                        let Some(hwnd) = integer_property(&window, "Hwnd") else {
+                            continue;
+                        };
+                        observations.mapped.push(OfficeWindowDocumentObservation {
+                            hwnd: hwnd as isize,
+                            document_path: path,
+                        });
+                    } else {
+                        observations.unbound_paths.push(path);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some(protected_windows) = dispatch_property(&application, "ProtectedViewWindows") {
+        if let Some(count) = integer_property(&protected_windows, "Count") {
+            for index in 1..=count.clamp(0, MAX_WINDOWS as i32) {
+                let mut argument = [VARIANT::from(index)];
+                let Some(window) = invoke(
+                    &protected_windows,
+                    "Item",
+                    DISPATCH_PROPERTYGET | DISPATCH_METHOD,
+                    &mut argument,
+                )
+                .and_then(|value| IDispatch::try_from(&value).ok()) else {
+                    continue;
+                };
+                let (Some(source_path), Some(source_name)) = (
+                    string_property(&window, "SourcePath"),
+                    string_property(&window, "SourceName"),
+                ) else {
+                    continue;
+                };
+                let path = Path::new(&source_path).join(source_name);
+                let path = crate::contracts::windows_shell_path(&path.to_string_lossy());
+                if crate::contracts::windows_absolute_path(&path) && Path::new(&path).is_file() {
+                    observations.unbound_paths.push(path);
+                }
+            }
         }
     }
     observations
@@ -2308,6 +2409,96 @@ mod tests {
             )
             .is_empty());
         }
+    }
+
+    #[test]
+    fn protected_office_paths_require_one_unassigned_window_and_one_distinct_path() {
+        let word = office_window(301, 61, "WINWORD.EXE");
+        let resolved = resolve_office_window_paths_with_unbound(
+            std::slice::from_ref(&word),
+            "winword.exe",
+            OfficeDocumentObservations {
+                mapped: Vec::new(),
+                unbound_paths: vec![
+                    r"C:\Meetings\protected.docx".into(),
+                    r"c:/meetings/protected.docx".into(),
+                ],
+            },
+        );
+        assert_eq!(
+            resolved.get(&301).map(String::as_str),
+            Some(r"C:\Meetings\protected.docx")
+        );
+
+        let mut second = word.clone();
+        second.window.identity.hwnd = 302;
+        assert!(resolve_office_window_paths_with_unbound(
+            &[word.clone(), second],
+            "winword.exe",
+            OfficeDocumentObservations {
+                mapped: Vec::new(),
+                unbound_paths: vec![r"C:\Meetings\protected.docx".into()],
+            },
+        )
+        .is_empty());
+
+        assert!(resolve_office_window_paths_with_unbound(
+            std::slice::from_ref(&word),
+            "winword.exe",
+            OfficeDocumentObservations {
+                mapped: Vec::new(),
+                unbound_paths: vec![
+                    r"C:\Meetings\protected.docx".into(),
+                    r"C:\Meetings\other.docx".into(),
+                ],
+            },
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn protected_office_path_can_fill_only_the_single_unassigned_window() {
+        let word = office_window(301, 61, "WINWORD.EXE");
+        let mut protected = word.clone();
+        protected.window.identity.hwnd = 302;
+        let resolved = resolve_office_window_paths_with_unbound(
+            &[word, protected],
+            "winword.exe",
+            OfficeDocumentObservations {
+                mapped: vec![OfficeWindowDocumentObservation {
+                    hwnd: 301,
+                    document_path: r"C:\Meetings\normal.docx".into(),
+                }],
+                unbound_paths: vec![r"C:\Meetings\protected.docx".into()],
+            },
+        );
+        assert_eq!(
+            resolved.get(&301).map(String::as_str),
+            Some(r"C:\Meetings\normal.docx")
+        );
+        assert_eq!(
+            resolved.get(&302).map(String::as_str),
+            Some(r"C:\Meetings\protected.docx")
+        );
+
+        let ambiguous = resolve_office_window_paths_with_unbound(
+            std::slice::from_ref(&office_window(401, 71, "POWERPNT.EXE")),
+            "powerpnt.exe",
+            OfficeDocumentObservations {
+                mapped: vec![
+                    OfficeWindowDocumentObservation {
+                        hwnd: 401,
+                        document_path: r"C:\Meetings\first.pptx".into(),
+                    },
+                    OfficeWindowDocumentObservation {
+                        hwnd: 401,
+                        document_path: r"C:\Meetings\second.pptx".into(),
+                    },
+                ],
+                unbound_paths: vec![r"C:\Meetings\protected.pptx".into()],
+            },
+        );
+        assert!(ambiguous.is_empty());
     }
 
     #[test]
