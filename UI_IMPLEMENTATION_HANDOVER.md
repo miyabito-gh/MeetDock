@@ -873,8 +873,11 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - Adobe Acrobat Pro（`Acrobat.exe`）をReaderと同じAccessibility DOM境界で観測し、実行ファイルとトップレベルHWNDが一致する一意なPDFパスだけを保存する対応を実装した。
 - Explorerの仮想フォルダーを、通常パスの `document_path` と排他的な `shell_location` として保存・復元する対応を実装した。Shell APIで正規化し、厳格なGUID parsing nameだけを許可する。
 - `f39eafa`: 引継ぎ依頼時に引継ぎ文書を更新し、同じ引継ぎ指示文をチャットにも全文出力する規則を `AGENTS.md` へ追加。
-- `1db3700`: `git add` と `git commit` を常設承認済みとして扱い、チャットで都度確認しない規則を `AGENTS.md` へ追加。
-- 上記修正後、Rust全テスト75件、JavaScript全テスト581件、`cargo check`、`git diff --check` が成功している。
+- `747331c`: Word／PowerPointの保護ビューを通常ウィンドウと分離して観測し、取得できた完全パスを曖昧性がない場合だけ未割当の対象HWNDへ関連付ける対応を追加。
+- `e80136b`: 並び替えモードのドラッグハンドルを固定幅にし、長いパスの資料でもアイコンと文字が左へずれないよう修正。
+- `a3b7e3c`: `.exe` を直接起動する場合とスナップショットから実行ファイルを復元する場合に、実行ファイルの親フォルダーを作業ディレクトリとして明示。
+- `f9c64f0`: `git add` と `git commit` は、その時点の変更についてユーザーが明示的に依頼した場合だけ実行する規則へ変更。実装・修正・テスト依頼だけではコミットしない。pushも従来どおり明示依頼時だけ行う。
+- 上記修正後、Rust全テスト79件、JavaScript全テスト581件、`cargo check`、`git diff --check` が成功している。
 - 実機UI確認は未実施。特にAdobe Acrobat Readerのパス取得は自動テストのみ成功しており、実環境での動作確認と原因限定が未完了。
 
 ### 14.8 残項目
@@ -954,12 +957,12 @@ MeetDockの作業を継続してください。
 リポジトリ共通の作業規則とモデル選定基準はAGENTS.mdに従ってください。最初にAGENTS.md、UI_IMPLEMENTATION_HANDOVER.mdの14.7〜14.9、git status --short、git diff、git log -5を確認してください。
 
 現在のGit状態:
-- 作業ツリーはクリーン。
-- origin/masterは972b908。
-- f39eafa（引継ぎ文書とチャット出力の必須化）、1db3700（git add／commitの常設承認）、および今回の引継ぎ文書更新はローカル未push。ユーザーからpush依頼がない限りpushしない。
+- origin/masterはf9c64f0。
+- この引継ぎ作成により、UI_IMPLEMENTATION_HANDOVER.mdだけが未コミット変更になっている。ユーザーから明示的なコミット依頼がない限りコミットせず、pushも明示依頼時だけ行う。
+- 直近の実装コミットは747331c（Office保護ビュー）、e80136b（並び替え時の位置ずれ）、a3b7e3c（EXEの作業フォルダー）。f9c64f0でコミットを明示依頼時だけ行う規則へ変更済み。
 
 最優先の目的:
-Adobe Acrobat Reader（AcroRd32.exe）で開いているPDFの完全パスが、一時保存スナップショットのdocument_pathへ入らないという報告を再現・調査し、原因を限定してください。原因が実装範囲内で確定した場合は修正、対象テスト、必要な全体テスト、cargo check、git diff --check、コミットまで完了してください。他の機能へは進まないでください。
+Adobe Acrobat Reader（AcroRd32.exe）で開いているPDFの完全パスが、一時保存スナップショットのdocument_pathへ入らないという報告が未解決です。ユーザーがこの調査の再開を指示した場合に限り、再現・調査して原因を限定してください。原因が実装範囲内で確定した場合は修正、対象テスト、必要な全体テスト、cargo check、git diff --checkまで完了してください。コミットはユーザーが明示的に依頼した場合だけ行い、他の機能へは進まないでください。
 
 完了条件:
 - 対象ReaderトップレベルHWND、列挙した子HWND、AccessibleObjectFromWindow、GetDocInfoの各境界のどこで取得できなくなるかを限定する。
@@ -983,13 +986,17 @@ Adobe Acrobat Reader（AcroRd32.exe）で開いているPDFの完全パスが、
 - resolve_reader_window_pathsは同一HWNDから異なるパスが観測された場合、そのHWNDを曖昧として保存しない。
 - windows_absolute_pathとPath::is_fileを通過した完全パスだけを保存する。
 - MeetDock自身が起動した資料との関連付けを最優先し、タイトル推測は禁止。
+- 747331cでWord／PowerPointの保護ビューを通常ウィンドウと分離して観測し、曖昧性がない場合だけ完全パスを関連付ける対応を追加済み。
+- a3b7e3cで、`.exe` の通常起動とスナップショット復元時に実行ファイルの親フォルダーを作業ディレクトリとして明示済み。文書、URL、Explorerの起動方法は変更していない。
+- e80136bで、並び替え時のドラッグハンドルを固定幅にし、長いパスによるアイコンと文字の位置ずれを修正済み。
 - 実機UI確認はまだ一度も実施していない。
 
 実施済み確認:
-- Rust全75件、JavaScript全581件、cargo check、git diff --check成功。
-- Excel、Word、PowerPoint、Explorer仮想ロケーション、重複防止の実装済み。
+- Rust全79件、JavaScript全581件、cargo check、git diff --check成功。
+- Excel、Word、PowerPoint、Office保護ビュー、Explorer仮想ロケーション、重複防止の実装済み。
 - ブラウザー内PDFは通常起動セッションを対象外とする調査判断済み。
 - pdf_sidecar.rsの未使用import警告とTauri identifier末尾.app警告はfe743acで解消済み。
+- 実機UIは起動していない。Readerの実環境診断にはユーザーの明示許可が必要。
 
 最初に実行する対象テスト:
 - cargo test --manifest-path src-tauri/Cargo.toml reader_document_path_requires_one_distinct_path_per_window -- --nocapture
@@ -1450,4 +1457,40 @@ dialogとコンテキストメニューのアクセシビリティを完成さ�
 推奨モデル: gpt-5.6-sol
 reasoning effort: medium
 理由: 主にARIAとフォーカス管理だが、全工程の統合確認と実機検証設計が必要なため。
+```
+
+## 16. 2026-09-26 PDF表示・マーカー修正の引継ぎ
+
+この節は`master`の最新進捗を記録する。工程F全体の判定は行っていない。工程Fの詳細な実機結果と残課題は、別worktreeの`codex/ui-handover-coordination`側の本書16.1〜16.7を参照する。上の14.9と15節にあるGit状態・工程プロンプトは作成当時の記録であり、現在の作業指示として使わない。
+
+### 16.1 完了した修正
+
+- 工程Eは`2df48da`でコミット済み。`0d3d7b6`でPDF表示修正と、PDFマーカーの「プレビュー直後に描画モードになる」「描画後に元に戻すが操作できない」を修正し、`origin/master`へpush済み。
+- PDF表示修正は注釈overlayの白背景と位置ずれを解消した。ユーザーは原本上部の表示、PDF上へのマーカー描画、全画面とEsc往復の3点を実機で成功確認した。
+- マーカーツールはPDFを閉じる、開き直す、別PDFへ切り替える時に解除する。同じPDF内のページ操作や再描画では維持する。
+- 描画後の保存要求・応答ではViewのUndo／Redo履歴を保持する。資料IDとPDF識別子ごとの更新番号で遅延したsidecar load／save／remove応答を退け、同一PDFの保存操作を順番に実行する。Model→Effect→IPCと保存済みID境界を維持した。
+- `node --test tests/view.test.mjs tests/pdf-annotations.test.mjs tests/pdf-sidecar-ipc.test.mjs`は60件成功。関連する`tests/model.test.mjs tests/event-chain.test.mjs`は127件成功。`git diff --check`成功。Rustは変更していない。
+
+### 16.2 未解決・未確認
+
+- 上記マーカー2件の修正後の実機UI操作は未確認。アプリの起動・再起動はユーザーの明示許可が必要。
+- 工程Fで別途記録した背景・常時表示・しおり欄の高さ、色選択表示、ホイールのページ内スクロール、一覧のしおり表示と注釈削除、メニューのHome／End・Shift+F10・ContextMenu、最初のクリック消費、終了確認のlocalhost表示には着手していない。
+- スクリーンリーダー等の未確認項目を成功扱いにしない。作業ツリーにあった本書14.7〜14.9の既存変更は、この引継ぎ更新で内容を保持した。
+
+### 16.3 次チャット用引継ぎプロンプト――PDFマーカー実機確認
+
+```text
+MeetDockのPDFマーカー修正2件だけを実機確認してください。工程F全体の再判定や他の残課題へは進まないでください。
+
+最初にAGENTS.md、UI_IMPLEMENTATION_HANDOVER.mdの16.1〜16.3、git status --short --branch、git log -5を確認してください。作業基準はC:\Users\wmasa\Documents\Rust\MeetDockのmasterです。工程Eは2df48da、PDF表示とマーカー修正は0d3d7b6でコミットされ、origin/masterへpush済みです。
+
+実機UIを起動・再起動する前にユーザーの明示許可を確認してください。許可がなければ自動テスト結果と未確認事項を報告して止めてください。
+
+確認する操作は、PDFを開く、閉じて開き直す、別PDFへ切り替える際に明示選択前の描画が始まらないこと、同じPDF内のページ操作では意図したツール状態が保たれること、描画後の元に戻す・やり直すが有効で保存済み注釈へ反映されることです。保存応答の遅延や再描画後もUndo履歴が残ることを確認してください。既存のPDF表示修正も壊れていないことを確認してください。
+
+自動テストはnode --test tests/view.test.mjs tests/pdf-annotations.test.mjs tests/pdf-sidecar-ipc.test.mjsが60件成功し、tests/model.test.mjs tests/event-chain.test.mjsが127件成功しています。Rustは変更していません。コード変更が必要になった場合は対象を限定し、対応テストとgit diff --checkを実行してください。コミット・pushは明示依頼時だけ行ってください。
+
+推奨モデル: gpt-5.6-sol
+reasoning effort: medium
+理由: 状態と保存の自動テストは済んでおり、実機操作の再現・観察と必要時の原因限定が中心のため。
 ```
