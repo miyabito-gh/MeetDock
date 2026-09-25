@@ -864,7 +864,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 ### 14.7 実装済み状況
 
 - `f222582`: 外部起動Excel Workbookの完全パス取得。
-- `8657e04`: Adobe Acrobat ReaderのAccessibility DOMからPDF完全パス取得。
+- `8657e04`: Adobe Acrobat ReaderのAccessibility DOMからPDF完全パス取得を実装。ただし実環境で完全パスを取得できていない可能性がユーザーから報告されており、次チャットで最優先に再調査する。
 - `648afa6`: Word DocumentおよびPowerPoint Presentationの完全パス取得。
 - `546f9d7`: 同一復元対象の二重保存・二重登録防止。Windowsパス表記を正規化した復元対象キーをRust／JavaScriptに追加し、保存・読み込み・全件起動・グループ登録で重複を除外する。異なる完全パスの文書は別項目として保持する。
 - `2e1ee2e`: Serde既定値フィールドを省略可能にしつつ、必須フィールド欠落・未知フィールド・位置配列入力を拒否する厳格性を維持。
@@ -873,7 +873,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 - Adobe Acrobat Pro（`Acrobat.exe`）をReaderと同じAccessibility DOM境界で観測し、実行ファイルとトップレベルHWNDが一致する一意なPDFパスだけを保存する対応を実装した。
 - Explorerの仮想フォルダーを、通常パスの `document_path` と排他的な `shell_location` として保存・復元する対応を実装した。Shell APIで正規化し、厳格なGUID parsing nameだけを許可する。
 - 上記修正後、Rust全テスト75件、JavaScript全テスト581件、`cargo check`、`git diff --check` が成功している。
-- 実機UI確認は未実施。
+- 実機UI確認は未実施。特にAdobe Acrobat Readerのパス取得は自動テストのみ成功しており、実環境での動作確認と原因限定が未完了。
 
 ### 14.8 残項目
 
@@ -944,4 +944,56 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 ### 14.9 次チャット用引継ぎプロンプト
 
-14.8の残項目はすべて完了したため、次チャット用の残項目プロンプトは不要。
+以下を次チャットへそのまま貼り付ける。
+
+```text
+MeetDockの作業を継続してください。
+
+リポジトリ共通の作業規則とモデル選定基準はAGENTS.mdに従ってください。最初にAGENTS.md、UI_IMPLEMENTATION_HANDOVER.mdの14.7〜14.9、git status --short、git diff、git log -5を確認してください。
+
+最優先の目的:
+Adobe Acrobat Reader（AcroRd32.exe）で開いているPDFの完全パスが、一時保存スナップショットのdocument_pathへ入らないという報告を再現・調査し、原因を限定してください。原因が実装範囲内で確定した場合は修正、対象テスト、必要な全体テスト、cargo check、git diff --check、コミットまで完了してください。他の機能へは進まないでください。
+
+完了条件:
+- 対象ReaderトップレベルHWND、列挙した子HWND、AccessibleObjectFromWindow、GetDocInfoの各境界のどこで取得できなくなるかを限定する。
+- 取得できた完全パスを対象Reader HWNDへ一意に関連付ける。タイトル、表示名、ファイル名だけからパスを推測しない。
+- 複数PDF、複数Readerウィンドウ、ReaderとAcrobat Proの同時存在、取得不能、曖昧観測で別文書を誤登録しない。
+- Readerの実行ファイル名、ウィンドウクラス／階層、Accessibility DOMの実際の差異を確認し、ProやHelperプロセスと混同しない。
+- 診断のためのログやエラーへ、完全パス、文書内容、OS詳細を露出させない。
+- 実機UIを起動する必要がある場合は、AGENTS.mdに従いユーザーの明示許可を得てから行う。まずモック可能な境界と自動テストを整える。
+
+主な対象ファイル:
+- src-tauri/src/windowing.rs
+- src-tauri/Cargo.toml
+- 必要な場合のみsrc-tauri/src/lib.rs
+- 関連するRustテスト
+- 契約変更が必要な場合のみsrc/contracts.js、tests/contracts.test.mjs、src-tauri/tests/contracts.rs
+
+既存実装と制約:
+- 8657e04でAcrobat ReaderのAccessibility DOMに対してOBJID_NATIVEOMを使い、IDispatchのGetDocInfoからファイル名を取得する処理を追加済み。
+- bdf1820でAcrobat Pro（Acrobat.exe）も許可対象へ追加し、Reader／ProのトップレベルHWNDに対する純粋な一意解決テストを追加済み。
+- reader_document_observationsは対象トップレベルHWNDと全子HWNDを候補にし、取得したパスをトップレベルHWNDへ戻す。
+- resolve_reader_window_pathsは同一HWNDから異なるパスが観測された場合、そのHWNDを曖昧として保存しない。
+- windows_absolute_pathとPath::is_fileを通過した完全パスだけを保存する。
+- MeetDock自身が起動した資料との関連付けを最優先し、タイトル推測は禁止。
+- 実機UI確認はまだ一度も実施していない。
+
+実施済み確認:
+- Rust全75件、JavaScript全581件、cargo check、git diff --check成功。
+- Excel、Word、PowerPoint、Explorer仮想ロケーション、重複防止の実装済み。
+- ブラウザー内PDFは通常起動セッションを対象外とする調査判断済み。
+- pdf_sidecar.rsの未使用import警告とTauri identifier末尾.app警告はfe743acで解消済み。
+
+最初に実行する対象テスト:
+- cargo test --manifest-path src-tauri/Cargo.toml reader_document_path_requires_one_distinct_path_per_window -- --nocapture
+- cargo test --manifest-path src-tauri/Cargo.toml acrobat_pro_and_reader_paths_require_exact_unique_hwnd_mappings -- --nocapture
+- cargo test --manifest-path src-tauri/Cargo.toml snapshot_uses_reader_path_after_registered_association -- --nocapture
+
+未解決事項:
+- GetDocInfoへ到達できていないのか、status、返却BSTR、パス正規化、Path::is_file、トップレベルHWNDへの対応のどこで失敗しているか不明。
+- Readerの更新版、保護モード、権限差、複数タブ／ウィンドウ構造が影響している可能性はあるが、観測前に原因を断定しない。
+
+推奨モデル: gpt-6-astra
+reasoning effort: high
+理由: Windows Accessibility／COM、Reader固有のウィンドウ階層、HWNDと文書パスの安全な一意対応を横断して実環境との差を原因限定する難しい調査であるため。
+```
