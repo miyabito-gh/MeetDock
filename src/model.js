@@ -5,7 +5,7 @@ export const Lifecycle = enumeration('Booting Ready ReadOnly RecoveryPending Mig
 export const Edit = enumeration('Clean Dirty Saving Conflict');
 export const Pdf = enumeration('Closed Loading Viewing PasswordRequired Failed');
 export const WINDOW_SNAPSHOT_GROUP_ID = 'window-snapshot';
-export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDuplicated GroupMoved GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialMoved MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed WindowSnapshotSaveRequested WindowSnapshotSaved WindowSnapshotSaveFailed WindowSnapshotLoadRequested WindowSnapshotLoaded WindowSnapshotLoadFailed WindowSnapshotClearSucceeded WindowSnapshotClearFailed WindowSnapshotLaunchRequested WindowSnapshotLaunchAllRequested WindowSnapshotLaunchSucceeded WindowSnapshotLaunchFailed WindowSnapshotLaunchAllCompleted WindowSnapshotRegisterRequested ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfSidecarSaveRequested PdfSidecarRemoveRequested PdfSidecarLoaded PdfSidecarSaved PdfSidecarRemoved PdfSidecarFailed PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
+export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDuplicated GroupMoved GroupDeleted GroupReordered MaterialAdded MaterialUpdated MaterialMoved MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed WindowSnapshotSaveRequested WindowSnapshotSaved WindowSnapshotSaveFailed WindowSnapshotLoadRequested WindowSnapshotLoaded WindowSnapshotLoadFailed WindowSnapshotClearSucceeded WindowSnapshotClearFailed WindowSnapshotLaunchRequested WindowSnapshotLaunchAllRequested WindowSnapshotLaunchSucceeded WindowSnapshotLaunchFailed WindowSnapshotLaunchAllCompleted WindowSnapshotRegisterRequested ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchProgressed BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfSidecarSaveRequested PdfSidecarRemoveRequested PdfSidecarLoaded PdfSidecarSaved PdfSidecarRemoved PdfSidecarFailed PdfMaximizeToggled FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
 export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses SyncWindows ActivateWindow RequestWindowClose SaveWindowExclusions SaveWindowSnapshot LoadWindowSnapshot ClearWindowSnapshot LaunchWindowSnapshotItem BatchLaunchWindowSnapshot Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit PdfSearch PdfSearchPrevious PdfSearchNext LoadPdfSidecar SavePdfSidecar RemovePdfSidecar CloseWindow');
 
 export function initialState() {
@@ -19,11 +19,16 @@ export function initialState() {
 }
 const valid = (type, value) => { try { return validate(type, value); } catch { return null; } };
 const material = (s, id) => s.saved_config?.materials.find(m => m.id === id);
+const displayedMaterial = (s, id) => (s.draft ?? s.saved_config)?.materials.find(m => m.id === id);
+const savedTarget = (s, id) => {
+  const shown = displayedMaterial(s, id), saved = material(s, id);
+  return shown && saved && shown.path === saved.path && shown.target_type === saved.target_type && shown.group_id === saved.group_id && shown.role === saved.role ? saved : null;
+};
 const group = (s, id) => s.saved_config?.groups.some(g => g.id === id);
 const pdfMaterials = s => {
   const config = s.saved_config, query = String(s.query ?? '').trim().toLocaleLowerCase('ja');
   const names = new Map((config?.groups ?? []).map(g => [g.id, g.name]));
-  return (config?.materials ?? []).filter(m => m.target_type === 'file' && /\.pdf$/i.test(m.path) &&
+  return (config?.materials ?? []).filter(m => savedTarget(s,m.id) && m.target_type === 'file' && /\.pdf$/i.test(m.path) &&
     (query ? `${m.name} ${names.get(m.group_id) ?? ''}`.toLocaleLowerCase('ja').includes(query) : m.group_id === s.selected_group_id))
     .sort((a, b) => (a.role === b.role ? a.order - b.order : a.role === 'main' ? -1 : 1));
 };
@@ -45,7 +50,7 @@ const uniqueSnapshotItems = items => {
 };
 const dirtyWith = (s, config) => ({ ...s, edit: s.edit === Edit.Conflict ? Edit.Conflict : Edit.Dirty, draft: config });
 const explorerMode = (s, groupId) => {
-  const config = s.draft ?? s.saved_config;
+  const config = s.saved_config;
   const override = config?.groups.find(g => g.id === groupId)?.explorer_open_mode ?? 'inherit';
   return override === 'inherit' ? (config?.explorer_open_mode ?? 'new_window') : override;
 };
@@ -233,14 +238,14 @@ export function transition(s, e) {
       return result(s, [effect(Effect.PrepareDroppedFiles, { paths: structuredClone(e.paths) }, { group_id: e.group_id })]);
     }
     case Event.DroppedFilesPrepared:
-      if (!editable(s) || !editableConfig(s)?.groups.some(g => g.id === e.group_id) || !e.response?.candidates?.length) return deny();
+      if (!editable(s) || !editableConfig(s)?.groups.some(g => g.id === e.group_id) || !Array.isArray(e.response?.candidates) || !Array.isArray(e.response?.failures)) return deny();
       return result({ ...s, dropped_files: { group_id: e.group_id, candidates: structuredClone(e.response.candidates), failures: structuredClone(e.response.failures??[]) } });
     case Event.DroppedFilesPrepareFailed:
       return result(s, [], e.error);
     case Event.DroppedFilesCancelled:
       return s.dropped_files ? result({ ...s, dropped_files: null }) : deny();
     case Event.DroppedFilesConfirmed: {
-      if (!editable(s) || !s.dropped_files || !editableConfig(s)?.groups.some(g => g.id === e.group_id) || !['main', 'reference'].includes(e.role)) return deny();
+      if (!editable(s) || !s.dropped_files?.candidates?.length || !editableConfig(s)?.groups.some(g => g.id === e.group_id) || !['main', 'reference'].includes(e.role)) return deny();
       const config = editableConfig(s);
       for (const entry of s.dropped_files.candidates) config.materials.push({ id: crypto.randomUUID(), group_id: e.group_id, name: entry.name, role: e.role, target_type: entry.target_type, path: entry.path, order: Number.MAX_SAFE_INTEGER, window_match_pattern: null });
       reorder(config.materials, m => `${m.group_id}\0${m.role}`); return result({ ...dirtyWith(s, config), dropped_files: null, selected_group_id: e.group_id });
@@ -402,11 +407,11 @@ export function transition(s, e) {
       return result({...next,selected_group_id:items.length?groupId:s.selected_group_id,windowing:{...next.windowing,snapshot:null,snapshot_focus_after_load:false}},[effect(Effect.ClearWindowSnapshot,{})],{code:'WINDOW_SNAPSHOT_REGISTERED'});
     }
     case Event.ActivateRequested:
-      if (!editable(s) || !material(s, e.material_id) || s.launch.running.some(x => x.material_id === e.material_id) || s.launch.batch?.material_ids.includes(e.material_id)) return deny();
-      return result({ ...s, launch: { ...s.launch, running: [...s.launch.running, { material_id: e.material_id, generation: s.state_generation }] } },
+      if (!editable(s) || !savedTarget(s, e.material_id) || s.launch.running.some(x => x.material_id === e.material_id) || s.launch.batch?.material_ids.includes(e.material_id)) return deny();
+      return result({ ...s, launch_results: [], launch: { ...s.launch, running: [...s.launch.running, { material_id: e.material_id, generation: s.state_generation }] } },
         [effect(Effect.Activate, { material_id: e.material_id, explorer_open_mode: explorerMode(s, material(s,e.material_id).group_id) })]);
     case Event.OpenContainingFolderRequested:
-      if (!editable(s) || !material(s, e.material_id)) return deny();
+      if (!editable(s) || !savedTarget(s, e.material_id) || savedTarget(s, e.material_id).target_type !== 'file') return deny();
       return result(s, [effect(Effect.OpenContainingFolder, { material_id: e.material_id, explorer_open_mode: explorerMode(s, material(s,e.material_id).group_id) })]);
     case Event.OpenContainingFolderCompleted:
       return result(s, [], e.error ?? null);
@@ -418,17 +423,22 @@ export function transition(s, e) {
       const response = e.response ? valid('LaunchResponse', e.response) : null;
       if (e.response && (!response || response.material_id !== e.material_id)) return deny();
       return result({ ...s, launch: { ...s.launch, running: s.launch.running.filter(x => x !== running) },
-        launch_results: response ? [response] : [] }, [], e.generation === s.state_generation ? (response ?? e.error) : null);
+        launch_results: [] }, [], e.generation === s.state_generation ? (response ?? e.error) : null);
     }
     case Event.BatchLaunchRequested: {
       if (!editable(s) || !group(s, e.group_id) || s.launch.batch) return deny();
       const ids = s.saved_config.materials.filter(m => m.group_id === e.group_id && m.role === 'main').map(m => m.id);
+      if (!ids.length || ids.some(id=>!savedTarget(s,id))) return deny();
       if (s.launch.running.some(x => ids.includes(x.material_id))) return deny();
-      return result({ ...s, launch: { ...s.launch, batch: { group_id: e.group_id, material_ids: ids, generation: s.state_generation } } }, [effect(Effect.BatchLaunch, { group_id: e.group_id, material_ids: ids, explorer_open_mode: explorerMode(s,e.group_id) })]);
+      return result({ ...s, launch_results: [], launch: { ...s.launch, batch: { group_id: e.group_id, material_ids: ids, generation: s.state_generation, completed: 0 } } }, [effect(Effect.BatchLaunch, { group_id: e.group_id, material_ids: ids, explorer_open_mode: explorerMode(s,e.group_id) })]);
     }
     case Event.BatchLaunchCancelRequested:
       if (!s.launch.batch || s.launch.batch.group_id !== e.group_id) return deny();
       return result(s, [effect(Effect.CancelBatch, { group_id: e.group_id })]);
+    case Event.BatchLaunchProgressed:
+      if (!s.launch.batch || s.launch.batch.group_id !== e.group_id || s.launch.batch.generation !== e.generation ||
+        !Number.isSafeInteger(e.completed) || e.completed <= s.launch.batch.completed || e.completed > s.launch.batch.material_ids.length) return deny();
+      return result({ ...s, launch: { ...s.launch, batch: { ...s.launch.batch, completed: e.completed } } });
     case Event.BatchLaunchCompleted:
     case Event.BatchLaunchCancelled:
       if (!s.launch.batch || s.launch.batch.group_id !== e.group_id || s.launch.batch.generation !== e.generation) return deny();
@@ -436,8 +446,8 @@ export function transition(s, e) {
       return result({ ...s, launch: { ...s.launch, batch: null }, launch_results: structuredClone(e.response?.results ?? []) }, [],
         e.generation === s.state_generation ? (e.error ?? e.response ?? null) : null);
     case Event.PdfOpenRequested: {
-      const m = material(s, e.material_id), generation = bump();
-      if (!m || m.target_type !== 'file' || !/\.pdf$/i.test(m.path) || generation === null ||
+      const m = savedTarget(s, e.material_id), generation = bump();
+      if (!editable(s) || !m || m.target_type !== 'file' || !/\.pdf$/i.test(m.path) || generation === null ||
         (s.pdf.material_id === m.id && [Pdf.Loading, Pdf.Viewing].includes(s.pdf.kind))) return deny();
       return result({ ...s, state_generation: generation, pdf: { kind: Pdf.Loading, material_id: m.id, generation } },
         [effect(Effect.ReplacePdf, { material_id: m.id, url: `material://pdf/${m.id}`, generation }, { generation })]);
@@ -501,8 +511,8 @@ export function transition(s, e) {
       return result({ ...s, state_generation: generation, pdf: { kind: Pdf.Closed } }, [effect(Effect.ClosePdf, {})]);
     }
     case Event.PdfOpenExternalRequested:
-      if (s.pdf.kind !== Pdf.Failed || !['PDF_FALLBACK_TOO_LARGE', 'PDF_NOT_READABLE', 'PDF_CORRUPT'].includes(s.pdf.code) || !material(s, s.pdf.material_id)) return deny();
-      return result({ ...s, launch: { ...s.launch, running: [...s.launch.running, { material_id: s.pdf.material_id, generation: s.state_generation }] } },
+      if (!editable(s) || s.pdf.kind !== Pdf.Failed || !['PDF_FALLBACK_TOO_LARGE', 'PDF_NOT_READABLE', 'PDF_CORRUPT'].includes(s.pdf.code) || !savedTarget(s, s.pdf.material_id) || s.launch.running.some(x=>x.material_id===s.pdf.material_id)) return deny();
+      return result({ ...s, launch_results: [], launch: { ...s.launch, running: [...s.launch.running, { material_id: s.pdf.material_id, generation: s.state_generation }] } },
         [effect(Effect.Activate, { material_id: s.pdf.material_id })]);
     case Event.PdfPreviousRequested:
     case Event.PdfNextRequested:
@@ -562,10 +572,11 @@ export function renderModel(result) {
   const s = result.state;
   const pdf_candidates = pdfMaterials(s).map(({ id, name }) => ({ id, name }));
   const pdf_current_name = material(s, s.pdf.material_id)?.name ?? '';
+  const config = s.draft ?? s.saved_config;
   return { lifecycle: s.lifecycle, edit: s.edit, sync: s.sync, launch: s.launch, pdf: s.pdf,
     config_revision: s.config_revision, state_generation: s.state_generation,
     can_edit: editable(s) && s.edit !== Edit.Saving, can_launch: editable(s),
-    config: s.draft ?? s.saved_config, statuses: s.statuses, last_sync_at: s.last_sync_at, launch_results: s.launch_results,
+    config, runnable_material_ids: (config?.materials??[]).filter(m=>savedTarget(s,m.id)).map(m=>m.id), statuses: s.statuses, last_sync_at: s.last_sync_at, launch_results: s.launch_results,
     candidates: s.candidates, selected_group_id: s.selected_group_id,
     dropped_files: s.dropped_files, pdf_candidates, pdf_current_name, pdf_sidecars: s.pdf_sidecars, query: s.query, width: s.width, layout: s.layout,
     window_dialog_open: s.windowing.dialog_open, window_items: s.windowing.items, window_exclusions: s.windowing.exclusions, window_snapshot_busy:s.windowing.snapshot_busy, window_snapshot:s.windowing.snapshot, window_snapshot_running:s.windowing.snapshot_running, window_snapshot_batch:s.windowing.snapshot_batch,

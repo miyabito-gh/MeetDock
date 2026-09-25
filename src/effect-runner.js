@@ -100,6 +100,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
             if (control.cancelled) break;
             try { results.push(validate('LaunchResponse', await services.launch.activate({ material_id: f.request.material_ids[index], explorer_open_mode: f.request.explorer_open_mode }))); }
             catch (raw) { results.push({ material_id: f.request.material_ids[index], outcome: 'launch_failed', error: safeError(raw) }); }
+            dispatch({ type: Event.BatchLaunchProgressed, completed: results.length, ...context });
           }
           batches.delete(f.request.group_id);
           event = { type: control.cancelled ? Event.BatchLaunchCancelled : Event.BatchLaunchCompleted,

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { transition, initialState, Event, Effect, Lifecycle, Edit, Pdf, WINDOW_SNAPSHOT_GROUP_ID } from '../src/model.js';
+import { transition, initialState, renderModel, Event, Effect, Lifecycle, Edit, Pdf, WINDOW_SNAPSHOT_GROUP_ID } from '../src/model.js';
 import { appError, MAX_SAFE } from '../src/contracts.js';
 
 const fixtures = JSON.parse(readFileSync(new URL('./fixtures/contracts.json', import.meta.url))).fixtures;
@@ -30,6 +30,46 @@ const response = mode => ({ mode, config: null, source_schema_version: mode === 
 const io = appError('CONFIG_IO'), conflict = appError('CONFIG_CONFLICT'), pdfError = appError('PDF_CORRUPT');
 const saved = { revision: 13, last_updated: '2026-09-19T10:00:00Z' };
 const launched = { material_id: 'm1', outcome: 'launched', error: null };
+
+test('draft target changes block launch and PDF until saved while unchanged targets remain usable',()=>{
+  let state=dirty();
+  const draft=structuredClone(state.draft);
+  draft.materials.find(m=>m.id==='m1').path='C:\\Fixtures\\new.pdf';
+  state=run(state,Event.DraftChanged,{config:draft}).state;
+  assert.ok(!renderModel({state,notice:null}).runnable_material_ids.includes('m1'));
+  for(const [type,fields] of [[Event.ActivateRequested,{material_id:'m1'}],[Event.OpenContainingFolderRequested,{material_id:'m1'}],[Event.PdfOpenRequested,{material_id:'m1'}],[Event.BatchLaunchRequested,{group_id:'g1'}]]){
+    const outcome=run(state,type,fields);assert.equal(outcome.state,state);assert.deepEqual(outcome.effects,[]);
+  }
+  assert.ok(renderModel({state,notice:null}).runnable_material_ids.includes('m2'));
+});
+test('a role change cannot silently launch a former main item in a batch',()=>{
+  const draft=dirty(),changed=structuredClone(draft.draft);
+  changed.materials.find(m=>m.id==='m1').role='reference';
+  const state=run(draft,Event.DraftChanged,{config:changed}).state;
+  const outcome=run(state,Event.BatchLaunchRequested,{group_id:'g1'});
+  assert.equal(outcome.state,state);assert.deepEqual(outcome.effects,[]);
+});
+
+test('all failed drops remain visible but cannot be confirmed',()=>{
+  const state=run(ready(),Event.DroppedFilesPrepared,{group_id:'g1',response:{candidates:[],failures:[{path:'C:\\missing',reason:'not_found'}]}}).state;
+  assert.equal(state.dropped_files.failures.length,1);
+  assert.equal(run(state,Event.DroppedFilesConfirmed,{group_id:'g1',role:'main'}).state,state);
+});
+
+test('individual results stay in notices and new launches clear stale batch details',()=>{
+  let state={...ready(),launch_results:[launched]};
+  const request=run(state,Event.ActivateRequested,{material_id:'m1'});state=request.state;
+  assert.deepEqual(state.launch_results,[]);
+  const done=run(state,Event.LaunchSucceeded,{material_id:'m1',generation:state.state_generation,response:launched});
+  assert.deepEqual(done.state.launch_results,[]);assert.deepEqual(done.notice,launched);
+});
+test('batch progress advances only for the active group and generation',()=>{
+  const started=run(ready(),Event.BatchLaunchRequested,{group_id:'g1'}).state;
+  const first=run(started,Event.BatchLaunchProgressed,{group_id:'g1',generation:started.state_generation,completed:1}).state;
+  assert.equal(first.launch.batch.completed,1);
+  assert.equal(run(first,Event.BatchLaunchProgressed,{group_id:'g2',generation:first.state_generation,completed:2}).state,first);
+  assert.equal(run(first,Event.BatchLaunchProgressed,{group_id:'g1',generation:first.state_generation,completed:1}).state,first);
+});
 
 // IDs map 1:1 to the rows in MEDIATOR_STATE_TRANSITIONS.md.
 // Each row includes success/effect count and an independent failed guard.

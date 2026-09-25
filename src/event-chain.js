@@ -20,6 +20,26 @@ export function createRootLifecycleHandler() {
     return { handled: true, state, effects, notice: null };
   };
 }
+export function closeAction(edit, choice) {
+  if (edit === 'Clean') return 'close';
+  if (!['Dirty', 'Conflict', 'Saving'].includes(edit)) return 'cancel';
+  return ['save', 'discard'].includes(choice) ? choice : 'cancel';
+}
+export async function handleCloseRequest({ getState, choose, save, discard, waitForSave, close }) {
+  const edit = getState().edit;
+  const action = closeAction(edit, edit === 'Clean' ? null : await choose(edit));
+  if (action === 'cancel') return false;
+  if (action === 'save') {
+    if (edit !== 'Saving') save();
+    if (getState().edit === 'Saving') await waitForSave();
+  } else if (action === 'discard') {
+    if (edit === 'Saving') await waitForSave();
+    if (['Dirty', 'Conflict'].includes(getState().edit)) discard();
+  }
+  if (getState().edit !== 'Clean') return false;
+  close();
+  return true;
+}
 export const mediatorHandler = (state, event) => transition(state, event);
 export function diagnosticFallback(state) {
   return { handled: true, state, effects: [], notice: null, diagnostic: 'unhandled_event' };

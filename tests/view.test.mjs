@@ -2,7 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, placeStableRow, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+import { batchButtonAction, batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, placeStableRow, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+
+test('stop button targets the running batch after navigation',()=>{
+  const model={selected_group_id:'g2',launch:{batch:{group_id:'g1'}}};
+  assert.deepEqual(batchButtonAction(model),{action:'cancelBatch',groupId:'g1'});
+  assert.deepEqual(batchButtonAction({...model,launch:{batch:null}}),{action:'batch',groupId:'g2'});
+});
 
 const group = (id, name, order) => ({ id, parent_id: null, name, order });
 const material = (id, group_id, name, order) => ({ id, group_id, name, role: 'main', target_type: 'file', path: `C:\\docs\\${id}.pdf`, window_match_pattern: null, order });
@@ -70,7 +76,7 @@ test('window inventory dialog balances context and workspace while keeping setti
 });
 test('saved windows appear as a sidebar group with launch and registration actions',()=>{
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  for(const token of ["'一時保存したウィンドウ'","openMenu({kind:'snapshot'","add('グループへ登録','register-window-snapshot')","renderSnapshotMaterials(next)","emit('launchAllWindowSnapshot')","emit('registerWindowSnapshot')","emit('launchWindowSnapshot',index)"])assert.ok(source.includes(token));
+  for(const token of ["'一時保存したウィンドウ'","openMenu({kind:'snapshot'","add('グループへ登録','register-window-snapshot',model.can_edit)","renderSnapshotMaterials(next)","emit('launchAllWindowSnapshot')","emit('registerWindowSnapshot')","emit('launchWindowSnapshot',index)"])assert.ok(source.includes(token));
   assert.ok(source.includes("button('現在を一時保存','save-window-snapshot','secondary')"));
   assert.ok(source.includes('windowsHeadActions.insertBefore(snapshotSave,windowsRefresh)'));
   for(const duplicate of ['window-snapshot-list','window-snapshot-row','保存一覧を表示',"'launch-all-window-snapshot'"])assert.ok(!source.includes(duplicate));
@@ -169,13 +175,13 @@ test('PDF controls reflow against the resizable preview width without overflowin
 
 test('material rows expose a persistent PDF preview action and current-row state', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  assert.ok(source.includes("if(isPdf(item))add('アプリ内でPDF表示','pdf')"));
+  assert.ok(source.includes("if(isPdf(item))add('アプリ内でPDF表示','pdf',runnable)"));
   assert.ok(source.includes('pdf-preview-button'));
   assert.ok(source.includes("r.setAttribute('aria-current','true')"));
   assert.ok(source.includes("icon=button('','activate','file-icon')"));
   assert.ok(source.includes("acts.append(openFolder,pdfPreview,remove,more)"));
   assert.ok(source.includes('開いていない場合は外部アプリで開きます'));
-  assert.ok(source.includes("add('外部で開く','activate')"));
+  assert.ok(source.includes("add('外部で開く','activate',runnable)"));
   assert.doesNotMatch(source, /button\('開く','activate','primary'\)/);
   const styles = readFileSync(new URL('../src/visibility.css', import.meta.url), 'utf8');
   assert.match(styles, /\[hidden\][^{]*\{\s*display:\s*none\s*!important/);

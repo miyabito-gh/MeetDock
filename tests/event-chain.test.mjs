@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createDispatcher } from '../src/event-chain.js';
+import { closeAction, createDispatcher, handleCloseRequest } from '../src/event-chain.js';
 import { createEffectRunner, createServices } from '../src/effect-runner.js';
 import { createRoot } from '../src/root.js';
 import { createPresenter } from '../src/presenter.js';
@@ -16,6 +16,27 @@ const ready = () => {
 };
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const req1 = '12345678-1234-4234-8234-123456789abc', req2 = '12345678-1234-4234-8234-123456789abd';
+test('close choices preserve dirty work on cancel and cover saving state',()=>{
+  assert.equal(closeAction('Clean',null),'close');
+  for(const edit of ['Dirty','Conflict','Saving']){
+    assert.equal(closeAction(edit,'save'),'save');
+    assert.equal(closeAction(edit,'discard'),'discard');
+    assert.equal(closeAction(edit,'cancel'),'cancel');
+  }
+});
+test('close flow saves, discards or cancels according to user choice',async()=>{
+  for(const [start,choice,expected] of [['Dirty','cancel',[]],['Conflict','discard',['discard','close']],['Dirty','save',['save','wait','close']],['Saving','discard',['wait','close']]]){
+    let edit=start;const calls=[];
+    const handled=await handleCloseRequest({getState:()=>({edit}),choose:async()=>choice,
+      save:()=>{calls.push('save');edit='Saving'},discard:()=>{calls.push('discard');edit='Clean'},
+      waitForSave:async()=>{calls.push('wait');edit='Clean'},close:()=>calls.push('close')});
+    assert.deepEqual(calls,expected);assert.equal(handled,expected.includes('close'));
+  }
+  let edit='Dirty';const calls=[];
+  assert.equal(await handleCloseRequest({getState:()=>({edit}),choose:async()=> 'save',save:()=>{edit='Saving'},
+    discard:()=>calls.push('discard'),waitForSave:async()=>{edit='Conflict'},close:()=>calls.push('close')}),false);
+  assert.deepEqual(calls,[]);
+});
 function ports() {
   return { settings: { load: async () => fixture('SettingsLoadResponse'), save: async () => fixture('SaveSettingsResponse'), resolve: async () => fixture('SettingsLoadResponse') },
     statuses: { sync: async r => ({ request_id: r.request_id, results: [] }) },
@@ -165,8 +186,9 @@ test('batch launch cancellation stops unstarted items and retains completed deta
   first.resolve(fixture('LaunchResponse'));
   await runner.settled();
   assert.deepEqual(calls, ['m1']);
-  assert.equal(events[0].type, Event.BatchLaunchCancelled);
-  assert.equal(events[0].response.results.length, 1);
+  assert.deepEqual(events.map(event=>event.type),[Event.BatchLaunchProgressed,Event.BatchLaunchCancelled]);
+  assert.equal(events[0].completed,1);
+  assert.equal(events[1].response.results.length, 1);
 });
 
 test('PDF effects publish adapter view snapshots with their original generation', async () => {

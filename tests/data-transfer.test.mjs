@@ -15,6 +15,11 @@ test('group export includes descendants, materials and matching PDF sidecars',()
   assert.deepEqual(bundle.materials.map(x=>x.id),['m1']);
   assert.deepEqual(bundle.pdf_sidecars.map(x=>x.material_id),['m1']);
 });
+test('a virtual or deleted selection cannot create an empty group export',()=>{
+  assert.throws(()=>exportBundle(config,{groupId:'window-snapshot'}),TypeError);
+  assert.throws(()=>exportBundle(config,{groupId:'deleted'}),TypeError);
+  assert.throws(()=>exportBundle(config,{groupId:''}),TypeError);
+});
 
 test('import is non-destructive and remaps every imported id and sidecar reference',()=>{
   let n=0;const imported=importBundle(config,exportBundle(config,{groupId:'g1',sidecars:[{material_id:'m1',markers:[]}]}),{idFactory:()=>`new${++n}`});

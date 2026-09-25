@@ -6,13 +6,16 @@ import { createFocusSync } from './focus-sync.js';
 import { createProductionPdfViewAdapter } from './pdf-runtime.js';
 import { createPresenter } from './presenter.js';
 import { createRoot } from './root.js';
+import { Event } from './model.js';
+import { handleCloseRequest } from './event-chain.js';
 import { createAppView } from './view.js';
 import './mock-styles.css';
 import './visibility.css';
 
 const view = createAppView(document.querySelector('#app'));
 const pdf = createProductionPdfViewAdapter({ canvas: view.canvas, requestPassword: request => view.requestPassword(request) });
-const services = createServices(createIpcAdapter(invoke), pdf, { close: () => getCurrentWindow().close() });
+let allowingClose = false;
+const services = createServices(createIpcAdapter(invoke), pdf, { close: async () => { allowingClose = true; try { await getCurrentWindow().close(); } catch (error) { allowingClose = false; throw error; } } });
 let root;
 const presenter = createPresenter(view, event => root.dispatch(event));
 root = createRoot({ services, presenter, diagnostic: code => console.warn(`MeetDock diagnostic: ${code}`) });
@@ -25,6 +28,27 @@ const syncOnFocus = createFocusSync({
   },
 });
 window.addEventListener('focus', syncOnFocus);
+let closePending = false;
+const waitForSave = () => new Promise(resolve => {
+  const timer = setInterval(() => {
+    if (root.getState().edit === 'Saving') return;
+    clearInterval(timer); resolve(root.getState().edit === 'Clean');
+  }, 50);
+});
+getCurrentWindow().onCloseRequested(async event => {
+  if (allowingClose) return;
+  event.preventDefault();
+  if (closePending) return;
+  closePending = true;
+  try {
+    await handleCloseRequest({
+      getState: () => root.getState(),
+      choose: async () => window.confirm('変更を保存して終了しますか？') ? 'save' : window.confirm('保存せずに終了しますか？') ? 'discard' : 'cancel',
+      save: () => presenter.save(), discard: () => presenter.discard(true), waitForSave,
+      close: () => root.dispatch({ type: Event.CloseRequested }),
+    });
+  } finally { closePending = false; }
+}).catch(() => {});
 getCurrentWindow().onDragDropEvent(event => {
   const payload = event.payload;
   document.querySelector('.drop-zone')?.classList.toggle('dragover', payload.type === 'over');

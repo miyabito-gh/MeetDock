@@ -10,7 +10,8 @@ export function normalizeMaterialPath(value){
 export function exportBundle(config,{groupId=null,sidecars=[]}={}){
   const groups=config?.groups??[],materials=config?.materials??[];
   let selected=groups;
-  if(groupId){
+  if(groupId!==null){
+    if(!groups.some(group=>group.id===groupId))throw new TypeError('Selected group is unavailable');
     const ids=new Set([groupId]);
     let changed=true;
     while(changed){changed=false;for(const group of groups)if(group.parent_id&&ids.has(group.parent_id)&&!ids.has(group.id)){ids.add(group.id);changed=true}}
@@ -19,7 +20,7 @@ export function exportBundle(config,{groupId=null,sidecars=[]}={}){
   const ids=new Set(selected.map(group=>group.id));
   const includedMaterials=materials.filter(material=>ids.has(material.group_id));
   const materialIds=new Set(includedMaterials.map(material=>material.id));
-  return {format:'meetdock-export',version:VERSION,scope:groupId?'group':'all',groups:clone(selected),materials:clone(includedMaterials),pdf_sidecars:clone(sidecars.filter(item=>materialIds.has(item.material_id)))};
+  return {format:'meetdock-export',version:VERSION,scope:groupId!==null?'group':'all',groups:clone(selected),materials:clone(includedMaterials),pdf_sidecars:clone(sidecars.filter(item=>materialIds.has(item.material_id)))};
 }
 
 export function importBundle(config,bundle,{idFactory=()=>crypto.randomUUID()}={}){
