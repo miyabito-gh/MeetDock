@@ -437,7 +437,8 @@ impl Validate for DroppedFileFailure {
 }
 impl Validate for PrepareDroppedFilesResponse {
     fn validate(&mut self) -> Result<(), AppError> {
-        ensure(!self.candidates.is_empty() && self.candidates.len() + self.failures.len() <= 100)?;
+        ensure(!self.candidates.is_empty() || !self.failures.is_empty())?;
+        ensure(self.candidates.len() + self.failures.len() <= 100)?;
         for candidate in &mut self.candidates {
             candidate.validate()?;
         }

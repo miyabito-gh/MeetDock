@@ -6,6 +6,8 @@ import { createRoot } from '../src/root.js';
 import { createPresenter } from '../src/presenter.js';
 import { initialState, transition, Event, Effect } from '../src/model.js';
 import { appError } from '../src/contracts.js';
+import { createIpcAdapter } from '../src/ipc-adapter.js';
+import { renderDroppedFilesDialog } from '../src/view.js';
 import { readFileSync } from 'node:fs';
 const fixture = name => structuredClone(JSON.parse(readFileSync(new URL('./fixtures/contracts.json', import.meta.url))).fixtures.find(f => f.name === `${name}: valid`).value);
 const ready = () => {
@@ -16,13 +18,75 @@ const ready = () => {
 };
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const req1 = '12345678-1234-4234-8234-123456789abc', req2 = '12345678-1234-4234-8234-123456789abd';
+const dialogNodes = () => {
+  const document = { createElement: tag => ({ tag, textContent: '', className: '', value: '', disabled: false }) };
+  const container = () => ({ ownerDocument: document, children: [], replaceChildren(){this.children=[]}, append(item){this.children.push(item)} });
+  return { text: {}, list: container(), group: container(), confirm: {} };
+};
+test('dropped file responses traverse the effect runner into the model, including all failures', async () => {
+  const candidate = { name: 'sample.pdf', path: 'C:\\Drop\\sample.pdf', target_type: 'file' };
+  const failure = { path: 'C:\\Drop\\missing.pdf', reason: 'not_found' };
+  for (const [response, expectedCount] of [
+    [{ candidates: [candidate], failures: [] }, 1],
+    [{ candidates: [candidate], failures: [failure] }, 1],
+    [{ candidates: [], failures: [failure] }, 0],
+  ]) {
+    let state = ready(); const events = [];
+    const ipc = createIpcAdapter(async () => response);
+    const runner = createEffectRunner({ droppedFiles: { prepare: request => ipc.call('prepare_dropped_files', request) } }, event => {
+      events.push(event.type);
+      state = transition(state, event).state;
+    });
+    const request = transition(state, { type: Event.NativeFilesDropped, group_id: 'g1', paths: ['C:\\Drop\\sample.pdf'] });
+    runner.run(request.effects);
+    await runner.settled();
+    assert.deepEqual(events, [Event.DroppedFilesPrepared]);
+    assert.equal(state.dropped_files.candidates.length, expectedCount);
+    assert.deepEqual(state.dropped_files.failures, response.failures);
+    const nodes = dialogNodes();
+    renderDroppedFilesDialog(state.dropped_files, state.saved_config.groups, nodes);
+    assert.equal(nodes.confirm.disabled, expectedCount === 0);
+    assert.equal(nodes.list.children.length, response.candidates.length + response.failures.length);
+    assert.deepEqual(nodes.list.children.filter(item => item.className === 'dnd-failure').map(item => item.textContent),
+      response.failures.map(item => `登録不可: ${item.path} — 見つかりません`));
+    assert.equal(nodes.group.value, 'g1');
+    const confirmed = transition(state, { type: Event.DroppedFilesConfirmed, group_id: 'g1', role: 'main' });
+    if (expectedCount === 0) assert.equal(confirmed.state, state);
+    else assert.equal(confirmed.state.draft.materials.length, state.saved_config.materials.length + expectedCount);
+  }
+  let state = ready(); const events = [];
+  const ipc = createIpcAdapter(async () => ({ candidates: [], failures: [] }));
+  const runner = createEffectRunner({ droppedFiles: { prepare: request => ipc.call('prepare_dropped_files', request) } }, event => {
+    events.push(event.type);
+    state = transition(state, event).state;
+  });
+  runner.run(transition(state, { type: Event.NativeFilesDropped, group_id: 'g1', paths: ['C:\\Drop\\missing.pdf'] }).effects);
+  await runner.settled();
+  assert.deepEqual(events, [Event.DroppedFilesPrepareFailed]);
+  assert.equal(state.dropped_files, null);
+});
 test('native fullscreen effect reports success and failure without committing the model early', async () => {
   const events = [];
   const services = createServices({ call: async () => {} }, {}, {}, { set: async value => { if (value) throw Error('native failure'); } });
   const runner = createEffectRunner(services, event => events.push(event));
-  runner.run([{ type: Effect.SetFullscreen, request: { value: true } }, { type: Effect.SetFullscreen, request: { value: false } }]);
+  runner.run([{ type: Effect.SetFullscreen, request: { value: true, request: 1 } }, { type: Effect.SetFullscreen, request: { value: false, request: 2 } }]);
   await runner.settled();
-  assert.deepEqual(events.map(event => [event.type, event.value]), [[Event.PdfFullscreenFailed, true], [Event.PdfFullscreenSucceeded, false]]);
+  assert.deepEqual(events.map(event => [event.type, event.value, event.request]), [[Event.PdfFullscreenFailed, true, 1], [Event.PdfFullscreenSucceeded, false, 2]]);
+});
+test('native fullscreen exit waits for a delayed entry before reporting its own result', async () => {
+  const gate = deferred(), calls = [], events = [];
+  const services = createServices({ call: async () => {} }, {}, {}, { set: async value => {
+    calls.push(value);
+    if (value) await gate.promise;
+  } });
+  const runner = createEffectRunner(services, event => events.push(event));
+  runner.run([{ type: Effect.SetFullscreen, request: { value: true, request: 1 } }, { type: Effect.SetFullscreen, request: { value: false, request: 2 } }]);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, [true]);
+  gate.resolve();
+  await runner.settled();
+  assert.deepEqual(calls, [true, false]);
+  assert.deepEqual(events.map(event => [event.value, event.request]), [[true, 1], [false, 2]]);
 });
 test('close choices preserve dirty work on cancel and cover saving state',()=>{
   assert.equal(closeAction('Clean',null),'close');

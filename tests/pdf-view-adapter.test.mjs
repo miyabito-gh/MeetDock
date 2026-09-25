@@ -26,6 +26,28 @@ test('only the visible page text is exposed and zoom reuses its extraction', asy
   await adapter.close();
 });
 
+test('positioned PDF text follows rows on one column and columns on a two-column page', async () => {
+  const item = (str, x, y, width = 80) => ({ str, transform: [1, 0, 0, 1, x, y], width, height: 10 });
+  const pages = [
+    [item('second', 40, 80), item('first', 40, 100), item('third', 40, 60)],
+    [item('right 2', 300, 80), item('left 1', 40, 100), item('right 1', 300, 100), item('left 2', 40, 80)],
+    [],
+  ];
+  const reads = [];
+  const doc = { numPages: pages.length, getPage: async number => ({
+    getViewport: ({ scale }) => ({ width: 500 * scale, height: 200 * scale }),
+    render: () => ({ promise: Promise.resolve(), cancel() {} }),
+    getTextContent: async () => { reads.push(number); return { items: pages[number - 1] }; },
+  }), async destroy() {} };
+  const adapter = new PdfViewAdapter({ canvas: canvas([]), pdfjs: { GlobalWorkerOptions: {}, getDocument: () => loading(doc, []) } });
+  assert.equal((await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 1 })).page_text, 'first\nsecond\nthird');
+  assert.equal((await adapter.next({ generation: 1 })).page_text, 'left 1\nleft 2\nright 1\nright 2');
+  assert.equal((await adapter.next({ generation: 1 })).page_text, '');
+  assert.equal((await adapter.previous({ generation: 1 })).page_text, 'left 1\nleft 2\nright 1\nright 2');
+  assert.equal((await adapter.zoomIn({ generation: 1 })).page_text, 'left 1\nleft 2\nright 1\nright 2');
+  assert.deepEqual(reads, [1, 2, 3, 2]);
+});
+
 test('PDF replace cancels, resets Canvas, cleans and destroys before loading next document', async () => {
   const log = [], firstRender = deferred(), loads = [];
   const pdfjs = { GlobalWorkerOptions: {}, getDocument: ({url}) => { log.push(`load:${url}`); const item = loading(document(log, loads.length ? Promise.resolve() : firstRender.promise), log); loads.push(item); return item; } };

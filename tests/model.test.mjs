@@ -32,17 +32,43 @@ test('PDF fullscreen confirms native success, keeps state on failure, and clears
   assert.equal(requested.state.layout.pdf_fullscreen_pending, true);
   assert.equal(requested.effects[0].type, Effect.SetFullscreen);
   assert.equal(run(requested.state, Event.PdfMaximizeToggled).effects.length, 0);
-  const failed = run(requested.state, Event.PdfFullscreenFailed, { value: true });
+  const failed = run(requested.state, Event.PdfFullscreenFailed, { value: true, request: 1 });
   assert.equal(failed.state.layout.pdf_maximized, false);
   assert.equal(failed.state.layout.pdf_fullscreen_pending, null);
-  const maximized = run(requested.state, Event.PdfFullscreenSucceeded, { value: true }).state;
+  const maximized = run(requested.state, Event.PdfFullscreenSucceeded, { value: true, request: 1 }).state;
   assert.equal(maximized.layout.pdf_maximized, true);
   const closed = run(maximized, Event.PdfClosed);
-  assert.equal(closed.state.layout.pdf_maximized, false);
+  assert.equal(closed.state.layout.pdf_maximized, true);
   assert.ok(closed.effects.some(effect => effect.type === Effect.SetFullscreen && effect.request.value === false));
+  assert.equal(closed.state.layout.pdf_fullscreen_pending, false);
+  const exitFailed = run(closed.state, Event.PdfFullscreenFailed, { value: false, request: 2 });
+  assert.equal(exitFailed.state.layout.pdf_maximized, true);
+  assert.equal(exitFailed.state.layout.pdf_fullscreen_recovery, true);
+  const retry = run(exitFailed.state, Event.PdfMaximizeToggled);
+  assert.equal(retry.effects[0].request.value, false);
+  const recovered = run(retry.state, Event.PdfFullscreenSucceeded, { value: false, request: 3 });
+  assert.equal(recovered.state.layout.pdf_maximized, false);
+  assert.equal(recovered.state.layout.pdf_fullscreen_recovery, false);
   const changedGroup = run(maximized, Event.GroupSelected, { group_id: 'g2' });
-  assert.equal(changedGroup.state.layout.pdf_maximized, false);
+  assert.equal(changedGroup.state.layout.pdf_maximized, true);
   assert.ok(changedGroup.effects.some(effect => effect.type === Effect.SetFullscreen && effect.request.value === false));
+  assert.equal(run(changedGroup.state, Event.PdfFullscreenSucceeded, { value: false, request: 2 }).state.layout.pdf_maximized, false);
+  assert.equal(run(changedGroup.state, Event.PdfFullscreenSucceeded, { value: true, request: 1 }).diagnostic, 'stale_pdf_fullscreen');
+  assert.equal(run(closed.state, Event.PdfClosed).effects.length, 0);
+});
+
+test('closing during delayed fullscreen entry waits for the queued exit and ignores the old response', () => {
+  const entering = run(viewing(), Event.PdfMaximizeToggled).state;
+  const closed = run(entering, Event.PdfClosed);
+  assert.equal(closed.effects.find(effect => effect.type === Effect.SetFullscreen).request.value, false);
+  const entered = run(closed.state, Event.PdfFullscreenSucceeded, { value: true, request: 1 });
+  assert.equal(entered.diagnostic, 'stale_pdf_fullscreen');
+  assert.equal(entered.state.layout.pdf_maximized, true);
+  assert.equal(run(closed.state, Event.PdfFullscreenSucceeded, { value: false, request: 2 }).state.layout.pdf_maximized, false);
+  const failure = run(entered.state, Event.PdfFullscreenFailed, { value: false, request: 2 });
+  assert.equal(failure.state.layout.pdf_maximized, true);
+  assert.equal(failure.state.layout.pdf_fullscreen_recovery, true);
+  assert.equal(run(failure.state, Event.PdfMaximizeToggled).effects[0].request.value, false);
 });
 const candidate = { candidate_id: 'candidate1', kind: 'backup', revision: 12, last_updated: null };
 const pending = lifecycle => ({ ...initialState(), lifecycle, candidates: [{ ...candidate, kind: lifecycle === Lifecycle.MigrationPending ? 'legacy' : 'backup' }] });
@@ -68,6 +94,30 @@ test('a role change cannot silently launch a former main item in a batch',()=>{
   const state=run(draft,Event.DraftChanged,{config:changed}).state;
   const outcome=run(state,Event.BatchLaunchRequested,{group_id:'g1'});
   assert.equal(outcome.state,state);assert.deepEqual(outcome.effects,[]);
+});
+
+test('unsaved window matching blocks every external material action until saved',()=>{
+  let state=dirty();
+  const changed=structuredClone(state.draft);
+  changed.materials.find(m=>m.id==='m1').window_match_pattern='Agenda';
+  state=run(state,Event.DraftChanged,{config:changed}).state;
+  assert.ok(!renderModel({state,notice:null}).runnable_material_ids.includes('m1'));
+  for(const [type,fields] of [[Event.ActivateRequested,{material_id:'m1'}],[Event.OpenContainingFolderRequested,{material_id:'m1'}],[Event.PdfOpenRequested,{material_id:'m1'}],[Event.BatchLaunchRequested,{group_id:'g1'}]]){
+    const outcome=run(state,type,fields);assert.equal(outcome.state,state);assert.deepEqual(outcome.effects,[]);
+  }
+  assert.ok(renderModel({state,notice:null}).runnable_material_ids.includes('m2'));
+  const saving=run(state,Event.SaveRequested).state;
+  const committed=run(saving,Event.SaveSucceeded,{response:saved,generation:saving.saving.generation}).state;
+  assert.ok(renderModel({state:committed,notice:null}).runnable_material_ids.includes('m1'));
+});
+
+test('draft display name and order do not change the saved execution target',()=>{
+  const state=dirty(),changed=structuredClone(state.draft);
+  const item=changed.materials.find(m=>m.id==='m1');
+  item.name='表示用の新しい名前';item.order=99;
+  const next=run(state,Event.DraftChanged,{config:changed}).state;
+  assert.ok(renderModel({state:next,notice:null}).runnable_material_ids.includes('m1'));
+  assert.deepEqual(run(next,Event.ActivateRequested,{material_id:'m1'}).effects[0].request,{material_id:'m1',explorer_open_mode:'new_window'});
 });
 
 test('all failed drops remain visible but cannot be confirmed',()=>{

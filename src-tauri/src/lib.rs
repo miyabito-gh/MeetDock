@@ -187,7 +187,10 @@ mod ipc_tests {
         assert_eq!(partial.candidates.len(), 1);
         assert_eq!(partial.failures.len(), 1);
         assert_eq!(partial.failures[0].reason, "not_found");
-        assert!(prepare_dropped_candidates(vec![missing.to_string_lossy().into_owned()]).is_err());
+        let all_failed = prepare_dropped_candidates(vec![missing.to_string_lossy().into_owned()]).unwrap();
+        assert!(all_failed.candidates.is_empty());
+        assert_eq!(all_failed.failures.len(), 1);
+        assert_eq!(all_failed.failures[0].reason, "not_found");
         std::fs::remove_file(file).unwrap();
         std::fs::remove_dir(directory).unwrap();
     }
@@ -476,7 +479,7 @@ fn prepare_dropped_candidates(paths: Vec<String>) -> Result<PrepareDroppedFilesR
             target_type,
         });
     }
-    if candidates.is_empty() { return Err(AppError::new(ErrorCode::ValidationError, None)); }
+    if candidates.is_empty() && failures.is_empty() { return Err(AppError::new(ErrorCode::ValidationError, None)); }
     Ok(PrepareDroppedFilesResponse { candidates, failures })
 }
 

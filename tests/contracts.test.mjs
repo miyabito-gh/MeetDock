@@ -87,8 +87,13 @@ test('dropped file response accepts files and folders with explicit target types
   const result = await createIpcAdapter(async () => response)
     .call('prepare_dropped_files', { paths: response.candidates.map(candidate => candidate.path) });
   assert.deepEqual(result, response);
+  const allFailed = { candidates: [], failures: [{ path: 'missing.pdf', reason: 'not_found' }] };
+  assert.deepEqual(await createIpcAdapter(async () => allFailed)
+    .call('prepare_dropped_files', { paths: ['C:\\Drop\\missing.pdf'] }), allFailed);
   for (const invalid of [
     { candidates: [], failures: [] },
+    { candidates: [], failures: [{ path: 'missing.pdf', reason: 'not_found', detail: 'OS secret' }] },
+    { candidates: [], failures: [{ path: 'missing.pdf', reason: 7 }] },
     { candidates: [{ name: 'URL', path: 'https://example.com', target_type: 'url' }], failures: [] },
     { candidates: [{ name: 'Missing type', path: 'C:\\Drop\\item' }], failures: [] },
     { candidates: [{ name: 'Valid', path: 'C:\\Drop\\item', target_type: 'file' }], failures: [{ path: 'x', reason: 'unknown' }] },

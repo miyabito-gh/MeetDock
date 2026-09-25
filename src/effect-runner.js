@@ -120,7 +120,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
           const operation = fullscreenQueue.catch(() => {}).then(() => services.fullscreen.set(f.request.value));
           fullscreenQueue = operation;
           await operation;
-          event = { type: Event.PdfFullscreenSucceeded, value: f.request.value }; break;
+          event = { type: Event.PdfFullscreenSucceeded, value: f.request.value, request: f.request.request }; break;
         }
         case Effect.LoadPdfSidecar: event = { type: Event.PdfSidecarLoaded, sidecar: await services.pdfSidecars.load(f.request), ...context }; break;
         case Effect.SavePdfSidecar: event = { type: Event.PdfSidecarSaved, sidecar: await services.pdfSidecars.save(f.request), ...context }; break;
@@ -156,7 +156,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         [Effect.PdfZoomIn]: Event.PdfFailed, [Effect.PdfZoomOut]: Event.PdfFailed, [Effect.PdfFit]: Event.PdfFailed,
         [Effect.PdfSearch]: Event.PdfFailed, [Effect.PdfSearchPrevious]: Event.PdfFailed, [Effect.PdfSearchNext]: Event.PdfFailed, [Effect.CloseWindow]: Event.EffectFailed,
       }[f.type] ?? Event.FatalError;
-      event = { type, error, ...context, value: f.request.value, effect_type: f.type, request_id: f.request.request_id };
+      event = { type, error, ...context, value: f.request.value, request: f.request.request, effect_type: f.type, request_id: f.request.request_id };
     }
     if ([Event.PdfViewChanged, Event.PdfSearchCompleted].includes(event?.type) && !event.view) return;
     dispatch(event);

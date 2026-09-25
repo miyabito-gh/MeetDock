@@ -28,9 +28,20 @@ fn check(kind: &str, value: Value) -> Result<Value, AppError> {
         "OpenContainingFolderRequest" => decode_as!(OpenContainingFolderRequest),
         "BatchLaunchRequest" => decode_as!(BatchLaunchRequest),
         "BatchLaunchResponse" => decode_as!(BatchLaunchResponse),
+        "PrepareDroppedFilesResponse" => decode_as!(PrepareDroppedFilesResponse),
         "ConfigDocument" => Ok(serde_json::to_value(decode_config(value)?).unwrap()),
         _ => panic!("unknown fixture type {kind}"),
     }
+}
+#[test]
+fn dropped_response_requires_a_candidate_or_failure_and_rejects_extra_fields() {
+    let all_failed = serde_json::json!({"candidates":[],"failures":[{"path":"C:\\Drop\\missing.pdf","reason":"not_found"}]});
+    assert!(check("PrepareDroppedFilesResponse", all_failed.clone()).is_ok());
+    assert!(check("PrepareDroppedFilesResponse", serde_json::json!({"candidates":[],"failures":[]})).is_err());
+    assert!(check("PrepareDroppedFilesResponse", serde_json::json!({"candidates":[],"failures":[{"path":"x","reason":"unknown"}]})).is_err());
+    let mut extra = all_failed;
+    extra["failures"][0]["detail"] = serde_json::json!("OS secret");
+    assert!(check("PrepareDroppedFilesResponse", extra).is_err());
 }
 #[test]
 fn shared_contract_fixtures() {

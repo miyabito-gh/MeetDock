@@ -6,6 +6,68 @@ function pdfError(code) {
   return appError(code);
 }
 
+function pageReadingText(items) {
+  const positioned = items.map((item, index) => ({
+    index, text: String(item.str ?? ''), x: item.transform?.[4], y: item.transform?.[5],
+    width: item.width, height: item.height, hasEOL: item.hasEOL,
+  })).filter(item => item.text.trim());
+  if (!positioned.every(item => Number.isFinite(item.x) && Number.isFinite(item.y)))
+    return items.map(item => `${item.str ?? ''}${item.hasEOL ? '\n' : ' '}`).join('').trim();
+
+  const lines = [];
+  for (const item of positioned.sort((a, b) => b.y - a.y || a.x - b.x || a.index - b.index)) {
+    const tolerance = Math.max(2, Math.min(6, (Number.isFinite(item.height) ? item.height : 10) * .4));
+    let line = lines.find(line => Math.abs(line.y - item.y) <= tolerance);
+    if (!line) { line = { y: item.y, items: [] }; lines.push(line); }
+    line.items.push(item);
+  }
+  const separated = [];
+  for (const line of lines) {
+    line.items.sort((a, b) => a.x - b.x || a.index - b.index);
+    let run = [];
+    for (const item of line.items) {
+      const previous = run.at(-1);
+      const right = previous && previous.x + (Number.isFinite(previous.width) ? previous.width : previous.text.length * 5);
+      if (previous && item.x - right > Math.max(32, (Number.isFinite(item.height) ? item.height : 10) * 4)) {
+        separated.push({ y: line.y, items: run });
+        run = [];
+      }
+      run.push(item);
+    }
+    if (run.length) separated.push({ y: line.y, items: run });
+  }
+  for (const line of separated) {
+    line.left = Math.min(...line.items.map(item => item.x));
+    line.right = Math.max(...line.items.map(item => item.x + (Number.isFinite(item.width) ? item.width : item.text.length * 5)));
+    line.text = line.items.map(item => item.text).join(' ').replace(/\s+/g, ' ').trim();
+  }
+  separated.sort((a, b) => b.y - a.y || a.left - b.left);
+
+  // A wide, persistent gutter with vertically overlapping text separates common two-column pages.
+  const candidates = [...new Set(separated.flatMap(line => [line.left, line.right]))].sort((a, b) => a - b);
+  let columns = null;
+  for (let i = 0; i < candidates.length - 1; i++) {
+    const gap = candidates[i + 1] - candidates[i];
+    const pageWidth = Math.max(...separated.map(line => line.right)) - Math.min(...separated.map(line => line.left));
+    if (gap < Math.max(18, pageWidth * .08)) continue;
+    const left = separated.filter(line => line.right <= candidates[i]);
+    const right = separated.filter(line => line.left >= candidates[i + 1]);
+    if (left.length < 2 || right.length < 2) continue;
+    const overlap = Math.min(Math.max(...left.map(line => line.y)), Math.max(...right.map(line => line.y))) -
+      Math.max(Math.min(...left.map(line => line.y)), Math.min(...right.map(line => line.y)));
+    if (overlap <= 0) continue;
+    if (!columns || gap > columns.gap) columns = { gap, left, right };
+  }
+  if (!columns) return separated.map(line => line.text).join('\n');
+  const used = new Set([...columns.left, ...columns.right]);
+  const top = Math.max(...[...used].map(line => line.y));
+  const bottom = Math.min(...[...used].map(line => line.y));
+  const headers = separated.filter(line => !used.has(line) && line.y > top);
+  const footers = separated.filter(line => !used.has(line) && line.y < bottom);
+  const middle = separated.filter(line => !used.has(line) && line.y <= top && line.y >= bottom);
+  return [...headers, ...columns.left, ...middle, ...columns.right, ...footers].map(line => line.text).join('\n');
+}
+
 /** Owns one PDF.js document and enforces teardown before every replacement. */
 export class PdfViewAdapter {
   #pdfjs;
@@ -140,7 +202,7 @@ export class PdfViewAdapter {
         let content;
         try { content = await page.getTextContent(); } catch { content = { items: [] }; }
         if (token !== this.#generation || pageNumber !== this.#pageNumber) return;
-        this.#pageText = content.items.map(item => `${item.str ?? ''}${item.hasEOL ? '\n' : ' '}`).join('').trim();
+        this.#pageText = pageReadingText(content.items);
         this.#pageTextNumber = pageNumber;
       }
     } catch (error) {

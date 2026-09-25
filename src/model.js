@@ -15,14 +15,14 @@ export function initialState() {
     config_revision: 0, state_generation: 0, saved_config: null, draft: null,
     candidates: [], resolution: null, saving: null, selected_group_id: null,
     statuses: [], last_sync_at: null, launch_results: [], query: '', width: null,
-    dropped_files: null, layout: { sidebar_collapsed: false, sidebar_width: 250, pdf_width: 430, pdf_maximized: false, pdf_fullscreen_pending: null } };
+    dropped_files: null, layout: { sidebar_collapsed: false, sidebar_width: 250, pdf_width: 430, pdf_maximized: false, pdf_fullscreen_pending: null, pdf_fullscreen_request: 0, pdf_fullscreen_recovery: false } };
 }
 const valid = (type, value) => { try { return validate(type, value); } catch { return null; } };
 const material = (s, id) => s.saved_config?.materials.find(m => m.id === id);
 const displayedMaterial = (s, id) => (s.draft ?? s.saved_config)?.materials.find(m => m.id === id);
 const savedTarget = (s, id) => {
   const shown = displayedMaterial(s, id), saved = material(s, id);
-  return shown && saved && shown.path === saved.path && shown.target_type === saved.target_type && shown.group_id === saved.group_id && shown.role === saved.role ? saved : null;
+  return shown && saved && shown.path === saved.path && shown.target_type === saved.target_type && shown.group_id === saved.group_id && shown.role === saved.role && shown.window_match_pattern === saved.window_match_pattern ? saved : null;
 };
 const group = (s, id) => s.saved_config?.groups.some(g => g.id === id);
 const pdfMaterials = s => {
@@ -63,6 +63,14 @@ export function transition(s, e) {
   const deny = () => result();
   const effect = (type, request, extra = {}) => ({ type, request, generation: s.state_generation, ...extra });
   const bump = () => s.state_generation < MAX_SAFE ? s.state_generation + 1 : null;
+  const closeFullscreen = () => {
+    const layout = s.layout;
+    if (layout.pdf_fullscreen_pending === false) return { layout, effects: [] };
+    if (!layout.pdf_maximized && layout.pdf_fullscreen_pending !== true && !layout.pdf_fullscreen_recovery) return { layout, effects: [] };
+    const request = layout.pdf_fullscreen_request + 1;
+    return { layout: { ...layout, pdf_fullscreen_pending: false, pdf_fullscreen_request: request, pdf_fullscreen_recovery: false },
+      effects: [effect(Effect.SetFullscreen, { value: false, request })] };
+  };
   if (!Object.hasOwn(Event, e.type) || ['CloseRequested'].includes(e.type)) return { ...result(), handled: false };
   if (e.type === Event.FatalError) return result({ ...s, lifecycle: Lifecycle.FatalError }, [], appError('INTERNAL_ERROR'));
   if (s.lifecycle === Lifecycle.FatalError) return deny();
@@ -296,20 +304,23 @@ export function transition(s, e) {
     case Event.EditDiscarded: {
       const generation = bump();
       if (![Edit.Dirty, Edit.Conflict].includes(s.edit) || e.confirmed !== true || generation === null) return deny();
-      return result({ ...s, edit: Edit.Clean, draft: null, state_generation: generation, pdf: { kind: Pdf.Closed }, layout: { ...s.layout, pdf_maximized: false, pdf_fullscreen_pending: null } },
-        [...(s.pdf.kind === Pdf.Closed ? [] : [effect(Effect.ClosePdf, {})]), ...(s.layout.pdf_maximized || s.layout.pdf_fullscreen_pending ? [effect(Effect.SetFullscreen, { value: false })] : [])]);
+      const fullscreen = closeFullscreen();
+      return result({ ...s, edit: Edit.Clean, draft: null, state_generation: generation, pdf: { kind: Pdf.Closed }, layout: fullscreen.layout },
+        [...(s.pdf.kind === Pdf.Closed ? [] : [effect(Effect.ClosePdf, {})]), ...fullscreen.effects]);
     }
     case Event.ReloadRequested: {
       const generation = bump();
       if (busy(s) || generation === null || (![Edit.Clean].includes(s.edit) && e.confirmed !== true)) return deny();
-      return result({ ...s, lifecycle: Lifecycle.Booting, edit: Edit.Clean, draft: null, state_generation: generation, resolution: 'load', pdf: { kind: Pdf.Closed }, layout: { ...s.layout, pdf_maximized: false, pdf_fullscreen_pending: null } },
-        [effect(Effect.ClosePdf, {}), ...(s.layout.pdf_maximized || s.layout.pdf_fullscreen_pending ? [effect(Effect.SetFullscreen, { value: false })] : []), effect(Effect.LoadSettings, {}, { generation })]);
+      const fullscreen = closeFullscreen();
+      return result({ ...s, lifecycle: Lifecycle.Booting, edit: Edit.Clean, draft: null, state_generation: generation, resolution: 'load', pdf: { kind: Pdf.Closed }, layout: fullscreen.layout },
+        [effect(Effect.ClosePdf, {}), ...fullscreen.effects, effect(Effect.LoadSettings, {}, { generation })]);
     }
     case Event.GroupSelected: {
       const generation = bump();
       if (!(group(s, e.group_id) || (e.group_id === WINDOW_SNAPSHOT_GROUP_ID && s.windowing.snapshot?.items?.length)) || e.group_id === s.selected_group_id || generation === null) return deny();
-      return result({ ...s, selected_group_id: e.group_id, state_generation: generation, pdf: { kind: Pdf.Closed }, layout: { ...s.layout, pdf_maximized: false, pdf_fullscreen_pending: null } },
-        [...(s.pdf.kind === Pdf.Closed ? [] : [effect(Effect.ClosePdf, {})]), ...(s.layout.pdf_maximized || s.layout.pdf_fullscreen_pending ? [effect(Effect.SetFullscreen, { value: false })] : [])]);
+      const fullscreen = closeFullscreen();
+      return result({ ...s, selected_group_id: e.group_id, state_generation: generation, pdf: { kind: Pdf.Closed }, layout: fullscreen.layout },
+        [...(s.pdf.kind === Pdf.Closed ? [] : [effect(Effect.ClosePdf, {})]), ...fullscreen.effects]);
     }
     case Event.SyncRequested: {
       if (![Lifecycle.Ready, Lifecycle.ReadOnly].includes(s.lifecycle) || s.resolution) return deny();
@@ -531,7 +542,8 @@ export function transition(s, e) {
     case Event.PdfClosed: {
       const generation = bump();
       if (s.pdf.kind === Pdf.Closed || generation === null) return deny();
-      return result({ ...s, state_generation: generation, pdf: { kind: Pdf.Closed }, layout: { ...s.layout, pdf_maximized: false, pdf_fullscreen_pending: null } }, [effect(Effect.ClosePdf, {}), ...(s.layout.pdf_maximized || s.layout.pdf_fullscreen_pending ? [effect(Effect.SetFullscreen, { value: false })] : [])]);
+      const fullscreen = closeFullscreen();
+      return result({ ...s, state_generation: generation, pdf: { kind: Pdf.Closed }, layout: fullscreen.layout }, [effect(Effect.ClosePdf, {}), ...fullscreen.effects]);
     }
     case Event.PdfOpenExternalRequested:
       if (!editable(s) || !(s.pdf.kind === Pdf.PasswordRequired || s.pdf.kind === Pdf.Failed && ['PDF_FALLBACK_TOO_LARGE', 'PDF_NOT_READABLE', 'PDF_CORRUPT'].includes(s.pdf.code)) || !savedTarget(s, s.pdf.material_id) || s.launch.running.some(x=>x.material_id===s.pdf.material_id)) return deny();
@@ -568,14 +580,21 @@ export function transition(s, e) {
         e.view.current_page < 1 || e.view.current_page > e.view.total_pages || e.view.zoom_percent < 1) return result(s, [], null, 'stale_pdf_search');
       return result({ ...s, pdf: { ...s.pdf, ...e.view, search_status: 'ready' } });
     case Event.PdfMaximizeToggled:
-      if (s.pdf.kind === Pdf.Closed || s.layout.pdf_fullscreen_pending != null) return deny();
-      return result({ ...s, layout: { ...s.layout, pdf_fullscreen_pending: !s.layout.pdf_maximized } }, [effect(Effect.SetFullscreen, { value: !s.layout.pdf_maximized })]);
+      if ((s.pdf.kind === Pdf.Closed && !s.layout.pdf_fullscreen_recovery) || s.layout.pdf_fullscreen_pending != null || s.layout.pdf_fullscreen_request >= MAX_SAFE) return deny();
+      { const value = s.layout.pdf_fullscreen_recovery ? false : !s.layout.pdf_maximized;
+        const request = s.layout.pdf_fullscreen_request + 1;
+        return result({ ...s, layout: { ...s.layout, pdf_fullscreen_pending: value, pdf_fullscreen_request: request, pdf_fullscreen_recovery: false } },
+          [effect(Effect.SetFullscreen, { value, request })]); }
     case Event.PdfFullscreenSucceeded:
-      if (s.pdf.kind === Pdf.Closed || s.layout.pdf_fullscreen_pending !== e.value) return result(s, [], null, 'stale_pdf_fullscreen');
-      return result({ ...s, layout: { ...s.layout, pdf_maximized: e.value, pdf_fullscreen_pending: null } });
+      // The runner serializes native calls. An entry completed while exit was queued is
+      // the current OS state until that exit completes, even if its request is obsolete.
+      if (e.value === true && s.layout.pdf_fullscreen_pending === false && e.request === s.layout.pdf_fullscreen_request - 1)
+        return result({ ...s, layout: { ...s.layout, pdf_maximized: true } }, [], null, 'stale_pdf_fullscreen');
+      if (s.layout.pdf_fullscreen_pending !== e.value || s.layout.pdf_fullscreen_request !== e.request) return result(s, [], null, 'stale_pdf_fullscreen');
+      return result({ ...s, layout: { ...s.layout, pdf_maximized: e.value, pdf_fullscreen_pending: null, pdf_fullscreen_recovery: false } });
     case Event.PdfFullscreenFailed:
-      if (s.pdf.kind === Pdf.Closed || s.layout.pdf_fullscreen_pending !== e.value) return result(s, [], null, 'stale_pdf_fullscreen');
-      return result({ ...s, layout: { ...s.layout, pdf_fullscreen_pending: null }, notice: 'FULLSCREEN_FAILED' });
+      if (s.layout.pdf_fullscreen_pending !== e.value || s.layout.pdf_fullscreen_request !== e.request) return result(s, [], null, 'stale_pdf_fullscreen');
+      return result({ ...s, layout: { ...s.layout, pdf_fullscreen_pending: null, pdf_fullscreen_recovery: !e.value } }, [], 'FULLSCREEN_FAILED');
     case Event.SearchChanged:
       return typeof e.value === 'string' ? result({ ...s, query: e.value }) : deny();
     case Event.ResizeChanged:
