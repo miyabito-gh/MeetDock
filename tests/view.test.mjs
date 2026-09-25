@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { batchButtonAction, batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, reorderPlacement, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+import { batchButtonAction, batchSummary, displayPath, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, reorderPlacement, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
 
 test('collapsed sidebar plus maximized PDF removes width limit and background focus', () => {
   const css = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
@@ -110,7 +110,32 @@ test('SEC-01 dynamic view uses textContent and does not inject markup', () => {
 test('modal key handling is isolated from document shortcuts', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   assert.match(source, /for\(const modal of \[dialog,operationDialog,issue,dndDialog,windowsDialog\]\) modal\.addEventListener\('keydown',e=>e\.stopPropagation\(\)\)/);
-  assert.match(source, /const modalOpen=dialog\.open\|\|issue\.open\|\|dndDialog\.open\|\|windowsDialog\.open;if\(modalOpen\)return/);
+  assert.match(source, /const modalOpen=dialog\.open\|\|operationDialog\.open\|\|issue\.open\|\|dndDialog\.open\|\|windowsDialog\.open;if\(modalOpen\)return/);
+});
+
+test('dialogs are named, focus their contents, restore the trigger, and keep pending issues open on Escape', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  for (const name of ['material', 'operation', 'issue', 'dnd', 'windows']) assert.ok(source.includes(`${name}-dialog-title`));
+  assert.match(source, /modal\.setAttribute\('aria-labelledby',id\)/);
+  assert.match(source, /modal\.addEventListener\('close',\(\)=>restoreFocus\(dialogOrigins\.get\(modal\)\)\)/);
+  assert.match(source, /\['RecoveryPending','MigrationPending'\]\.includes\(model\?\.lifecycle\)\)e\.preventDefault\(\)/);
+  for (const focus of ['fields.name.focus()', 'operationSubmit).focus()', 'dndRole.focus()', 'windowsRefresh.focus()']) assert.ok(source.includes(focus));
+});
+
+test('context actions use a button popup with keyboard traversal and focus return', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.match(source, /menu\.setAttribute\('role','group'\)/);
+  assert.deepEqual(['ArrowDown', 'ArrowUp', 'Home', 'End'].map(key => menuNextIndex(key, 2, 4)), [3, 1, 0, 3]);
+  assert.equal(menuNextIndex('ArrowDown', 3, 4), 0);
+  assert.equal(menuNextIndex('ArrowUp', 0, 4), 3);
+  assert.equal(menuNextIndex('ArrowUp', -1, 4), 3);
+  assert.equal(menuNextIndex('ArrowDown', 0, 0), -1);
+  assert.equal(menuNextIndex('Escape', 0, 4), -1);
+  for (const key of ['Escape', 'Tab']) assert.ok(source.includes(`e.key==='${key}'`));
+  assert.match(source, /e\.key==='ContextMenu'\|\|\(e\.shiftKey&&e\.key==='F10'\)/);
+  assert.match(source, /if\(!menu\.contains\(e\.target\)\)closeMenu\(\)/);
+  assert.match(source, /if\(!menu\.hidden\)\{e\.preventDefault\(\);closeMenu\(true\);return\}/);
+  assert.match(source, /queueMicrotask\(\(\)=>\{if\(!\[dialog,operationDialog,issue,dndDialog,windowsDialog\]/);
 });
 
 test('window inventory dialog balances context and workspace while keeping settings outside the list scroll', () => {
