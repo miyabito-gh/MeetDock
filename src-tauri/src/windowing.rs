@@ -461,7 +461,14 @@ fn snapshot_launch_command(item: &SnapshotItem) -> std::process::Command {
         command.arg(location);
         return command;
     }
-    std::process::Command::new(&item.executable_path)
+    let mut command = std::process::Command::new(&item.executable_path);
+    if let Some(parent) = Path::new(&item.executable_path)
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        command.current_dir(parent);
+    }
+    command
 }
 
 fn snapshot_path_key(path: &str) -> String {
@@ -2732,6 +2739,27 @@ mod tests {
         .unwrap();
         assert!(load_snapshot_file(&path).is_err());
         std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn snapshot_executable_launch_uses_its_parent_as_working_directory() {
+        let directory = std::env::temp_dir().join("meetdock-snapshot-working-directory");
+        let item = SnapshotItem {
+            material_id: None,
+            document_path: None,
+            shell_location: None,
+            app_name: "テストアプリ".into(),
+            title: "テストウィンドウ".into(),
+            executable_name: "test.exe".into(),
+            executable_path: directory.join("test.exe").to_string_lossy().into_owned(),
+            restorability: SnapshotRestorability::Restorable,
+            reason: None,
+        };
+
+        assert_eq!(
+            snapshot_launch_command(&item).get_current_dir(),
+            Some(directory.as_path())
+        );
     }
 
     #[test]

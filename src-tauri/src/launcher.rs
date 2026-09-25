@@ -515,6 +515,16 @@ fn matching_explorer_window(
     matches.next().is_none().then_some(hwnd)
 }
 
+fn executable_working_directory(path: &str) -> Option<&Path> {
+    let path = Path::new(path);
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+        .then(|| path.parent())
+        .flatten()
+        .filter(|parent| !parent.as_os_str().is_empty())
+}
+
 #[cfg(windows)]
 fn existing_explorer_window(_requested_path: &str) -> Option<isize> {
     // EnumWindows can establish that a window is Explorer, but it cannot safely expose
@@ -539,10 +549,16 @@ impl TargetLaunch for NativeTargetLaunch {
         };
         let shell_path = crate::contracts::windows_shell_path(&material.path);
         let target: Vec<u16> = shell_path.encode_utf16().chain(Some(0)).collect();
+        let working_directory = executable_working_directory(&shell_path)
+            .and_then(Path::to_str)
+            .map(|directory| directory.encode_utf16().chain(Some(0)).collect::<Vec<_>>());
         let mut execute = SHELLEXECUTEINFOW {
             cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
             fMask: SEE_MASK_NOCLOSEPROCESS,
             lpFile: PCWSTR(target.as_ptr()),
+            lpDirectory: working_directory
+                .as_ref()
+                .map_or(PCWSTR::null(), |directory| PCWSTR(directory.as_ptr())),
             nShow: SW_SHOWNORMAL.0,
             ..Default::default()
         };
@@ -961,6 +977,20 @@ mod tests {
             folder_path: Some("C:\\Meetings".into()),
         });
         assert_eq!(matching_explorer_window("c:/meetings/", &windows), None);
+    }
+
+    #[test]
+    fn executable_launch_uses_its_parent_as_working_directory() {
+        let directory = std::env::temp_dir().join("meetdock-launch-working-directory");
+        let executable = directory.join("Tool.EXE");
+        assert_eq!(
+            executable_working_directory(executable.to_str().unwrap()),
+            Some(directory.as_path())
+        );
+        assert_eq!(
+            executable_working_directory(directory.join("notes.txt").to_str().unwrap()),
+            None
+        );
     }
 
     #[test]
