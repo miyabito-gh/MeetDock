@@ -224,8 +224,10 @@ test('saved window rows reuse material icons and the left icon owns activate-or-
 
 test('groups and materials expose internal drag reorder affordances', () => {
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
   for(const token of ["'toggle-reorder'",'reorderMode','applyReorderMode',"el('span','drag-handle','⠿')",'elementFromPoint',"addEventListener('pointerdown'","addEventListener('pointermove'",'finishReorder','reorderGroup','reorderMaterial'])assert.ok(source.includes(token));
   assert.doesNotMatch(source,/addEventListener\('dragstart'/);
+  assert.match(styles,/\.drag-handle\{[^}]*width:24px;[^}]*flex:0 0 24px/);
 });
 
 test('reorder mode deletes material registration without confirmation',()=>{
