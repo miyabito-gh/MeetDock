@@ -1470,25 +1470,29 @@ reasoning effort: medium
 - マーカーツールはPDFを閉じる、開き直す、別PDFへ切り替える時に解除する。同じPDF内のページ操作や再描画では維持する。
 - 描画後の保存要求・応答ではViewのUndo／Redo履歴を保持する。資料IDとPDF識別子ごとの更新番号で遅延したsidecar load／save／remove応答を退け、同一PDFの保存操作を順番に実行する。Model→Effect→IPCと保存済みID境界を維持した。
 - `node --test tests/view.test.mjs tests/pdf-annotations.test.mjs tests/pdf-sidecar-ipc.test.mjs`は60件成功。関連する`tests/model.test.mjs tests/event-chain.test.mjs`は127件成功。`git diff --check`成功。Rustは変更していない。
+- 本書の前回進捗は`1e69e63`、利用枠と作業量の節約方針は`AGENTS.md`の`6913f66`でコミット・push済み。今回の引継ぎ更新と引継ぎ時のコミット規則は、次のローカルコミットに含める。pushは依頼されていない。
 
 ### 16.2 未解決・未確認
 
 - 上記マーカー2件の修正後の実機UI操作は未確認。アプリの起動・再起動はユーザーの明示許可が必要。
 - 工程Fで別途記録した背景・常時表示・しおり欄の高さ、色選択表示、ホイールのページ内スクロール、一覧のしおり表示と注釈削除、メニューのHome／End・Shift+F10・ContextMenu、最初のクリック消費、終了確認のlocalhost表示には着手していない。
 - スクリーンリーダー等の未確認項目を成功扱いにしない。作業ツリーにあった本書14.7〜14.9の既存変更は、この引継ぎ更新で内容を保持した。
+- 利用枠のアカウント全体の残量は確認したが、工程E・Fのタスク別消費量を示す履歴は取得できていない。長い文脈、大量のログ、修正途中の再テスト、高い推論量が消費を増やしうるため、以後は`AGENTS.md`の節約方針に従う。
 
 ### 16.3 次チャット用引継ぎプロンプト――PDFマーカー実機確認
+
+実機操作はコード修正と必要なツール・推論量が異なるため、この工程だけを次チャットへ分ける。
 
 ```text
 MeetDockのPDFマーカー修正2件だけを実機確認してください。工程F全体の再判定や他の残課題へは進まないでください。
 
-最初にAGENTS.md、UI_IMPLEMENTATION_HANDOVER.mdの16.1〜16.3、git status --short --branch、git log -5を確認してください。作業基準はC:\Users\wmasa\Documents\Rust\MeetDockのmasterです。工程Eは2df48da、PDF表示とマーカー修正は0d3d7b6でコミットされ、origin/masterへpush済みです。
+最初にAGENTS.mdの作業規則・利用枠節約方針、UI_IMPLEMENTATION_HANDOVER.mdの16.1〜16.3、git status --short --branch、git log -5を確認してください。作業基準はC:\Users\wmasa\Documents\Rust\MeetDockのmasterです。工程Eは2df48da、PDF表示とマーカー修正は0d3d7b6、前回の引継ぎは1e69e63、AGENTS.mdの節約方針は6913f66でコミット・push済みです。最新の引継ぎ更新と引継ぎ時のコミット規則はローカルコミット済みで、pushは未実施です。
 
 実機UIを起動・再起動する前にユーザーの明示許可を確認してください。許可がなければ自動テスト結果と未確認事項を報告して止めてください。
 
 確認する操作は、PDFを開く、閉じて開き直す、別PDFへ切り替える際に明示選択前の描画が始まらないこと、同じPDF内のページ操作では意図したツール状態が保たれること、描画後の元に戻す・やり直すが有効で保存済み注釈へ反映されることです。保存応答の遅延や再描画後もUndo履歴が残ることを確認してください。既存のPDF表示修正も壊れていないことを確認してください。
 
-自動テストはnode --test tests/view.test.mjs tests/pdf-annotations.test.mjs tests/pdf-sidecar-ipc.test.mjsが60件成功し、tests/model.test.mjs tests/event-chain.test.mjsが127件成功しています。Rustは変更していません。コード変更が必要になった場合は対象を限定し、対応テストとgit diff --checkを実行してください。コミット・pushは明示依頼時だけ行ってください。
+自動テストはnode --test tests/view.test.mjs tests/pdf-annotations.test.mjs tests/pdf-sidecar-ipc.test.mjsが60件成功し、tests/model.test.mjs tests/event-chain.test.mjsが127件成功しています。Rustは変更していません。コード変更が必要になった場合は対象を限定し、対応テストとgit diff --checkを実行してください。既存の成功ログや文書全体を再読せず、必要な箇所だけ確認してください。引継ぎ依頼時は更新した文書を含む対象変更をコミットし、pushは明示依頼時だけ行ってください。
 
 推奨モデル: gpt-5.6-sol
 reasoning effort: medium
