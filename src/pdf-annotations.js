@@ -47,6 +47,12 @@ export function createAnnotationHistory(initial = []) {
   return { present: structuredClone(initial), past: [], future: [] };
 }
 
+export function annotationSessionChange(activeKey, activeGeneration, activeValue, dirty, key, generation, value) {
+  if (key !== activeKey || generation !== activeGeneration) return 'reset';
+  if (dirty || value === activeValue) return 'keep';
+  return 'load';
+}
+
 export function commitAnnotations(history, next) {
   if (JSON.stringify(history.present) === JSON.stringify(next)) return history;
   return { present: structuredClone(next), past: [...history.past, history.present], future: [] };

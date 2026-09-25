@@ -10,7 +10,7 @@ export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings Syn
 
 export function initialState() {
   return { lifecycle: Lifecycle.Booting, edit: Edit.Clean, sync: { kind: 'Idle' },
-    launch: { running: [], batch: null }, pdf: { kind: Pdf.Closed }, pdf_sidecars: {},
+    launch: { running: [], batch: null }, pdf: { kind: Pdf.Closed }, pdf_sidecars: {}, pdf_sidecar_revisions: {},
     windowing: { dialog_open: false, sync: { kind: 'Idle' }, items: [], exclusions: [], running: [], closing: [], saving_exclusions: false, snapshot_busy:false, snapshot_focus_after_load:false, snapshot:null, snapshot_running:[], snapshot_batch:false, last_sync_at: null },
     config_revision: 0, state_generation: 0, saved_config: null, draft: null,
     candidates: [], resolution: null, saving: null, selected_group_id: null,
@@ -514,28 +514,33 @@ export function transition(s, e) {
       if (e.type !== Event.PdfReady) return result({ ...s, pdf: nextPdf }, [], e.error ?? null);
       const current = material(s, s.pdf.material_id), pdf_identity = `${current.target_type}:${current.path}`;
       return result({ ...s, pdf: { ...nextPdf, sidecar_loading: true, pdf_identity } },
-        [effect(Effect.LoadPdfSidecar, { material_id: current.id, pdf_identity }, { generation: s.pdf.generation })]);
+        [effect(Effect.LoadPdfSidecar, { material_id: current.id, pdf_identity }, { generation: s.pdf.generation, sidecar_revision: s.pdf_sidecar_revisions[`${current.id}\0${pdf_identity}`] ?? 0 })]);
     case Event.PdfSidecarLoaded:
       if (s.pdf.kind !== Pdf.Viewing || e.generation !== s.pdf.generation || e.material_id !== s.pdf.material_id) return deny();
+      if (e.sidecar_revision !== (s.pdf_sidecar_revisions[`${e.material_id}\0${e.pdf_identity}`] ?? 0)) return result({ ...s, pdf: { ...s.pdf, sidecar_loading: false } }, [], null, 'stale_sidecar');
       return result({ ...s, pdf: { ...s.pdf, sidecar_loading: false, sidecar: e.sidecar }, pdf_sidecars: e.sidecar ? { ...s.pdf_sidecars, [`${e.sidecar.material_id}\0${e.sidecar.pdf_identity}`]: e.sidecar } : s.pdf_sidecars });
     case Event.PdfSidecarSaveRequested:
       { const target = material(s, e.sidecar?.material_id), identity = target ? `${target.target_type}:${target.path}` : null;
       if (!target || e.sidecar?.pdf_identity !== identity) return deny();
-      const key = `${e.sidecar.material_id}\0${identity}`, current = s.pdf.kind === Pdf.Viewing && e.sidecar.material_id === s.pdf.material_id;
+      const key = `${e.sidecar.material_id}\0${identity}`, current = s.pdf.kind === Pdf.Viewing && e.sidecar.material_id === s.pdf.material_id, revision = (s.pdf_sidecar_revisions[key] ?? 0) + 1;
       return result({ ...s, pdf: current ? { ...s.pdf, sidecar: structuredClone(e.sidecar) } : s.pdf,
-        pdf_sidecars: { ...s.pdf_sidecars, [key]: structuredClone(e.sidecar) } },
-        [effect(Effect.SavePdfSidecar, structuredClone(e.sidecar), { generation: s.state_generation })]); }
+        pdf_sidecars: { ...s.pdf_sidecars, [key]: structuredClone(e.sidecar) }, pdf_sidecar_revisions: { ...s.pdf_sidecar_revisions, [key]: revision } },
+        [effect(Effect.SavePdfSidecar, structuredClone(e.sidecar), { generation: s.state_generation, sidecar_revision: revision })]); }
     case Event.PdfSidecarSaved:
+      if (e.sidecar_revision !== s.pdf_sidecar_revisions[`${e.sidecar.material_id}\0${e.sidecar.pdf_identity}`]) return result(s, [], null, 'stale_sidecar');
       return result({ ...s, pdf_sidecars: { ...s.pdf_sidecars, [`${e.sidecar.material_id}\0${e.sidecar.pdf_identity}`]: e.sidecar },
-        pdf: s.pdf.kind === Pdf.Viewing && e.sidecar.material_id === s.pdf.material_id ? { ...s.pdf, sidecar: e.sidecar } : s.pdf });
+        pdf: s.pdf.kind === Pdf.Viewing && e.sidecar.material_id === s.pdf.material_id && e.sidecar.pdf_identity === s.pdf.pdf_identity ? { ...s.pdf, sidecar: e.sidecar } : s.pdf });
     case Event.PdfSidecarRemoveRequested: {
       const target = material(s, e.material_id), identity = target ? `${target.target_type}:${target.path}` : null;
       if (!target || e.pdf_identity !== identity) return deny();
-      return result(s, [effect(Effect.RemovePdfSidecar, { material_id: e.material_id, pdf_identity: identity })]);
+      const key = `${e.material_id}\0${identity}`, revision = (s.pdf_sidecar_revisions[key] ?? 0) + 1;
+      const sidecars = { ...s.pdf_sidecars }; delete sidecars[key];
+      return result({ ...s, pdf_sidecars: sidecars, pdf: s.pdf.kind === Pdf.Viewing && e.material_id === s.pdf.material_id ? { ...s.pdf, sidecar: null } : s.pdf, pdf_sidecar_revisions: { ...s.pdf_sidecar_revisions, [key]: revision } }, [effect(Effect.RemovePdfSidecar, { material_id: e.material_id, pdf_identity: identity }, { sidecar_revision: revision })]);
     }
     case Event.PdfSidecarRemoved: {
       const key = `${e.material_id}\0${e.pdf_identity}`, sidecars = { ...s.pdf_sidecars }; delete sidecars[key];
-      return result({ ...s, pdf_sidecars: sidecars, pdf: s.pdf.kind === Pdf.Viewing && e.material_id === s.pdf.material_id ? { ...s.pdf, sidecar: null } : s.pdf });
+      if (e.sidecar_revision !== s.pdf_sidecar_revisions[key]) return result(s, [], null, 'stale_sidecar');
+      return result({ ...s, pdf_sidecars: sidecars, pdf: s.pdf.kind === Pdf.Viewing && e.material_id === s.pdf.material_id && e.pdf_identity === s.pdf.pdf_identity ? { ...s.pdf, sidecar: null } : s.pdf });
     }
     case Event.PdfSidecarFailed:
       return result(s, [], e.error);

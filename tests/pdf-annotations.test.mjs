@@ -1,6 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { addBookmark, commitAnnotations, createAnnotationHistory, createStroke, deleteBookmark, eraseAt, exportPdfAnnotations, hitTestStroke, importPdfAnnotations, normalizePoint, redoAnnotations, renameBookmark, reorderBookmark, undoAnnotations } from '../src/pdf-annotations.js';
+import { addBookmark, annotationSessionChange, commitAnnotations, createAnnotationHistory, createStroke, deleteBookmark, eraseAt, exportPdfAnnotations, hitTestStroke, importPdfAnnotations, normalizePoint, redoAnnotations, renameBookmark, reorderBookmark, undoAnnotations } from '../src/pdf-annotations.js';
+
+test('annotation session resets on preview close, reopen and PDF switch but keeps same-page edits', () => {
+  const key='m1\0file:a.pdf', other='m2\0file:b.pdf', saved={strokes:[]};
+  assert.equal(annotationSessionChange(null,null,null,false,key,1,saved),'reset');
+  assert.equal(annotationSessionChange(key,1,saved,false,key,1,saved),'keep');
+  assert.equal(annotationSessionChange(key,1,saved,true,key,1,{strokes:[{id:'new'}]}),'keep');
+  assert.equal(annotationSessionChange(key,1,saved,true,null,undefined,null),'reset');
+  assert.equal(annotationSessionChange(key,1,saved,true,key,2,saved),'reset');
+  assert.equal(annotationSessionChange(key,1,saved,true,other,3,saved),'reset');
+  assert.equal(annotationSessionChange(key,1,saved,false,key,1,{strokes:[]}), 'load');
+});
 
 test('marker strokes use normalized page coordinates and supported styles', () => {
   assert.deepEqual(normalizePoint(50, 25, 100, 100), { x: .5, y: .25 });

@@ -2,7 +2,45 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { batchButtonAction, batchSummary, displayPath, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, reorderPlacement, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+import { runInNewContext } from 'node:vm';
+import { commitAnnotations, createAnnotationHistory, createStroke, redoAnnotations, undoAnnotations } from '../src/pdf-annotations.js';
+import { batchButtonAction, batchSummary, displayPath, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, reorderPlacement, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+
+test('PDF annotation canvas follows the rendered page and stays transparent',()=>{
+  assert.deepEqual(pdfOverlayBounds({offsetLeft:24,offsetTop:24,clientWidth:712,clientHeight:1007}),{left:24,top:24,width:712,height:1007});
+  assert.deepEqual(pdfOverlayBounds({offsetLeft:163,offsetTop:24,clientWidth:390,clientHeight:552}),{left:163,top:24,width:390,height:552});
+  const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  assert.match(view,/overlay\.style\.left=`\$\{bounds\.left\}px`/);
+  assert.match(view,/overlay\.style\.top=`\$\{bounds\.top\}px`/);
+  assert.match(view,/new ResizeObserver\(\(\)=>drawAnnotations\(\)\)\.observe\(canvas\)/);
+  assert.match(styles,/\.canvas-wrap \.annotation-overlay\{[^}]*background:transparent;box-shadow:none/);
+});
+
+test('PDF marker pointer and toolbar events retain Undo across model renders and reset tools on preview changes',()=>{
+  const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const handlers={},saved=[];
+  const scope={annotationTools:{addEventListener:(type,handler)=>{handlers[type]=handler}},widthSelect:{addEventListener(){}},markerTool:'marker',markerColor:'yellow',markerWidth:'standard',drawing:{pointerId:7,points:[{x:.2,y:.3}]},newId:()=> 'stroke',createStroke,annotationHistory:createAnnotationHistory(),undoAnnotations,redoAnnotations,commitAnnotations,persistSidecar(){saved.push(scope.annotationHistory.present)},updateAnnotations(){},model:{pdf:{current_page:1}},overlay:{addEventListener:(type,handler)=>{handlers[type]=handler}}};
+  const start=view.indexOf("annotationTools.addEventListener('click'");
+  const end=view.indexOf('const overlayPoint=',start);
+  assert.ok(start>=0&&end>start);
+  runInNewContext(view.slice(start,end),scope);
+  const click=action=>handlers.click({target:{closest:()=>({dataset:{action}})}});
+  const finishStart=view.indexOf('const finishStroke=e=>');
+  const finishEnd=view.indexOf("overlay.addEventListener('pointercancel'",finishStart);
+  assert.ok(finishStart>=0&&finishEnd>finishStart);
+  runInNewContext(view.slice(finishStart,finishEnd),scope);
+  handlers.pointerup({pointerId:7,stopPropagation(){}});
+  assert.equal(scope.annotationHistory.past.length,1);
+  click('marker-undo');
+  assert.deepEqual(scope.annotationHistory.present,[]);
+  assert.equal(scope.annotationHistory.future.length,1);
+  click('marker-redo');
+  assert.deepEqual(scope.annotationHistory.present.map(item=>item.id),['stroke']);
+  assert.deepEqual(saved.map(value=>Array.from(value,item=>item.id)),[['stroke'],[],['stroke']]);
+  assert.match(view,/function selectSidecar\(\).*annotationSessionChange\(.*if\(change==='keep'\)return;if\(change==='reset'\)\{markerTool=null;drawing=null;annotationDirty=false/s);
+  assert.match(view,/function persistSidecar\(\).*annotationDirty=true/);
+});
 
 test('collapsed sidebar plus maximized PDF removes width limit and background focus', () => {
   const css = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');

@@ -30,10 +30,17 @@ export function createServices(ipc, pdf, lifecycle, fullscreen = { set: async ()
  * pdf.replace owns cancel -> Canvas reset -> cleanup -> destroy -> load (Phase 6).
  */
 export function createEffectRunner(services, dispatch, onIdle = () => {}) {
-  const seen = new WeakSet(), pending = new Set(), batches = new Map();
+  const seen = new WeakSet(), pending = new Set(), batches = new Map(), sidecarQueues = new Map();
   let fullscreenQueue = Promise.resolve();
+  const persistSidecar = (f, action) => {
+    const key = `${f.request.material_id}\0${f.request.pdf_identity}`;
+    const operation = (sidecarQueues.get(key) ?? Promise.resolve()).catch(() => {}).then(action);
+    sidecarQueues.set(key, operation);
+    operation.finally(() => { if (sidecarQueues.get(key) === operation) sidecarQueues.delete(key); }).catch(() => {});
+    return operation;
+  };
   async function execute(f) {
-    const context = { generation: f.generation, material_id: f.request.material_id, pdf_identity: f.request.pdf_identity, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id, index:f.request.index,
+    const context = { generation: f.generation, material_id: f.request.material_id, pdf_identity: f.request.pdf_identity, sidecar_revision: f.sidecar_revision, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id, index:f.request.index,
       ...(Number.isSafeInteger(f.request.search_generation) ? { search_generation: f.request.search_generation } : {}) };
     let event;
     try {
@@ -123,8 +130,8 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
           event = { type: Event.PdfFullscreenSucceeded, value: f.request.value, request: f.request.request }; break;
         }
         case Effect.LoadPdfSidecar: event = { type: Event.PdfSidecarLoaded, sidecar: await services.pdfSidecars.load(f.request), ...context }; break;
-        case Effect.SavePdfSidecar: event = { type: Event.PdfSidecarSaved, sidecar: await services.pdfSidecars.save(f.request), ...context }; break;
-        case Effect.RemovePdfSidecar: event = { type: Event.PdfSidecarRemoved, removed: await services.pdfSidecars.remove(f.request), ...context }; break;
+        case Effect.SavePdfSidecar: event = { type: Event.PdfSidecarSaved, sidecar: await persistSidecar(f, () => services.pdfSidecars.save(f.request)), ...context }; break;
+        case Effect.RemovePdfSidecar: event = { type: Event.PdfSidecarRemoved, removed: await persistSidecar(f, () => services.pdfSidecars.remove(f.request)), ...context }; break;
         case Effect.PdfPrevious: event = { type: Event.PdfViewChanged, view: await services.pdf.previous(f.request), ...context }; break;
         case Effect.PdfNext: event = { type: Event.PdfViewChanged, view: await services.pdf.next(f.request), ...context }; break;
         case Effect.PdfGoToPage: event = { type: Event.PdfViewChanged, view: await services.pdf.goToPage(f.request.page, f.request), ...context }; break;
