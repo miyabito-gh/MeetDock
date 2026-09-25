@@ -24,6 +24,8 @@ export class PdfViewAdapter {
   #searchQuery = '';
   #searchMatches = [];
   #searchIndex = -1;
+  #pageText = '';
+  #pageTextNumber = null;
 
   constructor({ canvas, requestPassword = async () => null, resolveUrl = url => url, pdfjs }) {
     if (!canvas?.getContext || typeof requestPassword !== 'function' || typeof resolveUrl !== 'function' || !pdfjs?.getDocument) throw new TypeError('invalid PDF adapter ports');
@@ -50,6 +52,8 @@ export class PdfViewAdapter {
     this.#searchQuery = '';
     this.#searchMatches = [];
     this.#searchIndex = -1;
+    this.#pageText = '';
+    this.#pageTextNumber = null;
     document?.cleanup?.();
     const previous = this.#destroying;
     const destroying = previous.catch(() => {}).then(async () => {
@@ -113,6 +117,7 @@ export class PdfViewAdapter {
       search_query: this.#searchQuery,
       search_index: this.#searchIndex < 0 ? 0 : this.#searchIndex + 1,
       search_total: this.#searchMatches.length,
+      page_text: this.#pageText,
     });
   }
 
@@ -121,15 +126,23 @@ export class PdfViewAdapter {
     if (!document || token !== this.#generation) return;
     try {
       this.#renderTask?.cancel?.();
-      const page = await document.getPage(this.#pageNumber);
-      if (token !== this.#generation) return;
+      const pageNumber = this.#pageNumber;
+      const page = await document.getPage(pageNumber);
+      if (token !== this.#generation || pageNumber !== this.#pageNumber) return;
       const viewport = page.getViewport({ scale: this.#scale });
       this.#canvas.width = Math.ceil(viewport.width);
       this.#canvas.height = Math.ceil(viewport.height);
       const render = page.render({ canvasContext: this.#canvas.getContext('2d'), viewport });
       this.#renderTask = render;
       await render.promise;
-      if (token !== this.#generation) return;
+      if (token !== this.#generation || pageNumber !== this.#pageNumber) return;
+      if (this.#pageTextNumber !== pageNumber) {
+        let content;
+        try { content = await page.getTextContent(); } catch { content = { items: [] }; }
+        if (token !== this.#generation || pageNumber !== this.#pageNumber) return;
+        this.#pageText = content.items.map(item => `${item.str ?? ''}${item.hasEOL ? '\n' : ' '}`).join('').trim();
+        this.#pageTextNumber = pageNumber;
+      }
     } catch (error) {
       if (token !== this.#generation || error?.name === 'RenderingCancelledException') return;
       throw pdfError('PDF_CORRUPT');

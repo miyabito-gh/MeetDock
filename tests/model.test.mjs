@@ -24,6 +24,26 @@ const batch = () => run(ready(), Event.BatchLaunchRequested, { group_id: 'g1' })
 const loading = () => run(ready(), Event.PdfOpenRequested, { material_id: 'm1' }).state;
 const pdfView = { current_page: 1, total_pages: 4, zoom_percent: 100 };
 const viewing = () => run(loading(), Event.PdfReady, { material_id: 'm1', generation: 2, view: pdfView }).state;
+
+test('PDF fullscreen confirms native success, keeps state on failure, and clears on close', () => {
+  const initial = viewing();
+  const requested = run(initial, Event.PdfMaximizeToggled);
+  assert.equal(requested.state.layout.pdf_maximized, false);
+  assert.equal(requested.state.layout.pdf_fullscreen_pending, true);
+  assert.equal(requested.effects[0].type, Effect.SetFullscreen);
+  assert.equal(run(requested.state, Event.PdfMaximizeToggled).effects.length, 0);
+  const failed = run(requested.state, Event.PdfFullscreenFailed, { value: true });
+  assert.equal(failed.state.layout.pdf_maximized, false);
+  assert.equal(failed.state.layout.pdf_fullscreen_pending, null);
+  const maximized = run(requested.state, Event.PdfFullscreenSucceeded, { value: true }).state;
+  assert.equal(maximized.layout.pdf_maximized, true);
+  const closed = run(maximized, Event.PdfClosed);
+  assert.equal(closed.state.layout.pdf_maximized, false);
+  assert.ok(closed.effects.some(effect => effect.type === Effect.SetFullscreen && effect.request.value === false));
+  const changedGroup = run(maximized, Event.GroupSelected, { group_id: 'g2' });
+  assert.equal(changedGroup.state.layout.pdf_maximized, false);
+  assert.ok(changedGroup.effects.some(effect => effect.type === Effect.SetFullscreen && effect.request.value === false));
+});
 const candidate = { candidate_id: 'candidate1', kind: 'backup', revision: 12, last_updated: null };
 const pending = lifecycle => ({ ...initialState(), lifecycle, candidates: [{ ...candidate, kind: lifecycle === Lifecycle.MigrationPending ? 'legacy' : 'backup' }] });
 const response = mode => ({ mode, config: null, source_schema_version: mode === 'read_only_future_schema' ? 4 : 3, candidates: [{ ...candidate, kind: mode === 'migration_required' ? 'legacy' : 'backup' }], notice_code: null });
@@ -468,6 +488,8 @@ test('PDF fallback opens only its saved material ID through Activate', () => {
   assert.deepEqual(result.effects[0].request, { material_id: 'm1' });
   const unsupported = run({ ...failed, pdf: { ...failed.pdf, code: 'PDF_PASSWORD_REQUIRED' } }, Event.PdfOpenExternalRequested);
   assert.equal(unsupported.effects.length, 0);
+  const password = run({ ...failed, pdf: { kind: Pdf.PasswordRequired, material_id: 'm1', generation: 1 } }, Event.PdfOpenExternalRequested);
+  assert.deepEqual(password.effects[0].request, { material_id: 'm1' });
 });
 
 test('layout boundaries and PDF controls are mediated', () => {

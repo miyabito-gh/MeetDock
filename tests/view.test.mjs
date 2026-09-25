@@ -4,6 +4,24 @@ import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { batchButtonAction, batchSummary, displayPath, materialIcon, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, reorderPlacement, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
 
+test('collapsed sidebar plus maximized PDF removes width limit and background focus', () => {
+  const css = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  const view = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.match(css, /\.app-shell\.sidebar-collapsed \.preview\.maximized\{max-width:none;flex-basis:100%;\}/);
+  for (const region of ['sidebar', 'listPane', 'toolbar', 'split']) assert.match(view, new RegExp(`${region}\\.inert=`));
+  assert.match(view, /pdfMaxButton\.setAttribute\('aria-pressed',String\(next\.layout\.pdf_maximized\)\)/);
+  assert.match(view, /sidebarToggle\.setAttribute\('aria-expanded',String\(!next\.layout\.sidebar_collapsed\)\)/);
+});
+
+test('marker pointer capture cannot enter the pan handler and can be released', () => {
+  const view = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  assert.match(view, /overlay\.addEventListener\('pointerdown'.*e\.stopPropagation\(\);overlay\.setPointerCapture/s);
+  assert.match(view, /wrap\.addEventListener\('pointerdown'.*\|\|markerTool\|\|/s);
+  assert.match(view, /overlay\.addEventListener\('lostpointercapture'/);
+  assert.match(css, /\.annotation-overlay\{pointer-events:none\}\.annotation-overlay\.drawing\{pointer-events:auto\}/);
+});
+
 test('pointer release dispatches reorder, role move and empty drop correctly',()=>{
   const source={group_id:'g1',role:'main'};
   assert.deepEqual(reorderDropAction('group','g2',null,{beforeId:'g1'}),{action:'reorderGroup',args:['g2','g1']});

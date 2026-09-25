@@ -13,7 +13,7 @@ function settingsEvent(response) {
 }
 
 // Thin application-service ports. Actual IPC is only reachable through these ports.
-export function createServices(ipc, pdf, lifecycle) {
+export function createServices(ipc, pdf, lifecycle, fullscreen = { set: async () => {} }) {
   return Object.freeze({
     settings: Object.freeze({ load: () => ipc.call('load_settings'), resolve: r => ipc.call('resolve_settings_issue', r), save: r => ipc.call('save_settings', r) }),
     statuses: Object.freeze({ sync: r => ipc.call('sync_material_statuses', r) }),
@@ -21,7 +21,7 @@ export function createServices(ipc, pdf, lifecycle) {
     launch: Object.freeze({ activate: r => ipc.call('activate_or_launch', r), batch: r => ipc.call('batch_launch_main', r), openContainingFolder: r => ipc.call('open_containing_folder', r) }),
     droppedFiles: Object.freeze({ prepare: r => ipc.call('prepare_dropped_files', r) }),
     pdfSidecars: Object.freeze({ load: r => ipc.call('load_pdf_sidecar', r), save: r => ipc.call('save_pdf_sidecar', r), remove: r => ipc.call('remove_pdf_sidecar', r) }),
-    pdf, lifecycle,
+    pdf, lifecycle, fullscreen,
   });
 }
 
@@ -31,6 +31,7 @@ export function createServices(ipc, pdf, lifecycle) {
  */
 export function createEffectRunner(services, dispatch, onIdle = () => {}) {
   const seen = new WeakSet(), pending = new Set(), batches = new Map();
+  let fullscreenQueue = Promise.resolve();
   async function execute(f) {
     const context = { generation: f.generation, material_id: f.request.material_id, pdf_identity: f.request.pdf_identity, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id, index:f.request.index,
       ...(Number.isSafeInteger(f.request.search_generation) ? { search_generation: f.request.search_generation } : {}) };
@@ -115,6 +116,12 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
           event = { type: Event.PdfReady, view, ...context }; break;
         }
         case Effect.ClosePdf: await services.pdf.close(); return;
+        case Effect.SetFullscreen: {
+          const operation = fullscreenQueue.catch(() => {}).then(() => services.fullscreen.set(f.request.value));
+          fullscreenQueue = operation;
+          await operation;
+          event = { type: Event.PdfFullscreenSucceeded, value: f.request.value }; break;
+        }
         case Effect.LoadPdfSidecar: event = { type: Event.PdfSidecarLoaded, sidecar: await services.pdfSidecars.load(f.request), ...context }; break;
         case Effect.SavePdfSidecar: event = { type: Event.PdfSidecarSaved, sidecar: await services.pdfSidecars.save(f.request), ...context }; break;
         case Effect.RemovePdfSidecar: event = { type: Event.PdfSidecarRemoved, removed: await services.pdfSidecars.remove(f.request), ...context }; break;
@@ -144,11 +151,12 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         [Effect.PrepareDroppedFiles]: Event.DroppedFilesPrepareFailed,
         [Effect.BatchLaunch]: Event.BatchLaunchCompleted,
         [Effect.ReplacePdf]: error.code === 'PDF_PASSWORD_REQUIRED' ? Event.PdfPasswordRequired : Event.PdfFailed,
+        [Effect.SetFullscreen]: Event.PdfFullscreenFailed,
         [Effect.ClosePdf]: Event.EffectFailed, [Effect.LoadPdfSidecar]: Event.PdfSidecarFailed, [Effect.SavePdfSidecar]: Event.PdfSidecarFailed, [Effect.RemovePdfSidecar]: Event.PdfSidecarFailed, [Effect.PdfPrevious]: Event.PdfFailed, [Effect.PdfNext]: Event.PdfFailed,
         [Effect.PdfZoomIn]: Event.PdfFailed, [Effect.PdfZoomOut]: Event.PdfFailed, [Effect.PdfFit]: Event.PdfFailed,
         [Effect.PdfSearch]: Event.PdfFailed, [Effect.PdfSearchPrevious]: Event.PdfFailed, [Effect.PdfSearchNext]: Event.PdfFailed, [Effect.CloseWindow]: Event.EffectFailed,
       }[f.type] ?? Event.FatalError;
-      event = { type, error, ...context, effect_type: f.type, request_id: f.request.request_id };
+      event = { type, error, ...context, value: f.request.value, effect_type: f.type, request_id: f.request.request_id };
     }
     if ([Event.PdfViewChanged, Event.PdfSearchCompleted].includes(event?.type) && !event.view) return;
     dispatch(event);

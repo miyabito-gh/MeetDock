@@ -16,6 +16,14 @@ const ready = () => {
 };
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const req1 = '12345678-1234-4234-8234-123456789abc', req2 = '12345678-1234-4234-8234-123456789abd';
+test('native fullscreen effect reports success and failure without committing the model early', async () => {
+  const events = [];
+  const services = createServices({ call: async () => {} }, {}, {}, { set: async value => { if (value) throw Error('native failure'); } });
+  const runner = createEffectRunner(services, event => events.push(event));
+  runner.run([{ type: Effect.SetFullscreen, request: { value: true } }, { type: Effect.SetFullscreen, request: { value: false } }]);
+  await runner.settled();
+  assert.deepEqual(events.map(event => [event.type, event.value]), [[Event.PdfFullscreenFailed, true], [Event.PdfFullscreenSucceeded, false]]);
+});
 test('close choices preserve dirty work on cancel and cover saving state',()=>{
   assert.equal(closeAction('Clean',null),'close');
   for(const edit of ['Dirty','Conflict','Saving']){

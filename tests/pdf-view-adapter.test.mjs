@@ -8,6 +8,24 @@ function page(log, pending = Promise.resolve(), baseWidth = 10, text = '') { ret
 function document(log, renderPromise, numPages = 4, baseWidth = 10) { return { numPages, getPage: async () => page(log, renderPromise, baseWidth), cleanup: () => log.push('cleanup'), destroy: async () => log.push('destroy-document') }; }
 function loading(doc, log) { return { promise: Promise.resolve(doc), destroy: async () => log.push('destroy-loading'), onPassword: null }; }
 
+test('only the visible page text is exposed and zoom reuses its extraction', async () => {
+  const reads = [];
+  const doc = { numPages: 3, getPage: async number => ({
+    getViewport: ({ scale }) => ({ width: 10 * scale, height: 20 * scale }),
+    render: () => ({ promise: Promise.resolve(), cancel() {} }),
+    getTextContent: async () => { reads.push(number); return { items: [{ str: `page ${number}` }] }; },
+  }), async destroy() {} };
+  const adapter = new PdfViewAdapter({ canvas: canvas([]), pdfjs: { GlobalWorkerOptions: {}, getDocument: () => loading(doc, []) } });
+  const first = await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 1 });
+  assert.equal(first.page_text, 'page 1');
+  assert.deepEqual(reads, [1]);
+  assert.equal((await adapter.zoomIn({ generation: 1 })).page_text, 'page 1');
+  assert.deepEqual(reads, [1]);
+  assert.equal((await adapter.next({ generation: 1 })).page_text, 'page 2');
+  assert.deepEqual(reads, [1, 2]);
+  await adapter.close();
+});
+
 test('PDF replace cancels, resets Canvas, cleans and destroys before loading next document', async () => {
   const log = [], firstRender = deferred(), loads = [];
   const pdfjs = { GlobalWorkerOptions: {}, getDocument: ({url}) => { log.push(`load:${url}`); const item = loading(document(log, loads.length ? Promise.resolve() : firstRender.promise), log); loads.push(item); return item; } };
@@ -87,7 +105,7 @@ test('HTTP 413 and unreadable or unsupported PDF failures expose fallback codes'
   }
 });
 
-const emptySearch = { search_query: '', search_index: 0, search_total: 0 };
+const emptySearch = { search_query: '', search_index: 0, search_total: 0, page_text: '' };
 
 test('view snapshot starts at page 1 and 100%, follows navigation and zoom, fits computed width, and clamps page boundaries', async () => {
   const adapter = new PdfViewAdapter({ canvas: canvas([]), pdfjs: { GlobalWorkerOptions: {}, getDocument: () => loading(document([], Promise.resolve(), 2, 200), []) } });
@@ -116,10 +134,10 @@ test('PDF text search counts matches, opens the first page, wraps navigation, an
   const doc = { numPages: pages.length, getPage: async number => page(log, Promise.resolve(), 10, pages[number - 1]), cleanup() {}, async destroy() {} };
   const adapter = new PdfViewAdapter({ canvas: canvas(log), pdfjs: { GlobalWorkerOptions: {}, getDocument: () => loading(doc, log) } });
   await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 3 });
-  assert.deepEqual(await adapter.search('AGENDA', { generation: 3 }), { current_page: 1, total_pages: 3, zoom_percent: 100, search_query: 'AGENDA', search_index: 1, search_total: 3 });
+  assert.deepEqual(await adapter.search('AGENDA', { generation: 3 }), { current_page: 1, total_pages: 3, zoom_percent: 100, search_query: 'AGENDA', search_index: 1, search_total: 3, page_text: 'Agenda agenda' });
   assert.equal((await adapter.searchNext({ generation: 3 })).search_index, 2);
   assert.equal((await adapter.searchNext({ generation: 3 })).current_page, 3);
   assert.equal((await adapter.searchNext({ generation: 3 })).search_index, 1);
   assert.equal((await adapter.searchPrevious({ generation: 3 })).search_index, 3);
-  assert.deepEqual(await adapter.search('', { generation: 3 }), { current_page: 3, total_pages: 3, zoom_percent: 100, ...emptySearch });
+  assert.deepEqual(await adapter.search('', { generation: 3 }), { current_page: 3, total_pages: 3, zoom_percent: 100, ...emptySearch, page_text: 'agenda' });
 });
