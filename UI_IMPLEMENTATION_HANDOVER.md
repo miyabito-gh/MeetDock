@@ -1459,6 +1459,48 @@ reasoning effort: medium
 理由: 主にARIAとフォーカス管理だが、全工程の統合確認と実機検証設計が必要なため。
 ```
 
+### 16.10 2026-09-26 Acrobat Reader実機観測後の原因調査引継ぎ
+
+- ユーザー実機で項目1を確認した結果、Adobe Acrobat Reader Continuous Release 2025.001.20756（64-bit）を使用している。
+- PDFは `C:\Users\wmasa\Documents\tmp` 配下で、MeetDockから起動した。Acrobatのタブ表示・別ウィンドウ表示のどちらでも同じ結果になった。
+- Acrobatの文書プロパティでは対象PDFの場所が `C:\Users\wmasa\Documents\tmp\` と確認できた。
+- MeetDockで「現在を一時保存」→保存→再読込したところ、PDFの完全パスは取得されず、Acrobat行は `C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe` にフォールバックした。これは `document_path` がなく、`executable_path` が表示されている状態と考えられる。
+- 「一時保存したウィンドウ」を新しいグループへ登録すると、実際に登録されるファイル数／対象が減る事象も確認された。Acrobat PDFが実行ファイル対象へフォールバックし、登録時の対象選別・重複判定で除外されている可能性がある。
+- サブエージェント起動は `gpt-5.6-sol / medium` および `gpt-5.6-terra / medium` で複数回試行したが、`create_thread received invalid arguments` により起動できなかった。次チャットはユーザーが手動起動する。
+- 既存のCMap対応変更（PDF.js標準CMap一式169ファイルと代表テスト）は未コミットの作業として保持している。引継ぎ依頼のため、この文書と併せてコミット対象とする。
+
+#### 次チャット用引継ぎプロンプト
+
+```text
+MeetDockの残存課題1「Adobe Acrobat Readerで開いているPDFの完全パス取得」を、実機観測結果に基づいて原因限定・必要な限定修正まで進めてください。作業基準はC:\Users\wmasa\Documents\Rust\MeetDockのmasterです。astraは使用せず、推奨モデルはgpt-5.6-sol / medium（またはgpt-5.6-terra / medium）です。
+
+実機観測:
+- Adobe Acrobat Reader Continuous Release 2025.001.20756、64-bit。
+- PDFは C:\Users\wmasa\Documents\tmp 配下。
+- PDFはMeetDockから起動した。Acrobatのタブ表示でも別ウィンドウ表示でも同じ。
+- Acrobatの文書プロパティでは対象PDFの場所が C:\Users\wmasa\Documents\tmp\ と確認できる。
+- MeetDockで「現在を一時保存」→保存→再読込したが、Acrobat PDFのdocument_pathは取得されず、行には C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe が表示された。つまりPDF完全パスではなくAcrobat実行ファイルパスへフォールバックしている。
+- 「一時保存したウィンドウ」を新しいグループへ登録すると、実際に登録されるファイル数／対象が減る事象も確認された。
+
+必須手順:
+1. 最初に git status --short、対象差分、必要なら git log -5 を確認する。既存変更を破棄しない。
+2. まず調査し、src-tauri/src/windowing.rs の AccessibleObjectFromWindow/GetDocInfo、Acrobatのトップレベル／子ウィンドウ列挙、Reader/Acrobat.exe判定、document_path未取得時のsnapshot_itemフォールバックを追跡する。
+3. 一時保存ウィンドウをグループ登録するModel経路も追跡し、document_path未取得のAcrobat項目がなぜ登録対象から減るかを別原因として切り分ける。
+4. 実機アプリ、開発サーバー、Acrobat、Explorer、Officeは起動しない。実機でしか確認できない点は未確認として記録する。
+5. 原因が確定した場合だけ、Model→Effect→IPC、保存済みID境界、厳格検証、Explorer existing_tab、sidecarを維持した最小修正を行う。タイトルや表示名からPDFパスを推測してはいけない。
+6. 対象Rust/JSテストを追加または実行し、Rust変更ならcargo check、最後にgit diff --checkを実行する。npm.cmd testの既知のtests/explorer-mode.test.mjs:23失敗は自動修正しない。
+7. コミットとpushはしない。親レビュー用に、原因候補の順位、根拠、必要な追加実機観測、変更ファイル、テスト結果、未解決事項を報告する。
+
+前回までの確認:
+- Acrobat Reader/ProのHWNDごとの完全パス照合境界には自動テストがあり、異なるパスが同一HWNDから返る場合は曖昧扱いで除外する。
+- Reader関連Rustテスト3件は成功済み。ただし実機ReaderでGetDocInfoが返ることは未確認。
+- Redo、遅延/stale応答、保存後再読込のJSテスト209件は成功済み。追加修正なし。
+- アクセシビリティ自動確認は成功済みだが、スクリーンリーダー実機確認は未実施。
+- PDF.js標準CMap 169ファイルを public/assets/pdfjs/cmaps/ に追加し、tests/pdf-assets.test.mjsへ78-EUC-H.bcmapの存在確認を追加済み。関連12テストとgit diff --checkは成功済み。
+
+この項目の親レビューが完了するまで、残存課題2〜4およびPDF画面デザイン見直しへ進まない。
+```
+
 ## 16. 2026-09-26 PDF表示・マーカー修正の引継ぎ
 
 この節は`master`の最新進捗を記録する。工程F全体の判定は行っていない。工程Fの詳細な実機結果と残課題は、別worktreeの`codex/ui-handover-coordination`側の本書16.1〜16.7を参照する。上の14.9と15節にあるGit状態・工程プロンプトは作成当時の記録であり、現在の作業指示として使わない。
