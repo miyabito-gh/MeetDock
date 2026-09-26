@@ -1410,7 +1410,7 @@ fn reader_document_observations(windows: &[EnumeratedWindow]) -> Vec<ReaderDocum
     }
 
     fn document_path(hwnd: isize) -> Option<String> {
-        use windows::Win32::System::Com::IDispatch;
+        use windows::{core::IUnknown, Win32::System::Com::IDispatch};
 
         let mut object: *mut c_void = std::ptr::null_mut();
         unsafe {
@@ -1425,7 +1425,21 @@ fn reader_document_observations(windows: &[EnumeratedWindow]) -> Vec<ReaderDocum
         if object.is_null() {
             return None;
         }
-        let dispatch = unsafe { IDispatch::from_raw(object) };
+        let root = unsafe { IDispatch::from_raw(object) };
+        // OBJID_NATIVEOM exposes the PDF DOM root, whose default dispatch may be
+        // IPDDomNode. GetDocInfo belongs to IPDDomDocument, so query it explicitly.
+        let unknown = root.cast::<IUnknown>().ok()?;
+        let mut document = std::ptr::null_mut();
+        let document_iid = GUID::from_u128(0x00ffd6c4_1a94_44bc_ad3e_8ac18552e3e6);
+        unsafe {
+            (unknown.vtable().QueryInterface)(unknown.as_raw(), &document_iid, &mut document)
+                .ok()
+                .ok()?;
+        }
+        if document.is_null() {
+            return None;
+        }
+        let dispatch = unsafe { IDispatch::from_raw(document) };
         let wide: Vec<u16> = "GetDocInfo"
             .encode_utf16()
             .chain(std::iter::once(0))

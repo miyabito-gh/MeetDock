@@ -1501,6 +1501,39 @@ MeetDockの残存課題1「Adobe Acrobat Readerで開いているPDFの完全パ
 この項目の親レビューが完了するまで、残存課題2〜4およびPDF画面デザイン見直しへ進まない。
 ```
 
+### 16.10.1 2026-09-26 限定修正後のPDF完全パス調査引継ぎ
+
+- `master` で `src-tauri/src/windowing.rs` のAcrobat DOM取得を修正した。`AccessibleObjectFromWindow(OBJID_NATIVEOM)` が返すルートの既定 `IDispatch` に直接 `GetDocInfo` を名前解決せず、`IPDDomDocument`（IID `00FFD6C4-1A94-44BC-AD3E-8AC18552E3E6`）を `QueryInterface` してから呼び出す。AdobeのPDF DOM仕様では `GetDocInfo` は `IPDDomDocument` のメソッドである。ただし、この修正後にユーザー実機Readerで `document_path` が取得できるかは未確認。
+- Reader/Acrobat.exe判定、トップレベルと子HWNDの列挙、同一トップレベルHWNDで異なるPDFパスが観測された場合の曖昧除外、絶対パスと `Path::is_file` の確認、保存済み資料との関連付け優先は維持した。タイトル・表示名からPDFパスを推測しない。
+- フォルダ減少は別原因だった。ユーザー確認では抜けたフォルダは一時保存一覧に実パスで表示され、既に別グループへ登録済みだった。`src/model.js` の全グループ対象の既存パス除外を、実パス付きExplorerフォルダに限って適用しないよう修正し、`tests/model.test.mjs` に回帰テストを追加した。ユーザーは同じフォルダを新グループにも追加することを希望した。仮想Shell場所の除外と他資料の重複防止は維持した。
+- 確認済み: `cargo test --manifest-path src-tauri/Cargo.toml reader`（3件）、`node --test tests/model.test.mjs`（109件）、`node --test tests/contracts.test.mjs`（399件）、`cargo check --manifest-path src-tauri/Cargo.toml`、`git diff --check` は成功。`cargo fmt --manifest-path src-tauri/Cargo.toml -- --check` は今回の対象外を含む既存の書式差分で失敗したため、無関係なファイルは整形していない。実機アプリは起動していない。
+- 次の工程はPDF取得だけを別チャットで進める。実機結果が出るまでは、今回の `QueryInterface` 修正で解決したと断定しない。残存課題2〜4、PDF画面デザイン、無関係な書式修正へ進まない。
+- 工程分割: フォルダの限定修正と自動テストはこのチャットで完了。PDFの実機確認と、必要ならWindows COM境界の追加調査は推論量と継続性が異なるため次チャットへ分ける。次工程は単一チャットで進められる。
+
+#### 次チャット用引継ぎプロンプト
+
+```text
+MeetDockの残存課題1「Adobe Acrobat Readerで開いているPDFの完全パス取得」だけを継続してください。作業基準は C:\Users\wmasa\Documents\Rust\MeetDock の master です。astraは使用せず、推奨モデルは gpt-5.6-sol / medium です。理由: Windows COMとRustの原因調査に加え、必要時にJSのスナップショット経路も確認する通常規模の横断作業だからです。
+
+目的と完了条件:
+- 直近のIPDDomDocument取得修正を実機結果で検証し、Acrobat PDFの完全パスが一時保存スナップショットのdocument_pathへ入り、保存後再読込でも維持されるか確認する。
+- 失敗が続く場合は、対象トップレベル／子HWND、AccessibleObjectFromWindow、IPDDomDocumentのQueryInterface、GetIDsOfNames、GetDocInfoのInvoke、status、返却BSTR、絶対パス／ファイル存在確認、HWNDへの一意対応のどこで止まるかを限定する。診断ログやエラーに完全パス、文書内容、OS詳細を出さない。
+- 原因が確定した場合だけ最小修正し、複数PDF・複数ウィンドウ・タブ・曖昧観測で別文書を誤登録しない。タイトルや表示名からパスを推測しない。Model→Effect→IPC、保存済みID、厳格検証、Explorer existing_tab、sidecarを維持する。
+
+対象ファイル: 主に src-tauri/src/windowing.rs。必要時のみ src-tauri/src/launcher.rs、src/model.js、tests/model.test.mjs、src-tauri/tests/contracts.rs、tests/contracts.test.mjs。無関係なファイルは変更しない。
+
+既存実装と観測:
+- Reader Continuous Release 2025.001.20756、64-bit。PDFは C:\Users\wmasa\Documents\tmp 配下で、MeetDockから起動。タブ表示でも別ウィンドウ表示でも、修正前は一時保存→保存→再読込後に document_path がなく、行には C:\Program Files\Adobe\Acrobat DC\Acrobat\Acrobat.exe が表示された。Acrobatの文書プロパティではPDFの場所が確認できた。
+- 現在のmasterでは、AccessibleObjectFromWindow(OBJID_NATIVEOM)が返すDOMルートからIPDDomDocument（IID 00FFD6C4-1A94-44BC-AD3E-8AC18552E3E6）をQueryInterfaceし、そのIDispatchでGetDocInfoを呼ぶ修正済み。ただし修正後の実機確認は未実施。Reader/Acrobat.exe判定、子HWND列挙、一意なパスだけ採用する境界は既存どおり。
+- フォルダ登録減少は別原因として修正済み。ユーザーは既に別グループに登録済みの実フォルダを新グループにも追加したいと明示した。実パス付きExplorerフォルダのみ既存パス除外を回避し、仮想Shell場所と他資料の重複防止は維持した。この項目は新しい実機不具合がなければ再変更しない。
+
+最初に git status --short、対象差分、必要なら git log -5 を確認し、既存変更を保持する。対象テストは cargo test --manifest-path src-tauri/Cargo.toml reader、node --test tests/model.test.mjs、必要なら node --test tests/contracts.test.mjs。直近はReader関連Rust 3件、Model 109件、JS契約399件、cargo check、git diff --checkが成功。cargo fmt --checkは対象外の既存書式差分で失敗する。npm.cmd testの既知のtests/explorer-mode.test.mjs:23失敗は自動修正しない。
+
+実機アプリ、開発サーバー、Acrobat、Explorer、Officeはユーザーの明示許可なしに起動しない。まずユーザーによる修正版の実機確認結果を受け取るか、必要な実機操作の許可を確認する。実機確認ではPDFのタブ表示と別ウィンドウ表示をそれぞれ一時保存・再読込し、PDF完全パス表示、保存件数、対象PDF数を比較する。失敗時は機密パスをログへ出さない限定診断を設計する。
+
+Rust変更後はcargo check、最後にgit diff --checkを実行する。コミット・pushは別途明示依頼がある場合だけ行う。親レビュー用に原因、根拠、変更ファイル、テスト結果、実機未確認点を報告し、残存課題2〜4とPDF画面デザインには進まない。
+```
+
 ## 16. 2026-09-26 PDF表示・マーカー修正の引継ぎ
 
 この節は`master`の最新進捗を記録する。工程F全体の判定は行っていない。工程Fの詳細な実機結果と残課題は、別worktreeの`codex/ui-handover-coordination`側の本書16.1〜16.7を参照する。上の14.9と15節にあるGit状態・工程プロンプトは作成当時の記録であり、現在の作業指示として使わない。

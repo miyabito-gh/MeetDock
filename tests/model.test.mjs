@@ -264,6 +264,20 @@ test('snapshot registration does not create an empty group when every confirmed 
   assert.equal(registered.state.windowing.snapshot,null);
   assert.equal(registered.effects[0].type,Effect.ClearWindowSnapshot);
 });
+test('snapshot registration copies a confirmed Explorer folder into a new group even when it exists in another group', () => {
+  const before=ready(),existing={...before.saved_config.materials[0],id:'folder-existing',target_type:'folder',path:'C:\\Meetings\\Folder',role:'reference',order:2};
+  before.saved_config.materials.push(existing);
+  const snapshot={schema_version:1,saved_at_unix_ms:1,items:[{
+    app_name:'Explorer',title:'資料',executable_name:'explorer.exe',executable_path:'C:\\Windows\\explorer.exe',
+    document_path:existing.path.replaceAll('\\','/').toUpperCase(),restorability:'restorable',reason:null,
+  }]};
+  const registered=run(run(before,Event.WindowSnapshotLoaded,{response:snapshot}).state,Event.WindowSnapshotRegisterRequested);
+  const added=registered.state.draft.materials.slice(before.saved_config.materials.length);
+  assert.equal(added.length,1);
+  assert.equal(added[0].target_type,'folder');
+  assert.equal(added[0].path,snapshot.items[0].document_path);
+  assert.notEqual(added[0].group_id,existing.group_id);
+});
 
 test('snapshot registration never converts a Shell location into a normal material path',()=>{
   const snapshot={schema_version:1,saved_at_unix_ms:1,items:[{app_name:'Explorer',title:'PC',executable_name:'explorer.exe',executable_path:'C:\\Windows\\explorer.exe',shell_location:'::{20D04FE0-3AEA-1069-A2D8-08002B30309D}',restorability:'restorable',reason:null}]};

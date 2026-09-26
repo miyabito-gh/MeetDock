@@ -48,6 +48,7 @@ const uniqueSnapshotItems = items => {
     targets.add(key); return true;
   });
 };
+const confirmedExplorerFolder = item => item.executable_name.toLocaleLowerCase('ja')==='explorer.exe'&&Boolean(item.document_path);
 const dirtyWith = (s, config) => ({ ...s, edit: s.edit === Edit.Conflict ? Edit.Conflict : Edit.Dirty, draft: config });
 const explorerMode = (s, groupId) => {
   const config = s.saved_config;
@@ -435,7 +436,7 @@ export function transition(s, e) {
       if(!editable(s)||!s.windowing.snapshot?.items?.length||!s.saved_config)return deny();
       const config=editableConfig(s),groupId=crypto.randomUUID(),stamp=new Date(s.windowing.snapshot.saved_at_unix_ms).toLocaleString('ja-JP');
       const existingTargets=new Set(config.materials.map(item=>windowsPathKey(item.path)));
-      const items=uniqueSnapshotItems(s.windowing.snapshot.items).filter(item=>!item.shell_location&&!existingTargets.has(windowsPathKey(item.document_path??item.executable_path)));
+      const items=uniqueSnapshotItems(s.windowing.snapshot.items).filter(item=>!item.shell_location&&(confirmedExplorerFolder(item)||!existingTargets.has(windowsPathKey(item.document_path??item.executable_path))));
       if(items.length)config.groups.push({id:groupId,parent_id:null,name:`保存ウィンドウ ${stamp}`,order:Number.MAX_SAFE_INTEGER});
       for(const item of items)config.materials.push({id:crypto.randomUUID(),group_id:groupId,name:item.title||item.app_name,role:'main',target_type:item.executable_name.toLocaleLowerCase('ja')==='explorer.exe'&&item.document_path?'folder':'file',path:item.document_path??item.executable_path,window_match_pattern:null,order:Number.MAX_SAFE_INTEGER});
       reorder(config.groups,g=>g.parent_id??'root');reorder(config.materials,m=>`${m.group_id}\0${m.role}`);
