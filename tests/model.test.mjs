@@ -144,7 +144,7 @@ test('batch progress advances only for the active group and generation',()=>{
 // IDs map 1:1 to the rows in MEDIATOR_STATE_TRANSITIONS.md.
 // Each row includes success/effect count and an independent failed guard.
 const rows = [
-  ['M01 settings', initialState, Event.SettingsLoaded, { config }, 3, s => s.lifecycle === Lifecycle.Ready && s.sync.kind === 'Running' && s.windowing.sync.kind === 'Running', { config: { ...config, schema_version: 4 } }],
+  ['M01 settings', initialState, Event.SettingsLoaded, { config }, 5, s => s.lifecycle === Lifecycle.Ready && s.sync.kind === 'Running' && s.windowing.sync.kind === 'Running', { config: { ...config, schema_version: 4 } }],
   ['M02 future', initialState, Event.FutureSchemaFound, { response: response('read_only_future_schema') }, 0, s => s.lifecycle === Lifecycle.ReadOnly, { response: { ...response('read_only_future_schema'), source_schema_version: 3 } }],
   ['M03 legacy', initialState, Event.LegacySettingsFound, { response: response('migration_required') }, 0, s => s.lifecycle === Lifecycle.MigrationPending, { response: { ...response('migration_required'), candidates: [] } }],
   ['M04 corrupt', initialState, Event.CorruptSettingsFound, { response: response('recovery_required') }, 0, s => s.lifecycle === Lifecycle.RecoveryPending, { response: {} }],
@@ -169,7 +169,7 @@ const rows = [
   ['M23 batch', ready, Event.BatchLaunchRequested, { group_id: 'g1' }, 1, s => s.launch.batch.group_id === 'g1', { group_id: 'missing' }],
   ['M24 batch complete', batch, Event.BatchLaunchCompleted, { group_id: 'g1', generation: 1, response: { results: [launched] } }, 0, s => s.launch.batch === null, { group_id: 'g2', generation: 1 }],
   ['M25 pdf open', ready, Event.PdfOpenRequested, { material_id: 'm1' }, 1, s => s.pdf.kind === Pdf.Loading && s.state_generation === 2, { material_id: 'missing' }],
-  ['M26 pdf ready', loading, Event.PdfReady, { material_id: 'm1', generation: 2, view: pdfView }, 1, s => s.pdf.kind === Pdf.Viewing && s.pdf.current_page === 1 && s.pdf.total_pages === 4 && s.pdf.zoom_percent === 100, { material_id: 'm2', generation: 2, view: pdfView }],
+  ['M26 pdf ready', loading, Event.PdfReady, { material_id: 'm1', generation: 2, view: pdfView }, 0, s => s.pdf.kind === Pdf.Viewing && s.pdf.current_page === 1 && s.pdf.total_pages === 4 && s.pdf.zoom_percent === 100, { material_id: 'm2', generation: 2, view: pdfView }],
   ['M27 pdf switch', viewing, Event.PdfOpenRequested, { material_id: 'm2' }, 1, s => s.pdf.material_id === 'm2' && s.state_generation === 3, { material_id: 'm1' }],
   ['M28 pdf password', loading, Event.PdfPasswordRequired, { material_id: 'm1', generation: 2, error: appError('PDF_PASSWORD_REQUIRED') }, 0, s => s.pdf.kind === Pdf.PasswordRequired, { material_id: 'm1', generation: 1 }],
   ['M29 pdf fail', viewing, Event.PdfFailed, { material_id: 'm1', generation: 2, error: pdfError }, 0, s => s.pdf.kind === Pdf.Failed, { material_id: 'm1', generation: 1, error: pdfError }],

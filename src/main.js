@@ -41,7 +41,7 @@ getCurrentWindow().onCloseRequested(async event => {
   try {
     await handleCloseRequest({
       getState: () => root.getState(),
-      choose: async () => window.confirm('変更を保存して終了しますか？') ? 'save' : window.confirm('保存せずに終了しますか？') ? 'discard' : 'cancel',
+      choose: edit => view.requestCloseChoice(edit),
       save: () => presenter.save(), discard: () => presenter.discard(true), waitForSave,
       close: () => root.dispatch({ type: Event.CloseRequested }),
     });

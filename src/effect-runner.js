@@ -40,7 +40,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
     return operation;
   };
   async function execute(f) {
-    const context = { generation: f.generation, material_id: f.request.material_id, pdf_identity: f.request.pdf_identity, sidecar_revision: f.sidecar_revision, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id, index:f.request.index,
+    const context = { ...(f.background ? { background: true } : {}), ...(f.preserve_until_removed ? { preserve_until_removed: true } : {}), generation: f.generation, material_id: f.request.material_id, pdf_identity: f.request.pdf_identity, sidecar_revision: f.sidecar_revision, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id, index:f.request.index,
       ...(Number.isSafeInteger(f.request.search_generation) ? { search_generation: f.request.search_generation } : {}) };
     let event;
     try {

@@ -109,6 +109,12 @@ test('close flow saves, discards or cancels according to user choice',async()=>{
     discard:()=>calls.push('discard'),waitForSave:async()=>{edit='Conflict'},close:()=>calls.push('close')}),false);
   assert.deepEqual(calls,[]);
 });
+test('native close uses the MeetDock dialog instead of a WebView confirm',()=>{
+  const source=readFileSync(new URL('../src/main.js',import.meta.url),'utf8');
+  assert.match(source,/choose: edit => view\.requestCloseChoice\(edit\)/);
+  assert.doesNotMatch(source,/window\.confirm|\bconfirm\(/);
+  assert.match(source,/if \(closePending\) return;/);
+});
 function ports() {
   return { settings: { load: async () => fixture('SettingsLoadResponse'), save: async () => fixture('SaveSettingsResponse'), resolve: async () => fixture('SettingsLoadResponse') },
     statuses: { sync: async r => ({ request_id: r.request_id, results: [] }) },

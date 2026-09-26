@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { runInNewContext } from 'node:vm';
-import { commitAnnotations, createAnnotationHistory, createStroke, redoAnnotations, undoAnnotations } from '../src/pdf-annotations.js';
+import { createFocusSync } from '../src/focus-sync.js';
+import { accumulatePdfWheel, createPdfWheelState } from '../src/pdf-wheel.js';
+import { annotationSessionChange, commitAnnotations, createAnnotationHistory, createStroke, redoAnnotations, undoAnnotations } from '../src/pdf-annotations.js';
 import { batchButtonAction, batchSummary, displayPath, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, reorderPlacement, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
 
 test('PDF annotation canvas follows the rendered page and stays transparent',()=>{
@@ -33,6 +35,43 @@ test('PDF marker and bookmark controls are collapsible and bookmark list height 
   assert.match(view,/a==='marker-tools-toggle'.*annotationTools\.hidden=!annotationTools\.hidden/s);
   assert.match(view,/a==='bookmark-tools-toggle'.*bookmarkPanel\.hidden=!bookmarkPanel\.hidden/s);
   assert.match(styles,/\.bookmark-list\{[^}]*max-height:180px;overflow-y:auto/);
+});
+
+test('PDF marker colors visibly expose selection and retain toggle and eraser behavior',()=>{
+  const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const control=color=>({dataset:{color},setAttribute(name,value){this[name]=value}});
+  const colors=['yellow','green','pink'].map(control),eraser=control();
+  const handlers={};
+  const scope={selectSidecar(){},annotationUndo:{},annotationRedo:{},clearMarkers:{},bookmarkAdd:{},overlay:{classList:{toggle(){}}},colorTools:{querySelectorAll:()=>colors},eraser,drawAnnotations(){},renderBookmarks(){},annotationHistory:createAnnotationHistory(),markerTool:null,markerColor:'yellow',model:{pdf:{kind:'Viewing'}},annotationTools:{addEventListener:(type,handler)=>{handlers[type]=handler}},widthSelect:{addEventListener(){}}};
+  const update=view.slice(view.indexOf('  function updateAnnotations(')).split('\n')[0];
+  runInNewContext(update,scope);
+  const start=view.indexOf("annotationTools.addEventListener('click'");
+  runInNewContext(view.slice(start,view.indexOf('const overlayPoint=',start)),scope);
+  const pressed=()=>colors.map(item=>item['aria-pressed']);
+  const click=(action,color)=>handlers.click({target:{closest:()=>({dataset:{action,color}})}});
+  scope.updateAnnotations(scope.model);
+  assert.deepEqual(pressed(),['false','false','false']);
+  for(const [index,color] of ['yellow','green','pink'].entries()){
+    click('marker-color',color);
+    assert.deepEqual(pressed(),colors.map((_,i)=>String(i===index)));
+    assert.equal(eraser['aria-pressed'],'false');
+    click('marker-color',color);
+    assert.deepEqual(pressed(),['false','false','false']);
+    assert.equal(scope.markerTool,null);
+  }
+  click('marker-color','yellow');
+  click('marker-color','green');
+  assert.deepEqual(pressed(),['false','true','false']);
+  click('marker-eraser');
+  assert.deepEqual(pressed(),['false','false','false']);
+  assert.equal(eraser['aria-pressed'],'true');
+  click('marker-color','pink');
+  assert.deepEqual(pressed(),['false','false','true']);
+  assert.equal(eraser['aria-pressed'],'false');
+  assert.match(styles,/\.marker-color\[aria-pressed="true"\]\{[^}]*box-shadow:inset/);
+  assert.match(styles,/\.marker-color::before\{[^}]*content:'✓'[^}]*visibility:hidden/);
+  assert.match(styles,/\.marker-color\[aria-pressed="true"\]::before\{visibility:visible\}/);
 });
 
 test('PDF marker pointer and toolbar events retain Undo across model renders and reset tools on preview changes',()=>{
@@ -156,6 +195,55 @@ test('focus refresh keeps an ordered material row attached so the first icon cli
   assert.deepEqual(insertions,[[moved,second]]);
 });
 
+test('focus refresh between press and release preserves the real row and dispatches one first click',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const calls=[],insertions=[],listeners={};
+  function node(){return {dataset:{},style:{},children:[],classList:{toggle(){}},setAttribute(){},removeAttribute(){},addEventListener(type,handler){this[type]=handler},append(...children){this.children.push(...children)},insertBefore(child,before){insertions.push(child);const index=before?this.children.indexOf(before):this.children.length;this.children.splice(index,0,child);this.firstChild=this.children[0];this.children.forEach((value,i)=>{value.nextSibling=this.children[i+1]??null})}}}
+  const config={groups:[group('g1','Group',1)],materials:[material('m1','g1','First',1),{...material('m2','g1','Second',2),role:'reference'}]};
+  const role=()=>({list:node(),s:node(),badge:node()});
+  const scope={model:{config,selected_group_id:'g1',query:'',pdf:{kind:'Closed'},statuses:[],can_launch:true,can_edit:true,runnable_material_ids:['m1','m2'],launch:{running:[]}},rows:new Map(),mainRole:role(),refRole:role(),emptyState:node(),emptyTitle:node(),emptyText:node(),clearSearch:node(),reorderMode:false,visibleMaterials,materialIcon,displayPath,placeStableRow,isPdf:()=>true,statusText:{exists:'利用可能'},el:node,button:(text,action)=>Object.assign(node(),{dataset:{action}}),actionIcon:(action)=>Object.assign(node(),{dataset:{action}}),host:{addEventListener:(type,handler)=>{listeners[type]=handler}},emit:(...args)=>calls.push(args),openMenu:()=>calls.push(['menu'])};
+  const start=source.indexOf('  function makeRow('),end=source.indexOf('  function renderWindows(',start);
+  assert.ok(start>=0&&end>start);
+  runInNewContext(source.slice(start,end),scope);
+  const clickLine=source.split('\n').find(line=>line.startsWith("  host.addEventListener('click',e=>{const t=e.target.closest('[data-action]')"));
+  assert.ok(clickLine);
+  runInNewContext(clickLine,scope);
+  scope.renderRows(config);
+  insertions.length=0;
+  for(const id of ['m1','m2']){
+    const pressedRow=scope.rows.get(id),pressedIcon=pressedRow._p.icon;
+    const focus=createFocusSync({requestId:()=>`sync-${id}`,sync:()=>{
+      scope.model.refreshing=true;scope.renderRows(config);
+      scope.model.statuses=config.materials.map(item=>({material_id:item.id,path_state:'exists',open_state:'closed'}));
+      scope.model.refreshing=false;scope.renderRows(config);
+    }});
+    assert.equal(focus(),true);
+    assert.equal(scope.rows.get(id),pressedRow);
+    assert.equal(pressedRow._p.icon,pressedIcon);
+    assert.equal(pressedIcon.disabled,false);
+    listeners.click({target:{closest:()=>pressedIcon}});
+  }
+  assert.deepEqual(insertions,[]);
+  assert.deepEqual(calls,[['activate','m1'],['activate','m2']]);
+  // Opening the row menu stops bubbling; closing it from an outside click
+  // neither prevents nor repeats the material's delegated action.
+  const row=scope.rows.get('m1'),more=row.children[2].children.at(-1);
+  let stopped=false;
+  more.click({stopPropagation(){stopped=true}});
+  assert.equal(stopped,true);
+  assert.deepEqual(calls.at(-1),['menu']);
+  let closed=0;
+  scope.document={addEventListener:(type,handler)=>{listeners.documentClick=handler}};
+  scope.menu={contains:()=>false};scope.moreActions={contains:()=>false,open:true};scope.closeMenu=()=>{closed++};
+  const documentClick=source.slice(source.indexOf("document.addEventListener('click',e=>{if(!menu.contains"));
+  runInNewContext(documentClick.split('\n')[0],scope);
+  listeners.click({target:{closest:()=>row._p.icon}});
+  listeners.documentClick({target:row._p.icon});
+  assert.equal(closed,1);
+  assert.deepEqual(calls.slice(-1),[['activate','m1']]);
+  assert.equal(calls.length,4);
+});
+
 test('SEC-01 dynamic view uses textContent and does not inject markup', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /innerHTML|insertAdjacentHTML|outerHTML|document\.write/);
@@ -165,13 +253,13 @@ test('SEC-01 dynamic view uses textContent and does not inject markup', () => {
 
 test('modal key handling is isolated from document shortcuts', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  assert.match(source, /for\(const modal of \[dialog,operationDialog,issue,dndDialog,windowsDialog\]\) modal\.addEventListener\('keydown',e=>e\.stopPropagation\(\)\)/);
-  assert.match(source, /const modalOpen=dialog\.open\|\|operationDialog\.open\|\|issue\.open\|\|dndDialog\.open\|\|windowsDialog\.open;if\(modalOpen\)return/);
+  assert.match(source, /for\(const modal of \[dialog,operationDialog,issue,dndDialog,windowsDialog,exitDialog\]\) modal\.addEventListener\('keydown',e=>e\.stopPropagation\(\)\)/);
+  assert.match(source, /const modalOpen=dialog\.open\|\|operationDialog\.open\|\|issue\.open\|\|dndDialog\.open\|\|windowsDialog\.open\|\|exitDialog\.open;if\(modalOpen\)return/);
 });
 
 test('dialogs are named, focus their contents, restore the trigger, and keep pending issues open on Escape', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  for (const name of ['material', 'operation', 'issue', 'dnd', 'windows']) assert.ok(source.includes(`${name}-dialog-title`));
+  for (const name of ['material', 'operation', 'issue', 'dnd', 'windows', 'exit']) assert.ok(source.includes(`${name}-dialog-title`));
   assert.match(source, /modal\.setAttribute\('aria-labelledby',id\)/);
   assert.match(source, /modal\.addEventListener\('close',\(\)=>restoreFocus\(dialogOrigins\.get\(modal\)\)\)/);
   assert.match(source, /\['RecoveryPending','MigrationPending'\]\.includes\(model\?\.lifecycle\)\)e\.preventDefault\(\)/);
@@ -191,7 +279,53 @@ test('context actions use a button popup with keyboard traversal and focus retur
   assert.match(source, /e\.key==='ContextMenu'\|\|\(e\.shiftKey&&e\.key==='F10'\)/);
   assert.match(source, /if\(!menu\.contains\(e\.target\)\)closeMenu\(\)/);
   assert.match(source, /if\(!menu\.hidden\)\{e\.preventDefault\(\);closeMenu\(true\);return\}/);
-  assert.match(source, /queueMicrotask\(\(\)=>\{if\(!\[dialog,operationDialog,issue,dndDialog,windowsDialog\]/);
+  assert.match(source, /queueMicrotask\(\(\)=>\{if\(!\[dialog,operationDialog,issue,dndDialog,windowsDialog,exitDialog\]/);
+});
+
+test('exit confirmation stays inside MeetDock and resolves save, discard, cancel, and Escape once',async()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  for(const token of ["'MeetDockを終了しますか？'","'保存して終了'","'保存せずに終了'","'キャンセル'","settleExitChoice('save')","settleExitChoice('discard')","settleExitChoice('cancel')","exitCancel.focus()",'if(exitChoicePromise)return exitChoicePromise'])assert.ok(source.includes(token));
+  assert.match(source,/exitDialog\.addEventListener\('cancel',e=>\{e\.preventDefault\(\);settleExitChoice\('cancel'\)\}\)/);
+  assert.match(source,/requestCloseChoice\(edit\).*edit==='Saving'.*保存完了後に終了/s);
+  assert.doesNotMatch(source,/window\.confirm/);
+  const listeners={},exitText={},exitSave={},exitDiscard={},exitCancel={focusCount:0,focus(){this.focusCount++}};
+  const exitDialog={open:false,showCount:0,addEventListener(type,handler){listeners[type]=handler},showModal(){this.open=true;this.showCount++},close(){if(!this.open)return;this.open=false;listeners.close?.()}};
+  const scope={exitDialog,exitText,exitSave,exitDiscard,exitCancel,rememberDialog(){}};
+  const declarations=source.slice(source.indexOf('  let exitChoiceResolve='),source.indexOf('  const closeOperation='));
+  const eventStart=source.indexOf("  exitDialog.addEventListener('click'");
+  const events=source.slice(eventStart,source.indexOf('  for(const modal of',eventStart));
+  runInNewContext(`${declarations}${events}globalThis.requestCloseChoiceTest=requestCloseChoice;`,scope);
+  const click=action=>listeners.click({target:{closest:()=>({dataset:{action}})}});
+
+  const save=scope.requestCloseChoiceTest('Dirty'),duplicate=scope.requestCloseChoiceTest('Saving');
+  assert.equal(save,duplicate);
+  assert.equal(exitDialog.showCount,1);
+  assert.equal(exitCancel.focusCount,1);
+  assert.equal(exitText.textContent,'未保存の変更があります。終了方法を選択してください。');
+  click('exit-save');
+  click('exit-discard');
+  assert.equal(await save,'save');
+
+  const discard=scope.requestCloseChoiceTest('Saving');
+  assert.equal(exitText.textContent,'保存処理が完了してから終了します。');
+  assert.equal(exitSave.textContent,'保存完了後に終了');
+  click('exit-discard');
+  assert.equal(await discard,'discard');
+
+  const cancel=scope.requestCloseChoiceTest('Dirty');
+  click('exit-cancel');
+  assert.equal(await cancel,'cancel');
+
+  const escape=scope.requestCloseChoiceTest('Dirty');
+  let prevented=false;
+  listeners.cancel({preventDefault(){prevented=true}});
+  assert.equal(prevented,true);
+  assert.equal(await escape,'cancel');
+
+  const externallyClosed=scope.requestCloseChoiceTest('Dirty');
+  exitDialog.close();
+  assert.equal(await externallyClosed,'cancel');
+  assert.equal(exitDialog.showCount,5);
 });
 
 test('window inventory dialog balances context and workspace while keeping settings outside the list scroll', () => {
@@ -236,6 +370,47 @@ test('PDF preview supports Ctrl-wheel zoom and pointer drag panning', () => {
   for (const token of ["addEventListener('wheel'", "e.ctrlKey", "'pdfZoomIn'", "'pdfZoomOut'", 'setPointerCapture', 'scrollLeft', 'scrollTop', "classList.add('panning')"]) assert.ok(source.includes(token));
   const styles = readFileSync(new URL('../src/visibility.css', import.meta.url), 'utf8');
   assert.match(styles, /\.canvas-wrap canvas\s*\{[^}]*max-width:\s*none/s);
+});
+
+test('PDF wheel scrolls within a page and only pages at vertical boundaries',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const events=[],handlers={};
+  const wrap={scrollTop:100,clientHeight:400,scrollHeight:1000,addEventListener:(type,handler)=>{handlers[type]=handler}};
+  const scope={wrap,model:{pdf:{kind:'Viewing',current_page:2,total_pages:3}},pdfWheel:createPdfWheelState(),createPdfWheelState,accumulatePdfWheel,pendingPdfScrollPosition:null,emit:action=>events.push(action)};
+  const start=source.indexOf("  wrap.addEventListener('wheel'");
+  runInNewContext(source.slice(start,source.indexOf("  annotationTools.addEventListener",start)),scope);
+  const wheel=(deltaY,extra={})=>{let prevented=false;handlers.wheel({deltaY,deltaX:0,preventDefault(){prevented=true},...extra});return prevented};
+  assert.equal(wheel(120),false);
+  assert.equal(wheel(-120),false);
+  assert.deepEqual(events,[]);
+  wrap.scrollTop=600;
+  assert.equal(wheel(60),false);
+  wrap.scrollTop=500;
+  assert.equal(wheel(120),false); // Native scroll must also discard prior boundary input.
+  wrap.scrollTop=600;
+  assert.equal(wheel(60),false);
+  assert.equal(wheel(40),true);
+  assert.deepEqual(events,['pdfNext']);
+  assert.equal(scope.pendingPdfScrollPosition,'start');
+  wrap.scrollTop=0;
+  assert.equal(wheel(-100),true);
+  assert.equal(events.at(-1),'pdfPrevious');
+  assert.equal(scope.pendingPdfScrollPosition,'end');
+  const count=events.length;
+  for(const extra of [{shiftKey:true},{deltaX:140}])assert.equal(wheel(-120,extra),false);
+  assert.equal(wheel(0,{deltaX:120}),false);
+  assert.equal(events.length,count);
+  scope.model.pdf.current_page=1;
+  assert.equal(wheel(-100),false);
+  wrap.scrollTop=600;scope.model.pdf.current_page=3;
+  assert.equal(wheel(100),false);
+  assert.equal(events.length,count);
+  assert.equal(wheel(-50,{ctrlKey:true}),true);
+  assert.equal(events.at(-1),'pdfZoomIn');
+  assert.equal(wheel(50,{ctrlKey:true}),true);
+  assert.equal(events.at(-1),'pdfZoomOut');
+  scope.model.pdf.kind='Closed';
+  assert.equal(wheel(120),false);
 });
 
 test('PDF preview keyboard paging maps supported keys and ignores unsafe key events', () => {
@@ -309,7 +484,7 @@ test('PDF controls reflow against the resizable preview width without overflowin
 
 test('material rows expose a persistent PDF preview action and current-row state', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  assert.ok(source.includes("if(isPdf(item))add('アプリ内でPDF表示','pdf',runnable)"));
+  assert.ok(source.includes("if(isPdf(item)){add('アプリ内でPDF表示','pdf',runnable)"));
   assert.ok(source.includes('pdf-preview-button'));
   assert.ok(source.includes("r.setAttribute('aria-current','true')"));
   assert.ok(source.includes("icon=button('','activate','file-icon')"));
@@ -485,4 +660,69 @@ test('data transfer and save-before-create stay inside the existing operation UI
   for(const token of ["exportBundle(model.config","showSaveFilePicker({suggestedName","handle.createWritable()","writable.write(JSON.stringify(bundle,null,2))","error?.name==='AbortError'","'export-all'","'export-group'","'import-data'","requestGroupCreate(null)","pendingGroupCreation&&next.edit==='Clean'","pendingGroupCreation={parentId,name}","parent_id:pending.parentId,name:pending.name","既存データは置き換えません"])assert.ok(source.includes(token));
   assert.doesNotMatch(source,/anchor\.download=/);
   assert.doesNotMatch(source,/prompt\([^)]*(?:グループ|インポート|エクスポート)/);
+});
+
+
+test('material list shows saved bookmark badges and confirmed removal uses the selected identity',()=>{
+  const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  assert.match(view,/bookmarkBadge=el\('span','marker-badge bookmark-badge','しおり'\)/);
+  assert.match(view,/row\._p\.bookmarkBadge\.hidden=!annotations\?\.bookmarks\?\.length/);
+  const item={id:'one',name:'資料',target_type:'file',path:'C:\\one.pdf'},key=`one\0file:${item.path}`;
+  const calls=[],scope={model:{pdf_sidecars:{[key]:{bookmarks:[{id:'b'}]}}},legacySidecars:{[key]:{strokes:[{id:'old'}]}},sidecarIdentity:item=>`${item.target_type}:${item.path}`,emit:(...args)=>calls.push(args),openOperation:options=>{scope.operation=options}};
+  for(const name of ['materialSidecar','requestAnnotationRemoval'])runInNewContext(view.slice(view.indexOf(`  function ${name}(`)).split('\n')[0],scope);
+  assert.equal(scope.materialSidecar(item).bookmarks.length,1);
+  scope.requestAnnotationRemoval(item);
+  assert.equal(calls.length,0); // opening or cancelling never deletes
+  assert.match(scope.operation.text,/マーカーとしおり/);
+  scope.operation.onConfirm();
+  assert.deepEqual(calls,[['clearPdfAnnotations','one',`file:${item.path}`]]);
+  scope.model.pdf_sidecars[key]=null;
+  assert.equal(scope.materialSidecar(item),null); // deletion never revives legacy badges
+});
+
+test('successful list deletion resets dirty current annotations and Undo while failure retains them',()=>{
+  const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8'),item={id:'one',target_type:'file',path:'C:\\one.pdf'},key=`one\0file:${item.path}`,stroke={id:'stroke'},history=commitAnnotations(createAnnotationHistory(),[stroke]);
+  const scope={model:{config:{materials:[item]},pdf:{kind:'Viewing',material_id:'one',generation:3,sidecar:null},pdf_sidecars:{[key]:null}},sidecarIdentity:item=>`${item.target_type}:${item.path}`,legacySidecars:{},activeSidecarKey:key,activePdfGeneration:3,activeSidecarValue:null,activeRemovalRevision:undefined,annotationDirty:true,annotationHistory:history,bookmarks:[{id:'b'}],drawing:{},markerTool:'marker',annotationSessionChange,createAnnotationHistory,structuredClone};
+  runInNewContext(view.slice(view.indexOf('  function selectSidecar(')).split('\n')[0],scope);
+  scope.selectSidecar();
+  assert.equal(scope.annotationHistory,history);
+  scope.model.pdf.sidecar_removal_revision=2;
+  scope.selectSidecar();
+  assert.equal(scope.annotationHistory.present.length,0);
+  assert.equal(scope.annotationHistory.past.length,0);
+  assert.equal(scope.bookmarks.length,0);
+  assert.equal(scope.drawing,null);
+  assert.equal(scope.annotationDirty,false);
+});
+
+test('popup key handler traverses enabled actions and consumes keys before document shortcuts',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  let keydown;const document={activeElement:null},closed=[];
+  const items=Array.from({length:3},()=>({focus(){document.activeElement=this}}));
+  const menu={querySelectorAll(selector){assert.equal(selector,'button:not(:disabled)');return items},addEventListener(type,handler){keydown=handler}};
+  runInNewContext(source.slice(source.indexOf("  menu.addEventListener('keydown'")).split('\n')[0],{menu,document,menuNextIndex,closeMenu:restore=>closed.push(restore)});
+  for(const [key,index] of [['End',2],['Home',0],['ArrowUp',2],['ArrowDown',0]]){
+    let prevented=false,stopped=false;keydown({key,preventDefault(){prevented=true},stopPropagation(){stopped=true}});
+    assert.equal(document.activeElement,items[index]);assert.equal(prevented,true);assert.equal(stopped,true);
+  }
+  for(const key of ['Escape','Tab','ContextMenu','F10']){
+    let prevented=false,stopped=false;keydown({key,shiftKey:key==='F10',preventDefault(){prevented=true},stopPropagation(){stopped=true}});
+    assert.equal(prevented,true);assert.equal(stopped,true);
+  }
+  assert.deepEqual(closed,[true,true]);
+});
+
+test('keyboard context keys open the focused material, group or snapshot menu with the focus origin',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const line=source.slice(source.indexOf("  search.addEventListener('input'")).split('\n')[0];
+  let keydown;const opened=[],document={activeElement:null,addEventListener(type,handler){keydown=handler}};
+  const scope={search:{addEventListener(){}},document,dialog:{},operationDialog:{},issue:{},dndDialog:{},windowsDialog:{},exitDialog:{},host:{contains:()=>true},WINDOW_SNAPSHOT_GROUP_ID:'snapshot',openMenu:(target,event)=>opened.push({target,event})};
+  runInNewContext(line,scope);
+  for(const key of ['ContextMenu','F10'])for(const [dataset,kind,id] of [[{materialId:'m'},'material','m'],[{groupId:'g'},'group','g'],[{groupId:'snapshot'},'snapshot','snapshot']]){
+    const row={dataset,getBoundingClientRect:()=>({left:30,top:50})},origin={closest:()=>row};document.activeElement=origin;
+    let prevented=false,stopped=false;keydown({key,shiftKey:key==='F10',preventDefault(){prevented=true},stopPropagation(){stopped=true}});
+    const result=opened.at(-1);assert.equal(result.target.kind,kind);assert.equal(result.target.id,id);assert.equal(result.event.target,origin);assert.equal(result.event.clientX,50);assert.equal(result.event.clientY,70);assert.equal(prevented,true);assert.equal(stopped,true);
+  }
+  const count=opened.length;keydown({key:'F10',shiftKey:false});assert.equal(opened.length,count);
+  scope.dialog.open=true;keydown({key:'ContextMenu'});assert.equal(opened.length,count);
 });
