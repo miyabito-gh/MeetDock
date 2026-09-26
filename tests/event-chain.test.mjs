@@ -73,6 +73,27 @@ test('native fullscreen effect reports success and failure without committing th
   await runner.settled();
   assert.deepEqual(events.map(event => [event.type, event.value, event.request]), [[Event.PdfFullscreenFailed, true, 1], [Event.PdfFullscreenSucceeded, false, 2]]);
 });
+test('PDF display selection stays local except for direct screen entry and exit', async () => {
+  let state=ready();
+  state=transition(state,{type:Event.PdfOpenRequested,material_id:'m1'}).state;
+  state=transition(state,{type:Event.PdfReady,material_id:'m1',generation:state.state_generation,view:{current_page:1,total_pages:2,zoom_percent:100}}).state;
+  const expanded=transition(state,{type:Event.PdfMaximizeToggled});
+  assert.equal(expanded.effects.length,0);
+  assert.equal(expanded.state.layout.pdf_window_expanded,true);
+  const entered=transition(state,{type:Event.PdfDisplayModeRequested,mode:'screen'});
+  assert.equal(entered.state.layout.pdf_window_expanded,false);
+  assert.deepEqual(entered.effects.map(effect=>[effect.type,effect.request.value]),[[Effect.SetFullscreen,true]]);
+  const calls=[],events=[];
+  const runner=createEffectRunner(createServices({call:async()=>{}},{},{},{set:async value=>calls.push(value)}),event=>events.push(event));
+  runner.run(entered.effects);
+  await runner.settled();
+  assert.deepEqual(calls,[true]);
+  const full=transition(entered.state,events[0]).state;
+  assert.equal(full.layout.pdf_maximized,true);
+  const exit=transition(full,{type:Event.PdfDisplayModeRequested,mode:'pane'});
+  assert.equal(exit.state.layout.pdf_window_expanded,false);
+  assert.deepEqual(exit.effects.map(effect=>[effect.type,effect.request.value]),[[Effect.SetFullscreen,false]]);
+});
 test('native fullscreen exit waits for a delayed entry before reporting its own result', async () => {
   const gate = deferred(), calls = [], events = [];
   const services = createServices({ call: async () => {} }, {}, {}, { set: async value => {

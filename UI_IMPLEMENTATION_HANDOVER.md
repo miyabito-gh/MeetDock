@@ -1459,6 +1459,26 @@ reasoning effort: medium
 理由: 主にARIAとフォーカス管理だが、全工程の統合確認と実機検証設計が必要なため。
 ```
 
+### 16.13 2026-09-27 PDF表示切替と資料一覧UIを完了
+
+- PDF表示先を「ペイン」「ウィンドウ全体」「画面全体」から直接選択できるようにした。
+- `PdfDisplayModeRequested` が状態を検証し、OS全画面の出入りだけ `SetFullscreen` を使う。遅延応答、失敗、PDFの閉じる／切り替え時の復帰を維持する。
+- 資料行の操作順を「PDFプレビュー」「保存場所」「…」に固定し、狭い一覧ペインでも右端位置を揃えた。
+- 最終確認: `node --test tests/model.test.mjs tests/event-chain.test.mjs tests/view.test.mjs` は198件成功、`node --check src/view.js`、`git diff --check` も成功。
+- 英語PDFの実機表示・検索、Acrobat Readerの完全パス取得、中国語PDFの追加検証、Redo・アクセシビリティの再調査は未確認または保留。既知の `tests/explorer-mode.test.mjs:23` 失敗は修正していない。
+
+#### 次チャット用引継ぎプロンプト
+
+```text
+MeetDockのmasterで、PDF表示と資料一覧UIの変更は完了済みです。PDFは「ペイン」「ウィンドウ全体」「画面全体」をヘッダーの3アイコンから直接選択できます。資料行の操作順は「PDFプレビュー」「保存場所」「…」で、狭幅一覧でも右端位置を固定しています。
+
+関連変更は src/model.js、src/presenter.js、src/view.js、src/mock-styles.css、tests/model.test.mjs、tests/event-chain.test.mjs、tests/view.test.mjs です。最終確認は対象テスト198件、node --check src/view.js、git diff --check に成功しています。
+
+次の依頼がない限り、新しい残存課題へ自動着手しないでください。変更時は最初に git status --short、対象差分、必要なら git log -5 を確認し、Model→Effect→IPC、sidecar、保存済みID、厳格検証、CMap対応を維持してください。実機UIは明示許可なしに起動しないでください。英語PDFの実機表示・検索は未確認、Acrobat Reader完全パス取得は保留、中国語PDF追加検証・Redo・アクセシビリティ再調査は範囲外です。通常の実装ではコミット・pushせず、引継ぎまたは明示依頼時だけ対象変更をコミットしてください。
+
+推奨モデル: gpt-5.6-sol / medium。理由: 次のUI変更も状態遷移・表示・関連テストをまたぐ通常規模の作業です。astraは使用しないでください。
+```
+
 ### 16.10 2026-09-26 Acrobat Reader実機観測後の原因調査引継ぎ
 
 - ユーザー実機で項目1を確認した結果、Adobe Acrobat Reader Continuous Release 2025.001.20756（64-bit）を使用している。

@@ -176,7 +176,8 @@ test('collapsed sidebar plus maximized PDF removes width limit and background fo
   const view = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   assert.match(css, /\.app-shell\.sidebar-collapsed \.preview\.maximized\{max-width:none;flex-basis:100%;\}/);
   for (const region of ['sidebar', 'listPane', 'toolbar', 'split']) assert.match(view, new RegExp(`${region}\\.inert=`));
-  assert.match(view, /pdfMaxButton\.setAttribute\('aria-pressed',String\(next\.layout\.pdf_maximized\)\)/);
+  assert.match(view, /const pdfMode=next\.layout\.pdf_maximized\?'screen':next\.layout\.pdf_window_expanded\?'window':'pane'/);
+  assert.match(view, /control\.setAttribute\('aria-pressed',String\(pdfMode===mode\)\)/);
   assert.match(view, /sidebarToggle\.setAttribute\('aria-expanded',String\(!next\.layout\.sidebar_collapsed\)\)/);
 });
 
@@ -578,7 +579,7 @@ test('material rows expose a persistent PDF preview action and current-row state
   assert.ok(source.includes('pdf-preview-button'));
   assert.ok(source.includes("r.setAttribute('aria-current','true')"));
   assert.ok(source.includes("icon=button('','activate','file-icon')"));
-  assert.ok(source.includes("acts.append(openFolder,pdfPreview,remove,more)"));
+  assert.ok(source.includes("acts.append(pdfPreview,openFolder,remove,more)"));
   assert.ok(source.includes('開いていない場合は外部アプリで開きます'));
   assert.ok(source.includes("add('外部で開く','activate',runnable)"));
   assert.doesNotMatch(source, /button\('開く','activate','primary'\)/);
@@ -697,8 +698,16 @@ test('toolbar groups remain stable and material status is lightweight', () => {
   const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
   assert.match(styles,/\.status\[data-tone="available"\] \.status-mark/);
   assert.match(styles,/\.row-actions\{width:auto;display:flex;align-items:center;justify-content:flex-end/);
-  assert.match(styles,/grid-template-columns:minmax\(240px,1fr\) 116px 72px/);
-  assert.match(styles,/\.material-row \.row-actions\{position:absolute;right:12px;top:50%;transform:translateY\(-50%\)\}/);
+  assert.match(styles,/\.list-pane\{container:material-list \/ inline-size\}/);
+  assert.match(styles,/\.list-header,\.material-row\{grid-template-columns:minmax\(0,1fr\) 116px 90px\}/);
+  assert.match(styles,/\.material-row \.row-actions\{position:static;right:auto;top:auto;transform:none/);
+  assert.match(styles,/@container material-list \(max-width:540px\)\{/);
+  assert.match(styles,/\.material-row \.row-actions\{grid-column:2!important;grid-row:2;margin-left:0;justify-self:end\}/);
+  assert.match(styles,/\.material-row \.row-actions\{[^}]*width:90px;display:grid;grid-template-columns:repeat\(3,30px\);gap:0\}/);
+  assert.match(styles,/\.material-row \.pdf-preview-button\{grid-column:1\}/);
+  assert.match(styles,/\.material-row \.open-folder-button\{grid-column:2\}/);
+  assert.match(styles,/\.material-row \.more-button,\.material-row \.reorder-delete-button\{grid-column:3\}/);
+  assert.match(styles,/\.material-row \.material-name-line\{flex-wrap:wrap/);
   assert.doesNotMatch(styles,/\.pdf-preview-button\[hidden\]\{display:block/);
 });
 
@@ -829,4 +838,20 @@ test('group tree redraw restores the focused group control for keyboard context 
   assert.equal(document.activeElement.dataset.action,'group');
   assert.equal(document.activeElement.dataset.id,'g1');
   assert.equal(rows[0].dataset.groupId,'g1');
+});
+
+test('PDF header directly selects and identifies all three display modes', () => {
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  for(const label of ['ペインに表示','ウィンドウ全体に表示','全画面表示']) assert.ok(source.includes(label));
+  assert.doesNotMatch(source,/pdfStage/);
+  assert.ok(source.includes("pdfModes.setAttribute('aria-label','PDFの表示範囲')"));
+  assert.ok(source.includes("else if(a==='pdf-display-pane')emit('pdfDisplayMode','pane')"));
+  assert.ok(source.includes("else if(a==='pdf-display-window')emit('pdfDisplayMode','window')"));
+  assert.ok(source.includes("else if(a==='pdf-display-screen')emit('pdfDisplayMode','screen')"));
+  assert.ok(source.includes("pdfModes.append(pdfPaneButton,pdfWindowButton,pdfScreenButton)"));
+  assert.ok(source.includes("control.disabled=next.layout.pdf_fullscreen_pending!=null"));
+  assert.match(styles,/\.preview-actions \.pdf-display-button\{width:30px;height:30px/);
+  assert.match(styles,/\.pdf-display-modes \.pdf-display-button\[aria-pressed="true"\]/);
+  assert.match(styles,/\.preview-actions \[hidden\],\.row-action-button\[hidden\]\{display:none!important\}/);
 });

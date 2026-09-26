@@ -5,7 +5,7 @@ export const Lifecycle = enumeration('Booting Ready ReadOnly RecoveryPending Mig
 export const Edit = enumeration('Clean Dirty Saving Conflict');
 export const Pdf = enumeration('Closed Loading Viewing PasswordRequired Failed');
 export const WINDOW_SNAPSHOT_GROUP_ID = 'window-snapshot';
-export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDuplicated GroupMoved GroupDeleted GroupReordered GroupMovedToEnd ReorderCancelled MaterialAdded MaterialUpdated MaterialMoved MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed WindowSnapshotSaveRequested WindowSnapshotSaved WindowSnapshotSaveFailed WindowSnapshotLoadRequested WindowSnapshotLoaded WindowSnapshotLoadFailed WindowSnapshotClearSucceeded WindowSnapshotClearFailed WindowSnapshotLaunchRequested WindowSnapshotLaunchAllRequested WindowSnapshotLaunchSucceeded WindowSnapshotLaunchFailed WindowSnapshotLaunchAllCompleted WindowSnapshotRegisterRequested ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchProgressed BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfSidecarSaveRequested PdfSidecarRemoveRequested PdfSidecarLoaded PdfSidecarSaved PdfSidecarRemoved PdfSidecarFailed PdfMaximizeToggled PdfFullscreenSucceeded PdfFullscreenFailed FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
+export const Event = enumeration('Started CloseRequested EffectFailed SettingsLoaded FutureSchemaFound LegacySettingsFound CorruptSettingsFound SettingsUnavailable SettingsLoadFailed MigrationApproved MigrationRejected RestoreSelected InitializeSelected ReadOnlySelected ResolutionFailed EditRequested DraftChanged GroupAdded GroupRenamed GroupDuplicated GroupMoved GroupDeleted GroupReordered GroupMovedToEnd ReorderCancelled MaterialAdded MaterialUpdated MaterialMoved MaterialDeleted MaterialReordered NativeFilesDropped DroppedFilesPrepared DroppedFilesPrepareFailed DroppedFilesConfirmed DroppedFilesCancelled SaveRequested SaveSucceeded SaveConflict SaveFailed EditDiscarded ReloadRequested GroupSelected SyncRequested SyncSucceeded SyncFailed WindowDialogOpened WindowDialogClosed WindowSyncSucceeded WindowSyncFailed WindowActivateRequested WindowActivateSucceeded WindowActivateFailed WindowCloseRequested WindowCloseSucceeded WindowCloseFailed WindowExclusionsSaveRequested WindowExclusionsSaved WindowExclusionsSaveFailed WindowSnapshotSaveRequested WindowSnapshotSaved WindowSnapshotSaveFailed WindowSnapshotLoadRequested WindowSnapshotLoaded WindowSnapshotLoadFailed WindowSnapshotClearSucceeded WindowSnapshotClearFailed WindowSnapshotLaunchRequested WindowSnapshotLaunchAllRequested WindowSnapshotLaunchSucceeded WindowSnapshotLaunchFailed WindowSnapshotLaunchAllCompleted WindowSnapshotRegisterRequested ActivateRequested OpenContainingFolderRequested OpenContainingFolderCompleted LaunchSucceeded LaunchFailed ForegroundDenied BatchLaunchRequested BatchLaunchCancelRequested BatchLaunchProgressed BatchLaunchCompleted BatchLaunchCancelled PdfOpenRequested PdfDocumentPreviousRequested PdfDocumentNextRequested PdfReady PdfViewChanged PdfPasswordRequired PdfFailed PdfOpenExternalRequested PdfClosed PdfPreviousRequested PdfNextRequested PdfPageRequested PdfZoomInRequested PdfZoomOutRequested PdfFitRequested PdfSearchRequested PdfSearchPreviousRequested PdfSearchNextRequested PdfSearchCompleted PdfSidecarSaveRequested PdfSidecarRemoveRequested PdfSidecarLoaded PdfSidecarSaved PdfSidecarRemoved PdfSidecarFailed PdfDisplayModeRequested PdfMaximizeToggled PdfFullscreenToggled PdfFullscreenSucceeded PdfFullscreenFailed FatalError SearchChanged ResizeChanged SidebarToggled SidebarWidthChanged PdfWidthChanged GenerationResetRequested');
 export const Effect = enumeration('LoadSettings ResolveSettings SaveSettings SyncStatuses SyncWindows ActivateWindow RequestWindowClose SaveWindowExclusions SaveWindowSnapshot LoadWindowSnapshot ClearWindowSnapshot LaunchWindowSnapshotItem BatchLaunchWindowSnapshot Activate OpenContainingFolder PrepareDroppedFiles BatchLaunch CancelBatch ReplacePdf ClosePdf PdfPrevious PdfNext PdfGoToPage PdfZoomIn PdfZoomOut PdfFit PdfSearch PdfSearchPrevious PdfSearchNext LoadPdfSidecar SavePdfSidecar RemovePdfSidecar SetFullscreen CloseWindow');
 
 export function initialState() {
@@ -15,7 +15,7 @@ export function initialState() {
     config_revision: 0, state_generation: 0, saved_config: null, draft: null,
     candidates: [], resolution: null, saving: null, selected_group_id: null,
     statuses: [], last_sync_at: null, launch_results: [], query: '', width: null,
-    dropped_files: null, layout: { sidebar_collapsed: false, sidebar_width: 250, pdf_width: 430, pdf_maximized: false, pdf_fullscreen_pending: null, pdf_fullscreen_request: 0, pdf_fullscreen_recovery: false } };
+    dropped_files: null, layout: { sidebar_collapsed: false, sidebar_width: 250, pdf_width: 430, pdf_window_expanded: false, pdf_maximized: false, pdf_fullscreen_pending: null, pdf_fullscreen_request: 0, pdf_fullscreen_recovery: false } };
 }
 const valid = (type, value) => { try { return validate(type, value); } catch { return null; } };
 const material = (s, id) => s.saved_config?.materials.find(m => m.id === id);
@@ -66,10 +66,10 @@ export function transition(s, e) {
   const bump = () => s.state_generation < MAX_SAFE ? s.state_generation + 1 : null;
   const closeFullscreen = () => {
     const layout = s.layout;
-    if (layout.pdf_fullscreen_pending === false) return { layout, effects: [] };
-    if (!layout.pdf_maximized && layout.pdf_fullscreen_pending !== true && !layout.pdf_fullscreen_recovery) return { layout, effects: [] };
+    if (layout.pdf_fullscreen_pending === false) return { layout: { ...layout, pdf_window_expanded: false }, effects: [] };
+    if (!layout.pdf_maximized && layout.pdf_fullscreen_pending !== true && !layout.pdf_fullscreen_recovery) return { layout: { ...layout, pdf_window_expanded: false }, effects: [] };
     const request = layout.pdf_fullscreen_request + 1;
-    return { layout: { ...layout, pdf_fullscreen_pending: false, pdf_fullscreen_request: request, pdf_fullscreen_recovery: false },
+    return { layout: { ...layout, pdf_window_expanded: false, pdf_fullscreen_pending: false, pdf_fullscreen_request: request, pdf_fullscreen_recovery: false },
       effects: [effect(Effect.SetFullscreen, { value: false, request })] };
   };
   if (!Object.hasOwn(Event, e.type) || ['CloseRequested'].includes(e.type)) return { ...result(), handled: false };
@@ -606,8 +606,33 @@ export function transition(s, e) {
         typeof e.view?.search_query !== 'string' || e.view.search_index < 0 || e.view.search_index > e.view.search_total ||
         e.view.current_page < 1 || e.view.current_page > e.view.total_pages || e.view.zoom_percent < 1) return result(s, [], null, 'stale_pdf_search');
       return result({ ...s, pdf: { ...s.pdf, ...e.view, search_status: 'ready' } });
+    case Event.PdfDisplayModeRequested: {
+      if (!['pane', 'window', 'screen'].includes(e.mode) || s.layout.pdf_fullscreen_pending != null ||
+        (s.pdf.kind === Pdf.Closed && !(s.layout.pdf_fullscreen_recovery && e.mode === 'pane'))) return deny();
+      const layout = s.layout;
+      if (e.mode === 'screen') {
+        if (layout.pdf_maximized || layout.pdf_fullscreen_request >= MAX_SAFE) return deny();
+        const request = layout.pdf_fullscreen_request + 1;
+        return result({ ...s, layout: { ...layout, pdf_fullscreen_pending: true, pdf_fullscreen_request: request, pdf_fullscreen_recovery: false } },
+          [effect(Effect.SetFullscreen, { value: true, request })]);
+      }
+      const expanded = e.mode === 'window';
+      if (layout.pdf_maximized || layout.pdf_fullscreen_recovery) {
+        if (layout.pdf_fullscreen_request >= MAX_SAFE) return deny();
+        const request = layout.pdf_fullscreen_request + 1;
+        return result({ ...s, layout: { ...layout, pdf_window_expanded: expanded, pdf_fullscreen_pending: false,
+          pdf_fullscreen_request: request, pdf_fullscreen_recovery: false } },
+          [effect(Effect.SetFullscreen, { value: false, request })]);
+      }
+      return layout.pdf_window_expanded === expanded ? deny() :
+        result({ ...s, layout: { ...layout, pdf_window_expanded: expanded } });
+    }
     case Event.PdfMaximizeToggled:
+      if (s.pdf.kind === Pdf.Closed || s.layout.pdf_maximized || s.layout.pdf_fullscreen_pending != null || s.layout.pdf_fullscreen_recovery) return deny();
+      return result({ ...s, layout: { ...s.layout, pdf_window_expanded: !s.layout.pdf_window_expanded } });
+    case Event.PdfFullscreenToggled:
       if ((s.pdf.kind === Pdf.Closed && !s.layout.pdf_fullscreen_recovery) || s.layout.pdf_fullscreen_pending != null || s.layout.pdf_fullscreen_request >= MAX_SAFE) return deny();
+      if (!s.layout.pdf_window_expanded && !s.layout.pdf_fullscreen_recovery) return deny();
       { const value = s.layout.pdf_fullscreen_recovery ? false : !s.layout.pdf_maximized;
         const request = s.layout.pdf_fullscreen_request + 1;
         return result({ ...s, layout: { ...s.layout, pdf_fullscreen_pending: value, pdf_fullscreen_request: request, pdf_fullscreen_recovery: false } },

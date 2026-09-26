@@ -67,6 +67,8 @@ export function createPresenter(view, dispatch) {
     clearPdfAnnotations(material_id, pdf_identity) { id(material_id); dispatch({ type: Event.PdfSidecarRemoveRequested, material_id, pdf_identity, preserve_until_removed: true }); },
     removePdfSidecar(material_id, pdf_identity) { id(material_id); dispatch({ type: Event.PdfSidecarRemoveRequested, material_id, pdf_identity }); },
     pdfMaximize() { dispatch({ type: Event.PdfMaximizeToggled }); },
+    pdfFullscreen() { dispatch({ type: Event.PdfFullscreenToggled }); },
+    pdfDisplayMode(mode) { dispatch({ type: Event.PdfDisplayModeRequested, mode }); },
     toggleSidebar() { dispatch({ type: Event.SidebarToggled }); },
     sidebarWidth(value) { dispatch({ type: Event.SidebarWidthChanged, value }); },
     pdfWidth(value) { dispatch({ type: Event.PdfWidthChanged, value }); },

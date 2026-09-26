@@ -25,26 +25,86 @@ const loading = () => run(ready(), Event.PdfOpenRequested, { material_id: 'm1' }
 const pdfView = { current_page: 1, total_pages: 4, zoom_percent: 100 };
 const viewing = () => run(loading(), Event.PdfReady, { material_id: 'm1', generation: 2, view: pdfView }).state;
 
+test('PDF display modes are directly selectable in both directions', () => {
+  const pane = viewing();
+  for (const mode of ['pane', 'invalid']) {
+    const denied = run(pane, Event.PdfDisplayModeRequested, { mode });
+    assert.equal(denied.state, pane);
+    assert.equal(denied.effects.length, 0);
+  }
+  const windowed = run(pane, Event.PdfDisplayModeRequested, { mode: 'window' });
+  assert.equal(windowed.state.layout.pdf_window_expanded, true);
+  assert.equal(windowed.effects.length, 0);
+  assert.equal(run(windowed.state, Event.PdfDisplayModeRequested, { mode: 'pane' }).state.layout.pdf_window_expanded, false);
+
+  const directEntry = run(pane, Event.PdfDisplayModeRequested, { mode: 'screen' });
+  assert.equal(directEntry.state.layout.pdf_window_expanded, false);
+  assert.deepEqual(directEntry.effects.map(effect => [effect.type, effect.request.value]), [[Effect.SetFullscreen, true]]);
+  assert.equal(run(directEntry.state, Event.PdfDisplayModeRequested, { mode: 'window' }).effects.length, 0);
+  const entryFailed = run(directEntry.state, Event.PdfFullscreenFailed, { value: true, request: 1 }).state;
+  assert.equal(entryFailed.layout.pdf_window_expanded, false);
+  assert.equal(entryFailed.layout.pdf_maximized, false);
+  const screen = run(directEntry.state, Event.PdfFullscreenSucceeded, { value: true, request: 1 }).state;
+  assert.equal(screen.layout.pdf_maximized, true);
+
+  for (const [mode, expanded] of [['pane', false], ['window', true]]) {
+    const exit = run(screen, Event.PdfDisplayModeRequested, { mode });
+    assert.equal(exit.state.layout.pdf_window_expanded, expanded);
+    assert.deepEqual(exit.effects.map(effect => [effect.type, effect.request.value]), [[Effect.SetFullscreen, false]]);
+    assert.equal(run(exit.state, Event.PdfDisplayModeRequested, { mode: 'screen' }).effects.length, 0);
+    const completed = run(exit.state, Event.PdfFullscreenSucceeded, { value: false, request: 2 }).state;
+    assert.equal(completed.layout.pdf_maximized, false);
+    assert.equal(completed.layout.pdf_window_expanded, expanded);
+    const failed = run(exit.state, Event.PdfFullscreenFailed, { value: false, request: 2 }).state;
+    assert.equal(failed.layout.pdf_maximized, true);
+    assert.equal(failed.layout.pdf_fullscreen_recovery, true);
+    assert.equal(run(failed, Event.PdfDisplayModeRequested, { mode }).effects[0].request.value, false);
+  }
+});
+
 test('PDF fullscreen confirms native success, keeps state on failure, and clears on close', () => {
   const initial = viewing();
-  const requested = run(initial, Event.PdfMaximizeToggled);
+  const expanded = run(initial, Event.PdfMaximizeToggled);
+  assert.equal(expanded.state.layout.pdf_window_expanded, true);
+  assert.equal(expanded.effects.length, 0);
+  assert.equal(run(expanded.state, Event.PdfMaximizeToggled).state.layout.pdf_window_expanded, false);
+  assert.equal(run(initial, Event.PdfFullscreenToggled).effects.length, 0);
+  const requested = run(expanded.state, Event.PdfFullscreenToggled);
   assert.equal(requested.state.layout.pdf_maximized, false);
   assert.equal(requested.state.layout.pdf_fullscreen_pending, true);
   assert.equal(requested.effects[0].type, Effect.SetFullscreen);
-  assert.equal(run(requested.state, Event.PdfMaximizeToggled).effects.length, 0);
+  assert.equal(run(requested.state, Event.PdfFullscreenToggled).effects.length, 0);
   const failed = run(requested.state, Event.PdfFullscreenFailed, { value: true, request: 1 });
   assert.equal(failed.state.layout.pdf_maximized, false);
   assert.equal(failed.state.layout.pdf_fullscreen_pending, null);
+  assert.equal(failed.state.layout.pdf_window_expanded, true);
   const maximized = run(requested.state, Event.PdfFullscreenSucceeded, { value: true, request: 1 }).state;
   assert.equal(maximized.layout.pdf_maximized, true);
+  assert.equal(run(maximized, Event.PdfMaximizeToggled).effects.length, 0);
+  const exiting = run(maximized, Event.PdfFullscreenToggled);
+  assert.equal(exiting.effects[0].request.value, false);
+  const windowed = run(exiting.state, Event.PdfFullscreenSucceeded, { value: false, request: 2 }).state;
+  assert.equal(windowed.layout.pdf_window_expanded, true);
+  assert.equal(windowed.layout.pdf_maximized, false);
+  assert.equal(run(windowed, Event.PdfMaximizeToggled).state.layout.pdf_window_expanded, false);
+  const closedFromWindow = run(windowed, Event.PdfClosed);
+  assert.equal(closedFromWindow.state.layout.pdf_window_expanded, false);
+  assert.equal(closedFromWindow.effects.some(effect => effect.type === Effect.SetFullscreen), false);
+  const switched = run(windowed, Event.PdfDocumentNextRequested);
+  assert.equal(switched.state.layout.pdf_window_expanded, true);
+  assert.equal(switched.effects.some(effect => effect.type === Effect.SetFullscreen), false);
+  const changedFromWindow = run(windowed, Event.GroupSelected, { group_id: 'g2' });
+  assert.equal(changedFromWindow.state.layout.pdf_window_expanded, false);
+  assert.equal(changedFromWindow.effects.some(effect => effect.type === Effect.SetFullscreen), false);
   const closed = run(maximized, Event.PdfClosed);
   assert.equal(closed.state.layout.pdf_maximized, true);
   assert.ok(closed.effects.some(effect => effect.type === Effect.SetFullscreen && effect.request.value === false));
   assert.equal(closed.state.layout.pdf_fullscreen_pending, false);
+  assert.equal(closed.state.layout.pdf_window_expanded, false);
   const exitFailed = run(closed.state, Event.PdfFullscreenFailed, { value: false, request: 2 });
   assert.equal(exitFailed.state.layout.pdf_maximized, true);
   assert.equal(exitFailed.state.layout.pdf_fullscreen_recovery, true);
-  const retry = run(exitFailed.state, Event.PdfMaximizeToggled);
+  const retry = run(exitFailed.state, Event.PdfFullscreenToggled);
   assert.equal(retry.effects[0].request.value, false);
   const recovered = run(retry.state, Event.PdfFullscreenSucceeded, { value: false, request: 3 });
   assert.equal(recovered.state.layout.pdf_maximized, false);
@@ -58,7 +118,7 @@ test('PDF fullscreen confirms native success, keeps state on failure, and clears
 });
 
 test('closing during delayed fullscreen entry waits for the queued exit and ignores the old response', () => {
-  const entering = run(viewing(), Event.PdfMaximizeToggled).state;
+  const entering = run(run(viewing(), Event.PdfMaximizeToggled).state, Event.PdfFullscreenToggled).state;
   const closed = run(entering, Event.PdfClosed);
   assert.equal(closed.effects.find(effect => effect.type === Effect.SetFullscreen).request.value, false);
   const entered = run(closed.state, Event.PdfFullscreenSucceeded, { value: true, request: 1 });
@@ -68,7 +128,7 @@ test('closing during delayed fullscreen entry waits for the queued exit and igno
   const failure = run(entered.state, Event.PdfFullscreenFailed, { value: false, request: 2 });
   assert.equal(failure.state.layout.pdf_maximized, true);
   assert.equal(failure.state.layout.pdf_fullscreen_recovery, true);
-  assert.equal(run(failure.state, Event.PdfMaximizeToggled).effects[0].request.value, false);
+  assert.equal(run(failure.state, Event.PdfFullscreenToggled).effects[0].request.value, false);
 });
 const candidate = { candidate_id: 'candidate1', kind: 'backup', revision: 12, last_updated: null };
 const pending = lifecycle => ({ ...initialState(), lifecycle, candidates: [{ ...candidate, kind: lifecycle === Lifecycle.MigrationPending ? 'legacy' : 'backup' }] });
