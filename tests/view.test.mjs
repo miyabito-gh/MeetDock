@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm';
 import { createFocusSync } from '../src/focus-sync.js';
 import { accumulatePdfWheel, createPdfWheelState } from '../src/pdf-wheel.js';
 import { annotationSessionChange, commitAnnotations, createAnnotationHistory, createStroke, redoAnnotations, undoAnnotations } from '../src/pdf-annotations.js';
-import { batchButtonAction, batchSummary, displayPath, groupTreeRenderKey, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, reorderPlacement, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+import { batchButtonAction, batchSummary, displayPath, groupTreeRenderKey, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
 
 test('PDF annotation canvas follows the rendered page and stays transparent',()=>{
   assert.deepEqual(pdfOverlayBounds({offsetLeft:24,offsetTop:24,clientWidth:712,clientHeight:1007}),{left:24,top:24,width:712,height:1007});
@@ -196,17 +196,6 @@ test('pointer release dispatches reorder, role move and empty drop correctly',()
   assert.deepEqual(reorderDropAction('material','m2',source,{beforeId:'m1',groupId:'g1',role:'main'}),{action:'reorderMaterial',args:['m2','m1']});
   assert.deepEqual(reorderDropAction('material','m2',source,{beforeId:null,groupId:'g1',role:'reference'}),{action:'moveMaterial',args:['m2','g1','reference',null]});
   assert.equal(reorderDropAction('material','m2',source,null),null);
-});
-
-test('keyboard placement covers each boundary and matches pointer insertion targets',()=>{
-  const peers=[{id:'a'},{id:'b'},{id:'c'},{id:'d'}];
-  assert.deepEqual(reorderPlacement(peers,'c','first'),{beforeId:'a'});
-  assert.deepEqual(reorderPlacement(peers,'c','up'),{beforeId:'b'});
-  assert.deepEqual(reorderPlacement(peers,'b','down'),{beforeId:'d'});
-  assert.deepEqual(reorderPlacement(peers,'c','down'),{beforeId:null});
-  assert.deepEqual(reorderPlacement(peers,'a','last'),{beforeId:null});
-  assert.equal(reorderPlacement(peers,'a','up'),null);
-  assert.equal(reorderPlacement(peers,'d','down'),null);
 });
 
 test('reorder entry follows edit, search and snapshot states',()=>{
@@ -631,9 +620,14 @@ test('saved window rows reuse material icons and the left icon owns activate-or-
 test('groups and materials expose internal drag reorder affordances', () => {
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
-  for(const token of ["'toggle-reorder'",'reorderMode','applyReorderMode',"el('button','drag-handle','⠿')",'elementFromPoint',"addEventListener('pointerdown'","addEventListener('pointermove'",'finishReorder','reorderGroup','reorderMaterial','reorderPlacement','cancelReorder'])assert.ok(source.includes(token));
+  for(const token of ["'toggle-reorder'",'reorderMode','applyReorderMode',"el('button','drag-handle','⠿')",'elementFromPoint',"addEventListener('pointerdown'","addEventListener('pointermove'",'finishReorder','reorderGroup','reorderMaterial','cancelReorder'])assert.ok(source.includes(token));
   assert.doesNotMatch(source,/addEventListener\('dragstart'/);
   assert.match(styles,/\.drag-handle\{[^}]*width:24px;[^}]*flex:0 0 24px/);
+  assert.ok(source.includes("reorderHint=el('span','','左端のハンドルをドラッグして並べ替え')"));
+  assert.ok(source.includes("reorderDone=button('完了','reorder-done','primary')"));
+  assert.doesNotMatch(source,/reorder-key|addStepControls|reorderPlacement/);
+  assert.doesNotMatch(styles,/\.reorder-keys|\.reorder-step-button/);
+  assert.match(styles,/\.reorder-mode \.group-row \.group-more\{display:none\}/);
 });
 
 test('reorder mode deletes material registration without confirmation',()=>{
