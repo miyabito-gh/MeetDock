@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm';
 import { createFocusSync } from '../src/focus-sync.js';
 import { accumulatePdfWheel, createPdfWheelState } from '../src/pdf-wheel.js';
 import { annotationSessionChange, commitAnnotations, createAnnotationHistory, createStroke, redoAnnotations, undoAnnotations } from '../src/pdf-annotations.js';
-import { batchButtonAction, batchSummary, displayPath, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, reorderPlacement, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+import { batchButtonAction, batchSummary, displayPath, groupTreeRenderKey, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, reorderPlacement, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
 
 test('PDF annotation canvas follows the rendered page and stays transparent',()=>{
   assert.deepEqual(pdfOverlayBounds({offsetLeft:24,offsetTop:24,clientWidth:712,clientHeight:1007}),{left:24,top:24,width:712,height:1007});
@@ -26,7 +26,7 @@ test('PDF marker and bookmark controls use the standard menu background',()=>{
   assert.match(styles,/\.toolbar-more-panel\{[^}]*background:#fff/);
 });
 
-test('PDF marker and bookmark controls are collapsible and bookmark list height is capped',()=>{
+test('PDF marker and bookmark controls are collapsible and bookmarks use a scrolling left rail',()=>{
   const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
   assert.match(view,/annotationTools\.hidden=true;bookmarkPanel\.hidden=true/);
@@ -34,7 +34,27 @@ test('PDF marker and bookmark controls are collapsible and bookmark list height 
   assert.ok(view.indexOf("bookmarkToolsToggle=button('しおり','bookmark-tools-toggle')")<view.indexOf('zoomGroup.append('));
   assert.match(view,/a==='marker-tools-toggle'.*annotationTools\.hidden=!annotationTools\.hidden/s);
   assert.match(view,/a==='bookmark-tools-toggle'.*bookmarkPanel\.hidden=!bookmarkPanel\.hidden/s);
-  assert.match(styles,/\.bookmark-list\{[^}]*max-height:180px;overflow-y:auto/);
+  assert.match(view,/pdfViewerBody=el\('div','pdf-viewer-body'\)/);
+  assert.match(view,/pdfViewerBody\.insertBefore\(bookmarkPanel,wrap\)/);
+  assert.match(styles,/\.pdf-viewer-body\{[^}]*display:flex;flex:1;[^}]*min-height:0;overflow:hidden/);
+  assert.match(styles,/\.bookmark-panel\{[^}]*flex:0 0 min\(210px,42%\);[^}]*border-right:1px solid var\(--line\);[^}]*display:flex;flex-direction:column;overflow:hidden/);
+  assert.match(styles,/\.bookmark-list\{[^}]*flex:1;min-height:0;[^}]*overflow-y:auto;overscroll-behavior:contain/);
+  assert.match(styles,/\.bookmark-list:empty\{display:none\}/);
+});
+
+test('bookmark rendering preserves the user collapsed state while viewing',()=>{
+  const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const render=view.slice(view.indexOf('  function renderBookmarks(')).split('\n')[0];
+  const scope={bookmarks:[],bookmarkList:{replaceChildren(){}},bookmarkPanel:{hidden:true},model:{pdf:{kind:'Viewing'}},el(){},button(){}};
+  runInNewContext(render,scope);
+  scope.renderBookmarks();
+  assert.equal(scope.bookmarkPanel.hidden,true);
+  scope.bookmarkPanel.hidden=false;
+  scope.renderBookmarks();
+  assert.equal(scope.bookmarkPanel.hidden,false);
+  scope.model.pdf.kind='Closed';
+  scope.renderBookmarks();
+  assert.equal(scope.bookmarkPanel.hidden,true);
 });
 
 test('PDF marker colors visibly expose selection and retain toggle and eraser behavior',()=>{
@@ -193,6 +213,18 @@ test('focus refresh keeps an ordered material row attached so the first icon cli
   assert.deepEqual(insertions,[]);
   const moved={};placeStableRow(container,moved,first);
   assert.deepEqual(insertions,[[moved,second]]);
+});
+
+test('focus refresh keeps the sidebar group tree attached until its rendered inputs change',()=>{
+  const config={groups:[group('g1','Group',1)],materials:[]};
+  const initial=groupTreeRenderKey(config,'g1',new Set(),false);
+  assert.equal(groupTreeRenderKey(structuredClone(config),'g1',new Set(),false),initial);
+  assert.notEqual(groupTreeRenderKey(config,'g1',new Set(['g1']),false),initial);
+  assert.notEqual(groupTreeRenderKey(config,'g1',new Set(),true),initial);
+  assert.notEqual(groupTreeRenderKey({groups:[group('g1','Renamed',1)]},'g1',new Set(),false),initial);
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  assert.match(source,/if\(renderKey===renderedGroupTreeKey\)return/);
+  assert.match(source,/if\(groups\.querySelector\('\.snapshot-group'\)\)return/);
 });
 
 test('focus refresh between press and release preserves the real row and dispatches one first click',()=>{
@@ -414,16 +446,22 @@ test('PDF wheel scrolls within a page and only pages at vertical boundaries',()=
 });
 
 test('PDF preview keyboard paging maps supported keys and ignores unsafe key events', () => {
-  assert.equal(pdfPageKeyDirection({ key: 'PageUp' }), -1);
-  assert.equal(pdfPageKeyDirection({ key: 'PageDown' }), 1);
+  assert.equal(pdfPageKeyDirection({ key: 'PageUp', ctrlKey: true }), -1);
+  assert.equal(pdfPageKeyDirection({ key: 'PageDown', ctrlKey: true }), 1);
+  assert.equal(pdfPageKeyDirection({ key: 'PageUp' }), 0);
+  assert.equal(pdfPageKeyDirection({ key: 'PageDown' }), 0);
   for (const key of ['ArrowUp', 'ArrowDown', ' ']) assert.equal(pdfPageKeyDirection({ key }), 0);
   assert.equal(pdfArrowBoundaryDirection({ key: 'ArrowUp' }, 0, 300, 900), -1);
   assert.equal(pdfArrowBoundaryDirection({ key: 'ArrowDown' }, 600, 300, 900), 1);
+  assert.equal(pdfArrowBoundaryDirection({ key: 'PageUp' }, 0, 300, 900), -1);
+  assert.equal(pdfArrowBoundaryDirection({ key: 'PageDown' }, 600, 300, 900), 1);
+  assert.equal(pdfArrowBoundaryDirection({ key: 'PageUp' }, 1, 300, 900), 0);
+  assert.equal(pdfArrowBoundaryDirection({ key: 'PageDown' }, 598, 300, 900), 0);
   assert.equal(pdfArrowBoundaryDirection({ key: 'ArrowDown' }, 598, 300, 900), 0);
   assert.equal(pdfArrowBoundaryDirection({ key: 'ArrowDown', repeat: true }, 600, 300, 900), 0);
-  for (const blocked of ['repeat', 'isComposing', 'ctrlKey', 'metaKey', 'altKey']) assert.equal(pdfPageKeyDirection({ key: 'PageDown', [blocked]: true }), 0);
-  assert.equal(pdfPageKeyDirection({ key: 'PageDown', keyCode: 229 }), 0);
-  assert.equal(pdfPageKeyDirection({ key: 'Home' }), 0);
+  for (const blocked of ['repeat', 'isComposing', 'metaKey', 'altKey']) assert.equal(pdfPageKeyDirection({ key: 'PageDown', ctrlKey: true, [blocked]: true }), 0);
+  assert.equal(pdfPageKeyDirection({ key: 'PageDown', ctrlKey: true, keyCode: 229 }), 0);
+  assert.equal(pdfPageKeyDirection({ key: 'Home', ctrlKey: true }), 0);
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   for (const token of ["wrap.tabIndex=0", "'PDFプレビュー本文'", "'aria-describedby'", "'aria-live','polite'", "interactive=e.target.closest?.('input,textarea,select,button,[contenteditable]", 'dialog.open||issue.open||dndDialog.open', '!menu.hidden||panning||resizing', "emit('pdfPrevious')", "emit('pdfNext')", 'wrap.focus({preventScroll:true})', "pendingPdfScrollPosition='end'", "pendingPdfScrollPosition='start'", "wrap.scrollTop=pendingPdfScrollPosition==='end'?wrap.scrollHeight:0"]) assert.ok(source.includes(token));
   const styles = readFileSync(new URL('../src/visibility.css', import.meta.url), 'utf8');
@@ -725,4 +763,18 @@ test('keyboard context keys open the focused material, group or snapshot menu wi
   }
   const count=opened.length;keydown({key:'F10',shiftKey:false});assert.equal(opened.length,count);
   scope.dialog.open=true;keydown({key:'ContextMenu'});assert.equal(opened.length,count);
+});
+
+test('group tree redraw restores the focused group control for keyboard context menus',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const line=source.slice(source.indexOf('  function tree(')).split('\n')[0];
+  const document={activeElement:null},rows=[];
+  const makeNode=(tag,action)=>({tag,dataset:action?{action}:{},style:{setProperty(){}},classList:{},children:[],setAttribute(){},addEventListener(){},append(...children){this.children.push(...children)},querySelectorAll(selector){assert.equal(selector,'[data-action]');return this.children.filter(child=>child.dataset?.action)},focus(){document.activeElement=this}});
+  const groups={replaceChildren(){rows.length=0},append(row){rows.push(row)},querySelectorAll(selector){assert.equal(selector,'.group-row');return rows}};
+  const oldRow={dataset:{groupId:'g1'}},oldControl={dataset:{action:'group'},closest:()=>oldRow};document.activeElement=oldControl;
+  const scope={document,groups,collapsedGroups:new Set(),renderedGroupTreeKey:null,groupTreeRenderKey,model:{selected_group_id:'g1',window_snapshot:null},el:tag=>makeNode(tag),button:(_,action)=>makeNode('button',action),svgIcon:()=>makeNode('svg'),openMenu(){}};
+  runInNewContext(line,scope);scope.tree({groups:[{id:'g1',parent_id:null,name:'Group',order:1}]});
+  assert.equal(document.activeElement.dataset.action,'group');
+  assert.equal(document.activeElement.dataset.id,'g1');
+  assert.equal(rows[0].dataset.groupId,'g1');
 });

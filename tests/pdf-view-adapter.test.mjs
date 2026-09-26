@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PdfViewAdapter, PDF_WORKER_URL } from '../src/pdf-view-adapter.js';
+import { PdfViewAdapter, PDF_CMAP_URL, PDF_WORKER_URL } from '../src/pdf-view-adapter.js';
 
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 function canvas(log) { return { _w: 1, _h: 1, get width() { return this._w; }, set width(v) { this._w=v; log.push(`width:${v}`); }, get height() { return this._h; }, set height(v) { this._h=v; log.push(`height:${v}`); }, getContext: () => ({}) }; }
@@ -99,11 +99,11 @@ test('invalid URL binding is rejected before PDF.js', async () => {
 });
 
 test('URL resolver can translate the custom scheme for WebView2', async () => {
-  let loadedUrl = null;
+  let loadedOptions = null;
   const pdfjs = {
     GlobalWorkerOptions: {},
-    getDocument({ url }) {
-      loadedUrl = url;
+    getDocument(options) {
+      loadedOptions = options;
       return loading(document([], Promise.resolve()), []);
     },
   };
@@ -113,7 +113,11 @@ test('URL resolver can translate the custom scheme for WebView2', async () => {
     resolveUrl: (_url, materialId) => `http://material.localhost/pdf/${materialId}`,
   });
   await adapter.replace({ url:'material://pdf/m1', material_id:'m1', generation:1 });
-  assert.equal(loadedUrl, 'http://material.localhost/pdf/m1');
+  assert.deepEqual(loadedOptions, {
+    url: 'http://material.localhost/pdf/m1',
+    cMapUrl: PDF_CMAP_URL,
+    cMapPacked: true,
+  });
 });
 
 test('HTTP 413 and unreadable or unsupported PDF failures expose fallback codes', async () => {

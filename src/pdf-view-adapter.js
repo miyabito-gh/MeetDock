@@ -1,6 +1,7 @@
 import { appError } from './contracts.js';
 
 export const PDF_WORKER_URL = '/assets/pdfjs/pdf.worker.min.mjs';
+export const PDF_CMAP_URL = '/assets/pdfjs/cmaps/';
 
 function pdfError(code) {
   return appError(code);
@@ -137,7 +138,7 @@ export class PdfViewAdapter {
     let passwordAttempts = 0;
     const resolvedUrl = this.#resolveUrl(url, material_id);
     if (typeof resolvedUrl !== 'string' || resolvedUrl.length === 0) throw pdfError('PDF_NOT_ALLOWED');
-    const loading = this.#pdfjs.getDocument({ url: resolvedUrl });
+    const loading = this.#pdfjs.getDocument({ url: resolvedUrl, cMapUrl: PDF_CMAP_URL, cMapPacked: true });
     this.#loadingTask = loading;
     loading.onPassword = async (updatePassword, reason) => {
       if (token !== this.#generation || ++passwordAttempts > 3) {

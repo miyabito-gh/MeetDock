@@ -1574,4 +1574,37 @@ npm.cmd run buildとgit diff --checkも成功。ビルドは通常権限のesbui
 推奨モデル: gpt-5.6-sol
 reasoning effort: medium
 理由: 設計・実装と自動検証は完了し、次はユーザーの実機報告に基づく限定調査・修正が中心です。実装工程から実機結果対応へ移るため次チャットに分割します。
+
+### 16.7 2026-09-26 しおり左レール化・no_1.pdf表示修正後の引継ぎ
+
+- ユーザー実機報告を受け、しおり一覧をPDF本文下部から左側の専用レールへ移動した。`pdf-viewer-body` 内で左レールとPDF本文を横並びにし、一覧はレール内でスクロールする。既存の追加・ジャンプ・名前変更・上下移動・削除確認・折りたたみ・キーボード操作は維持。
+- しおりレールの画面圧迫を抑えるため、空一覧は非表示、少数件は内容に追従、多数件はレール内スクロールとした。PDF本文の縦領域はしおり件数で縮まらない。
+- 添付 `C:\Users\wmasa\Downloads\no_1.pdf` はA4寸法正常だが、未埋込日本語Type0フォントがAdobe-Japan1 CMapに依存していた。`src/pdf-view-adapter.js` にローカル `cMapUrl` / `cMapPacked` を指定し、`public/assets/pdfjs/cmaps/Adobe-Japan1-UCS2.bcmap` を同梱した。CMapなしでは本文抽出1項目、追加後は94項目を確認。
+- 変更対象は`src/mock-styles.css`、`src/view.js`、`src/pdf-view-adapter.js`、`tests/view.test.mjs`、`tests/pdf-view-adapter.test.mjs`、`tests/pdf-assets.test.mjs`、`public/assets/pdfjs/cmaps/Adobe-Japan1-UCS2.bcmap`。Model/Effect/IPC/sidecar/Rust契約は変更していない。
+- 関連テストは`node --test tests/view.test.mjs tests/event-chain.test.mjs tests/focus-sync.test.mjs tests/pdf-view-adapter.test.mjs tests/pdf-assets.test.mjs tests/pdf-sidecar-ipc.test.mjs`で成功（最終レビュー98件）。`git diff --check`成功。アプリ・開発サーバーは未起動。コミット・pushはこの引継ぎ依頼で実施する。
+- 未確認: 実機でしおり左レールの幅・折りたたみ・追加時スクロール、`no_1.pdf`の日本語本文表示、他のCMap種別PDF。今回のCMap同梱は`Adobe-Japan1-UCS2`に限定し、別CMapの一般対応とは扱わない。
+
+#### 次チャット用引継ぎプロンプト
+
+```text
+MeetDockの実機確認を継続してください。作業基準はC:\Users\wmasa\Documents\Rust\MeetDockのmasterです。
+
+前回対応済み:
+- しおり一覧をPDF本文下部から左側の専用レールへ移動。`pdf-viewer-body`内で横並び、一覧はレール内スクロール。
+- 空一覧は非表示、少数件は内容追従、多数件は内部スクロール。PDF本文の縦領域をしおり件数で圧迫しない。
+- `no_1.pdf`の未埋込日本語Type0フォント向けにAdobe-Japan1-UCS2 CMapをローカル同梱・指定。
+- Model→Effect→IPC、sidecar、保存済みID境界、Rust/IPC契約は変更していない。
+
+対象ファイル:
+src/mock-styles.css、src/view.js、src/pdf-view-adapter.js、tests/view.test.mjs、tests/pdf-view-adapter.test.mjs、tests/pdf-assets.test.mjs、public/assets/pdfjs/cmaps/Adobe-Japan1-UCS2.bcmap
+
+実機確認（ユーザーが実施）:
+1. しおりレールがPDF本文左側に表示され、本文下部を圧迫しない。
+2. しおりの追加・ジャンプ・名前変更・上下移動・削除確認・折りたたみ・キーボード操作。
+3. `C:\Users\wmasa\Downloads\no_1.pdf`を開き、日本語本文が正常表示される。
+
+不具合があった場合だけ原因を限定し、該当ファイルと対象テストを修正する。アプリや開発サーバーはユーザーの明示許可なしに起動しない。全体工程の再判定、無関係な修正、別CMapの一般対応へ広げない。修正後は該当テストと`git diff --check`を実行する。通常修正ではコミットせず、次の引継ぎ依頼時のみ対象変更と文書をコミットする。
+
+推奨モデル: gpt-5.6-sol / medium。理由: 実機結果に基づく限定調査・UI確認対応が中心。
+```
 ```
