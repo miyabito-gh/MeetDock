@@ -30,8 +30,8 @@ test('PDF marker and bookmark controls are collapsible and bookmarks use a scrol
   const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
   assert.match(view,/annotationTools\.hidden=true;bookmarkPanel\.hidden=true/);
-  assert.ok(view.indexOf("const markerToolsToggle=button('マーカー','marker-tools-toggle')")<view.indexOf('zoomGroup.append('));
-  assert.ok(view.indexOf("bookmarkToolsToggle=button('しおり','bookmark-tools-toggle')")<view.indexOf('zoomGroup.append('));
+  assert.ok(view.indexOf("const markerToolsToggle=pdfIconButton('marker-tools-toggle'")<view.indexOf('utilityGroup.append('));
+  assert.ok(view.indexOf("bookmarkToolsToggle=pdfIconButton('bookmark-tools-toggle'")<view.indexOf('utilityGroup.append('));
   assert.match(view,/a==='marker-tools-toggle'.*annotationTools\.hidden=!annotationTools\.hidden/s);
   assert.match(view,/a==='bookmark-tools-toggle'.*bookmarkPanel\.hidden=!bookmarkPanel\.hidden/s);
   assert.match(view,/pdfViewerBody=el\('div','pdf-viewer-body'\)/);
@@ -55,6 +55,58 @@ test('bookmark rendering preserves the user collapsed state while viewing',()=>{
   scope.model.pdf.kind='Closed';
   scope.renderBookmarks();
   assert.equal(scope.bookmarkPanel.hidden,true);
+});
+
+test('bookmark rows keep navigation visible and put edit actions behind one compact menu',()=>{
+  const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const render=view.slice(view.indexOf('  function renderBookmarks(')).split('\n')[0];
+  const node=(tag,cls,text)=>({tag,cls,text,children:[],dataset:{},attributes:{},append(...children){this.children.push(...children)},setAttribute(name,value){this.attributes[name]=value}});
+  const list={rows:[],replaceChildren(){this.rows=[]},append(row){this.rows.push(row)}};
+  const scope={bookmarks:[{id:'b1',name:'Agenda',page:2},{id:'b2',name:'Notes',page:5}],bookmarkList:list,bookmarkPanel:{hidden:false},model:{pdf:{kind:'Viewing'}},el:node,button:(label,action,cls)=>Object.assign(node('button',cls,label),{action}),pdfIconButton:(action,label,paths,cls)=>Object.assign(node('button',cls,label),{action})};
+  runInNewContext(render,scope);
+  scope.renderBookmarks();
+  assert.equal(list.rows.length,2);
+  const [jump,more]=list.rows[0].children[0].children;
+  assert.equal(jump.action,'bookmark-jump');
+  assert.equal(jump.text,'Agenda');
+  assert.equal(more.action,'bookmark-menu');
+  assert.equal(more.attributes['aria-expanded'],'false');
+  const actions=list.rows[0].children[1];
+  assert.equal(actions.hidden,true);
+  assert.deepEqual(Array.from(actions.children,button=>button.action),['bookmark-rename','bookmark-up','bookmark-down','bookmark-delete']);
+  assert.equal(actions.children[1].disabled,true);
+  assert.equal(list.rows[1].children[1].children[2].disabled,true);
+});
+
+test('opening one bookmark action menu closes the other and keeps the control state in sync',()=>{
+  const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const handlerSource=view.slice(view.indexOf("  bookmarkPanel.addEventListener('click'" )).split('\n')[0];
+  const makeMenu=hidden=>{
+    const actions={hidden};
+    const row={querySelector:()=>actions};
+    const menu={disabled:false,dataset:{action:'bookmark-menu'},attributes:{},closest:()=>row,setAttribute(name,value){this.attributes[name]=value}};
+    return {actions,menu};
+  };
+  const first=makeMenu(true),second=makeMenu(false);
+  const scope={bookmarkPanel:{addEventListener:(type,handler)=>{scope.click=handler}},bookmarkList:{querySelectorAll:()=>[first.menu,second.menu]},model:{pdf:{kind:'Viewing'}}};
+  runInNewContext(handlerSource,scope);
+  scope.click({target:{closest:()=>first.menu}});
+  assert.equal(first.actions.hidden,false);
+  assert.equal(first.menu.attributes['aria-expanded'],'true');
+  assert.equal(second.actions.hidden,true);
+  assert.equal(second.menu.attributes['aria-expanded'],'false');
+  scope.click({target:{closest:()=>first.menu}});
+  assert.equal(first.actions.hidden,true);
+  assert.equal(first.menu.attributes['aria-expanded'],'false');
+});
+
+test('PDF reading toolbar separates primary controls and keeps narrow bookmark rail over the canvas',()=>{
+  const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  assert.match(view,/zoomGroup\.append\([^;]+\);utilityGroup\.append\(pdfSearchToggle,markerToolsToggle,bookmarkToolsToggle\);ptools\.append\(pageGroup,zoomGroup,utilityGroup\)/);
+  for(const action of ['pdf-search-toggle','marker-tools-toggle','bookmark-tools-toggle','pdf-fit','bookmark-add']) assert.ok(view.includes(`pdfIconButton('${action}'`));
+  assert.match(styles,/\.viewer-toolbar \.pdf-zoom-group,\.viewer-toolbar \.pdf-utility-group\{[^}]*border-left:1px solid/);
+  assert.match(styles,/@container pdf-preview \(max-width:520px\)\{[^\n]*\.bookmark-panel\{position:absolute;inset:0 auto 0 0/);
 });
 
 test('PDF marker colors visibly expose selection and retain toggle and eraser behavior',()=>{

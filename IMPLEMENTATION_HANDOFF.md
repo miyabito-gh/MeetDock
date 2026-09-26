@@ -200,3 +200,36 @@ Windows API、PDF/WebView2、UNC、障害注入は自動試験だけで合格扱
 最初の実装ターンはPhase 0～2を対象とする。既存雛形と設計文書を確認し、DTO/AppError、共有fixture、Mediator/Event Chainの純粋試験までを完成させる。UI、Windows API、PDF protocol、永続化I/Oはこの最初の変更へ混ぜない。
 
 Phase 0～2の完了後、差分、試験結果、未解決事項を報告してからPhase 3へ進む。
+
+## 11. 2026-09-27 PDF画面改善の完了と次のUI作業
+
+この節は現在の `master` に対する引継ぎである。上の初期実装時点の記述は履歴として残し、現行状態はコードとテストで確認する。
+
+- PDF本文・ツールバーを明るい読み取り画面へ整理し、ページ・ズームと検索・マーカー・しおりの補助操作を分離した。検索、マーカー、しおり、幅合わせ、しおり追加をアイコン化し、しおり各行の編集操作を開閉式にまとめた。幅520px以下ではしおりペインをPDF本文の上へ重ねる。変更対象は `src/view.js`、`src/mock-styles.css`、`tests/view.test.mjs`。ユーザーはこのPDF領域に問題がないと報告した。
+- `node --test tests/view.test.mjs` は66件成功、`node --check src/view.js` と `git diff --check` は成功。実機UIはこの作業で起動していない。日本語PDF `no_1.pdf` の本文表示は以前の実機確認済み。英語PDFの実機表示・検索は確認済みと断定しない。
+- 次の二項目は未実装。添付画像では、狭い資料一覧でPDF行の名前・マーカー／しおりバッジ・状態・操作アイコンが重なり、保存場所とPDFプレビューのアイコン位置も行間で揃っていない。`src/mock-styles.css` の固定列幅と `.material-row .row-actions` の絶対配置、`src/view.js` のバッジと行操作が主な調査箇所である。
+- 現在の `src/model.js` の `PdfMaximizeToggled` は `Effect.SetFullscreen` と `layout.pdf_maximized` を結び付ける二状態の動作である。次は「右ペイン → ウィンドウ全体 → OS全画面」の三段階を設計し、終了・Esc・PDFを閉じる／切り替えるときの復帰、失敗・遅延応答の扱いを既存のModel→Effect境界に合わせて確認する。
+- UIの参照先は、実装時に最新の公式指針を確認する。Fluent 2 の Toolbar 指針: https://fluent2.microsoft.design/components/web/react/core/toolbar/usage 。アイコンは判別できる形、ツールチップ、アクセス可能な名前、明確な選択状態を保つ。
+
+### 次チャット用引継ぎ指示
+
+```text
+MeetDock の master で、PDF全画面への三段階の導線と資料一覧の狭幅表示を実装してください。推奨モデル: gpt-5.6-sol、reasoning effort: medium。理由: 状態遷移とUI・関連テストをまたぐ通常規模の実装です。astra は使用しないでください。1チャットで扱える関連UI作業です。
+
+目的・完了条件:
+1. PDF表示を「右ペイン → ウィンドウ全体 → OS全画面」の順に進められ、逆方向へ戻れる明確な導線にする。既存の全画面失敗・遅延応答・PDFを閉じる／切り替える場合の復帰動作を維持する。各段階の表示とボタン名を一致させる。
+2. 資料一覧ペインを狭くしてもアイコン、資料名、マーカー／しおりバッジ、状態、操作が重ならないようにする。保存場所を開く・PDFプレビューのアイコンを全行で同じ位置に揃え、PDF以外の行でも不要な隙間を作らない。添付画像の約340pxの一覧ペインを再現条件にする。
+3. 公式の最新UI指針を参照し、MeetDockの既存デザインに合う簡潔で美しい見た目にする。対象テストと git diff --check を通す。通常の実装ではコミット・pushしない。
+
+対象・既存実装:
+- src/model.js の PdfMaximizeToggled / PdfFullscreenSucceeded / PdfFullscreenFailed、src/effect-runner.js の SetFullscreen、src/presenter.js の pdfMaximize、src/view.js の PDFヘッダー・資料行、src/mock-styles.css の .preview、.material-row、.row-actions と幅別ルールを先に確認する。
+- tests/model.test.mjs、tests/event-chain.test.mjs、tests/view.test.mjs を対応テストとする。必要なら既存のPDF関連テストだけ追加で確認する。
+- 現行の PDF画面デザインは src/view.js、src/mock-styles.css、tests/view.test.mjs に反映済みで、ユーザーはPDF領域を問題なしと評価した。node --test tests/view.test.mjs は66件成功、node --check src/view.js と git diff --check も成功。新しい二項目は未実装。
+
+制約・次の手順:
+- 最初に git status --short、対象差分、必要なら git log -5 を確認する。既存変更を保持し、原因候補・変更ファイル・対象テストを実装前に短く示す。
+- まず三段階の状態遷移と失敗・復帰をモデルテストで固定し、Model→Effect→IPC、保存済みID、sidecar、厳格検証、CMap対応を維持する。次に表示導線と一覧のレイアウトを調整する。
+- 一覧の列幅はウィンドウ幅だけでなく実際の一覧ペイン幅で成立させる。画像の重なりとアイコン位置を重点的に確認する。実機UI、開発サーバー、ブラウザー、外部アプリは明示許可なしに起動しない。
+- 最終確認: node --test tests/model.test.mjs tests/event-chain.test.mjs tests/view.test.mjs、node --check src/view.js、git diff --check。npm.cmd test の既知の tests/explorer-mode.test.mjs:23 失敗は自動修正しない。
+- Acrobat ReaderのPDF完全パス、中国語PDFの追加検証、Redoやアクセシビリティの再調査へ広げない。英語PDFの実機表示・検索は未確認扱いにする。
+```
