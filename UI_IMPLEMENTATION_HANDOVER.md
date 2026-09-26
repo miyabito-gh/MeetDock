@@ -1505,20 +1505,20 @@ reasoning effort: medium
 理由: 状態と保存の自動テストは済んでおり、実機操作の再現・観察と必要時の原因限定が中心のため。
 ```
 
-### 16.4 次チャット用引継ぎプロンプト――次の対象選択
+### 16.4 次チャット用引継ぎプロンプト――UI残課題を一括完了
 
-PDFマーカー2件、背景・常時表示・しおり欄高さの修正、`.app`設定表示と×終了はユーザーが実機確認済み。次の対象は未選択なので、次チャットで選ばれた1件だけを扱う。工程F全体の再判定は別の依頼がある場合に限る。
+PDFマーカー2件、背景・常時表示・しおり欄高さの修正、`.app`設定表示と×終了はユーザーが実機確認済み。次チャットでは16.2に残るUI/UX課題を一つのチャット内で順に調査・修正・検証する。課題ごとの選択待ちで停止せず、工程F全体の再判定には広げない。
 
 ```text
-MeetDockのUI/UX残課題を継続してください。まずAGENTS.md、UI_IMPLEMENTATION_HANDOVER.mdの16.1〜16.4、git status --short --branch、対象範囲のgit diff、必要ならgit log -5を確認してください。作業基準はC:\Users\wmasa\Documents\Rust\MeetDockのmasterです。
+MeetDockのUI/UX残課題をすべて一つのチャットで完了してください。まずAGENTS.md、UI_IMPLEMENTATION_HANDOVER.mdの16.1〜16.4、git status --short --branch、対象範囲のgit diff、必要ならgit log -5を確認してください。作業基準はC:\Users\wmasa\Documents\Rust\MeetDockのmasterです。
 
 PDF表示・マーカー修正は0d3d7b6、引継ぎと利用枠節約方針は1e69e63・6913f66・9eca242に記録されています。前回の引継ぎコミット以降もpushは依頼されていません。ユーザーはマーカー2件、背景・常時表示・しおり高さの3点、`.app`設定表示、×終了を実機確認済みです。白画面の初期化順、設定保存先、`allow-destroy`権限の調査をやり直さないでください。工程F全体も再判定しないでください。実機確認はユーザー自身が行います。
 
-次に扱う残課題はまだ選ばれていません。ユーザーが明示的に選んだ1件だけを調査・修正してください。選択がない場合は16.2の残課題から候補を短く示し、選択を待ってください。他項目へ自動的に進まないでください。対象ファイルは選ばれた課題に応じて最小限に絞ってください。
+同じチャットで順に完了するUI/UX課題は、色選択表示、ホイールのページ内スクロール、一覧のしおり表示と注釈削除、メニューのHome／End・Shift+F10・ContextMenu、最初のクリック消費、終了確認のlocalhost表示です。各項目の原因・対象ファイル・対応テストを限定し、個別の確認と修正後テストを順番に行ってください。一項目ごとに停止してユーザーへ選択を求めず、全項目の完了までこのチャットで続けてください。工程F全体の再判定や、列挙したUI課題以外の修正へ広げないでください。実機確認はユーザー自身が行うため、アプリを起動せず、自動テスト結果と実機未確認を明確に分けてください。
 
-直近確認では`node --test tests/view.test.mjs tests/event-chain.test.mjs`が71件成功し、capabilityテスト、`cargo check`、`npm.cmd run build`、`git diff --check`も成功しています。全体の`npm.cmd test`は615件中614件成功で、`tests/explorer-mode.test.mjs:23`の1件が単独実行でも`Cannot read properties of undefined (reading 'request')`で失敗します。Redo、遅延・staleなsidecar応答、保存後の再読み込みは個別の実機確認報告がないため成功扱いにしないでください。課題が選ばれたら対象テストを特定し、実装後に実行してください。既存の成功ログや文書全体を再読せず、AGENTS.mdの利用枠節約方針に従ってください。引継ぎ依頼時は更新した文書を含む対象変更をコミットし、pushは明示依頼時だけ行ってください。
+直近確認では`node --test tests/view.test.mjs tests/event-chain.test.mjs`が71件成功し、capabilityテスト、`cargo check`、`npm.cmd run build`、`git diff --check`も成功しています。全体の`npm.cmd test`は615件中614件成功で、`tests/explorer-mode.test.mjs:23`の1件が単独実行でも`Cannot read properties of undefined (reading 'request')`で失敗します。この既知の失敗は今回のUI課題と無関係なので自動修正しないでください。Redo、遅延・staleなsidecar応答、保存後の再読み込みは個別の実機確認報告がないため成功扱いにしないでください。対象テストを絞って各修正後に実行し、最後に`git diff --check`を実行してください。既存の成功ログや文書全体を再読せず、AGENTS.mdの利用枠節約方針に従ってください。引継ぎ依頼時は更新した文書を含む対象変更をコミットし、pushは明示依頼時だけ行ってください。
 
-推奨モデル: gpt-5.6-luna
-reasoning effort: low
-理由: 次の1件の選択と対象を限定した調査から始められ、複雑な実装が必要ならその時点で選び直せるため。
+推奨モデル: gpt-6-astra
+reasoning effort: high
+理由: 複数の独立したUI操作・アクセシビリティ課題を一チャットで調整し、順次実装・検証するため。
 ```
