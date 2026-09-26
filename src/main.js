@@ -14,8 +14,7 @@ import './visibility.css';
 
 const view = createAppView(document.querySelector('#app'));
 const pdf = createProductionPdfViewAdapter({ canvas: view.canvas, requestPassword: request => view.requestPassword(request) });
-let allowingClose = false;
-const services = createServices(createIpcAdapter(invoke), pdf, { close: async () => { allowingClose = true; try { await getCurrentWindow().close(); } catch (error) { allowingClose = false; throw error; } } }, { set: value => getCurrentWindow().setFullscreen(value) });
+const services = createServices(createIpcAdapter(invoke), pdf, { close: async () => getCurrentWindow().destroy() }, { set: value => getCurrentWindow().setFullscreen(value) });
 let root;
 const presenter = createPresenter(view, event => root.dispatch(event));
 root = createRoot({ services, presenter, diagnostic: code => console.warn(`MeetDock diagnostic: ${code}`) });
@@ -36,7 +35,6 @@ const waitForSave = () => new Promise(resolve => {
   }, 50);
 });
 getCurrentWindow().onCloseRequested(async event => {
-  if (allowingClose) return;
   event.preventDefault();
   if (closePending) return;
   closePending = true;

@@ -17,6 +17,24 @@ test('PDF annotation canvas follows the rendered page and stays transparent',()=
   assert.match(styles,/\.canvas-wrap \.annotation-overlay\{[^}]*background:transparent;box-shadow:none/);
 });
 
+test('PDF marker and bookmark controls use the standard menu background',()=>{
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  assert.match(styles,/\.annotation-toolbar\{[^}]*background:#fff/);
+  assert.match(styles,/\.bookmark-panel\{[^}]*background:#fff/);
+  assert.match(styles,/\.toolbar-more-panel\{[^}]*background:#fff/);
+});
+
+test('PDF marker and bookmark controls are collapsible and bookmark list height is capped',()=>{
+  const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  assert.match(view,/annotationTools\.hidden=true;bookmarkPanel\.hidden=true/);
+  assert.ok(view.indexOf("const markerToolsToggle=button('マーカー','marker-tools-toggle')")<view.indexOf('zoomGroup.append('));
+  assert.ok(view.indexOf("bookmarkToolsToggle=button('しおり','bookmark-tools-toggle')")<view.indexOf('zoomGroup.append('));
+  assert.match(view,/a==='marker-tools-toggle'.*annotationTools\.hidden=!annotationTools\.hidden/s);
+  assert.match(view,/a==='bookmark-tools-toggle'.*bookmarkPanel\.hidden=!bookmarkPanel\.hidden/s);
+  assert.match(styles,/\.bookmark-list\{[^}]*max-height:180px;overflow-y:auto/);
+});
+
 test('PDF marker pointer and toolbar events retain Undo across model renders and reset tools on preview changes',()=>{
   const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   const handlers={},saved=[];

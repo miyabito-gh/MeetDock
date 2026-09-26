@@ -1472,13 +1472,18 @@ reasoning effort: medium
 - `node --test tests/view.test.mjs tests/pdf-annotations.test.mjs tests/pdf-sidecar-ipc.test.mjs`は60件成功。関連する`tests/model.test.mjs tests/event-chain.test.mjs`は127件成功。`git diff --check`成功。Rustは変更していない。
 - 本書の前回進捗は`1e69e63`、利用枠と作業量の節約方針は`AGENTS.md`の`6913f66`でコミット・push済み。引継ぎ更新と引継ぎ時のコミット規則は`9eca242`でローカルコミット済み。pushは依頼されていない。
 - ユーザーは「プレビューを開いた直後に描画モードになる」「描画後に元に戻すが操作できない」の2件について、修正されたことを実機で確認した。ユーザー自身が実機確認を行う方針である。
+- 「背景・常時表示・しおり欄の高さ」は3点とも修正済み。マーカーとしおりの操作枠を通常メニューと同じ白背景にし、PDFツールバーの開閉ボタンから必要時だけ表示する。しおり一覧は高さ180pxで内部スクロールする。テスト中にトグル変数の初期化順による白画面（`Cannot access 'markerToolsToggle' before initialization`）が発生したが、宣言を使用箇所より前へ移動して解消し、ユーザーが続けて設定表示と終了動作を確認した。
+- 実機で設定表示が空に見えた原因はTauri identifier変更後も旧データが`%APPDATA%\com.meetdock.app`にあり、新しい`app_config_dir()`が`com.meetdock.desktop`を参照していたこと。保存先を`config_dir().join("com.meetdock.app")`へ戻し、ユーザーが既存設定の表示を確認した。`com.meetdock.desktop`側にできた別設定は削除・上書きしていない。
+- ウィンドウ×終了失敗は`Window.destroy()`のTauri capability不足。`core:window:allow-destroy`をcapabilityと生成済みschemaへ加え、ユーザーが実機で終了成功を確認した。
+- UI修正後の`node --test tests/view.test.mjs tests/event-chain.test.mjs`は71件成功。Tauri capability検証テスト1件、`cargo check --manifest-path src-tauri/Cargo.toml`、`npm.cmd run build`、`git diff --check`も成功。
 
 ### 16.2 未解決・未確認
 
-- 上記2件は実機確認済み。Redo操作と遅延・staleなsidecar応答は自動テストで確認したが、これらや保存後の再読み込みについてユーザーから個別の実機確認報告はない。
-- 工程Fで別途記録した背景・常時表示・しおり欄の高さ、色選択表示、ホイールのページ内スクロール、一覧のしおり表示と注釈削除、メニューのHome／End・Shift+F10・ContextMenu、最初のクリック消費、終了確認のlocalhost表示には着手していない。
+- PDFマーカーの上記2件は実機確認済み。Redo操作と遅延・staleなsidecar応答は自動テストで確認したが、これらや保存後の再読み込みについてユーザーから個別の実機確認報告はない。
+- 工程Fの残課題は色選択表示、ホイールのページ内スクロール、一覧のしおり表示と注釈削除、メニューのHome／End・Shift+F10・ContextMenu、最初のクリック消費、終了確認のlocalhost表示。
 - スクリーンリーダー等の未確認項目を成功扱いにしない。作業ツリーにあった本書14.7〜14.9の既存変更は、この引継ぎ更新で内容を保持した。
 - 利用枠のアカウント全体の残量は確認したが、工程E・Fのタスク別消費量を示す履歴は取得できていない。長い文脈、大量のログ、修正途中の再テスト、高い推論量が消費を増やしうるため、以後は`AGENTS.md`の節約方針に従う。
+- `npm.cmd test`は615件中614件成功。今回の変更と無関係な`tests/explorer-mode.test.mjs:23`の1件が単独再実行でも失敗し、`TypeError: Cannot read properties of undefined (reading 'request')`（29行目）を再現した。次チャットではユーザーが選んだUI残課題のみ扱い、この失敗を自動的に修正しない。
 
 ### 16.3 旧引継ぎプロンプト――PDFマーカー実機確認
 
@@ -1502,18 +1507,18 @@ reasoning effort: medium
 
 ### 16.4 次チャット用引継ぎプロンプト――次の対象選択
 
-PDFマーカー2件の実機確認はユーザーが完了した。次の対象は未選択なので、ここで修正作業を開始せず、次チャットで選ばれた1件だけを扱う。工程F全体の再判定は別の依頼がある場合に限る。
+PDFマーカー2件、背景・常時表示・しおり欄高さの修正、`.app`設定表示と×終了はユーザーが実機確認済み。次の対象は未選択なので、次チャットで選ばれた1件だけを扱う。工程F全体の再判定は別の依頼がある場合に限る。
 
 ```text
 MeetDockのUI/UX残課題を継続してください。まずAGENTS.md、UI_IMPLEMENTATION_HANDOVER.mdの16.1〜16.4、git status --short --branch、対象範囲のgit diff、必要ならgit log -5を確認してください。作業基準はC:\Users\wmasa\Documents\Rust\MeetDockのmasterです。
 
-PDF表示・マーカー修正は0d3d7b6、引継ぎと利用枠節約方針は1e69e63・6913f66・9eca242に記録されています。9eca242以降の引継ぎコミットはローカルのみで、pushは依頼されていません。ユーザーは「プレビュー直後に描画モードになる」「描画後に元に戻すが操作できない」の修正を実機で確認済みです。この2件を再調査せず、工程F全体も再判定しないでください。実機確認はユーザー自身が行います。
+PDF表示・マーカー修正は0d3d7b6、引継ぎと利用枠節約方針は1e69e63・6913f66・9eca242に記録されています。前回の引継ぎコミット以降もpushは依頼されていません。ユーザーはマーカー2件、背景・常時表示・しおり高さの3点、`.app`設定表示、×終了を実機確認済みです。白画面の初期化順、設定保存先、`allow-destroy`権限の調査をやり直さないでください。工程F全体も再判定しないでください。実機確認はユーザー自身が行います。
 
-次に扱う残課題はまだ選ばれていません。ユーザーが明示的に選んだ1件だけを調査・修正してください。選択がない場合は16.2の残課題から候補を短く示し、選択を待ってください。他項目へ自動的に進まないでください。対象候補のファイルはsrc/view.js、src/mock-styles.css、tests/view.test.mjsですが、選択された課題に応じて最小限に絞ってください。
+次に扱う残課題はまだ選ばれていません。ユーザーが明示的に選んだ1件だけを調査・修正してください。選択がない場合は16.2の残課題から候補を短く示し、選択を待ってください。他項目へ自動的に進まないでください。対象ファイルは選ばれた課題に応じて最小限に絞ってください。
 
-マーカー修正に対するJavaScript対象テスト60件、関連するModel・イベント連携テスト127件、git diff --checkは成功済みです。Redo、遅延・staleなsidecar応答、保存後の再読み込みは個別の実機確認報告がないため、成功扱いにしないでください。次の課題が決まったら対応する対象テストを特定し、実装後に実行してください。既存の成功ログや文書全体の再読を避け、AGENTS.mdの利用枠節約方針に従ってください。引継ぎ依頼時は更新した文書を含む対象変更をコミットし、pushは明示依頼時だけ行ってください。
+直近確認では`node --test tests/view.test.mjs tests/event-chain.test.mjs`が71件成功し、capabilityテスト、`cargo check`、`npm.cmd run build`、`git diff --check`も成功しています。全体の`npm.cmd test`は615件中614件成功で、`tests/explorer-mode.test.mjs:23`の1件が単独実行でも`Cannot read properties of undefined (reading 'request')`で失敗します。Redo、遅延・staleなsidecar応答、保存後の再読み込みは個別の実機確認報告がないため成功扱いにしないでください。課題が選ばれたら対象テストを特定し、実装後に実行してください。既存の成功ログや文書全体を再読せず、AGENTS.mdの利用枠節約方針に従ってください。引継ぎ依頼時は更新した文書を含む対象変更をコミットし、pushは明示依頼時だけ行ってください。
 
 推奨モデル: gpt-5.6-luna
 reasoning effort: low
-理由: 次に扱う1件の選択と短い現状確認が先で、複雑な実装の推論は課題確定後に選び直せるため。
+理由: 次の1件の選択と対象を限定した調査から始められ、複雑な実装が必要ならその時点で選び直せるため。
 ```

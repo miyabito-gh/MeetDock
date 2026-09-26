@@ -123,6 +123,7 @@ mod ipc_tests {
         assert_eq!(main["windows"], json!(["main"]));
         assert!(main.get("remote").is_none());
         for permission in [
+            "core:window:allow-destroy",
             "allow-load-settings",
             "allow-save-settings",
             "allow-resolve-settings-issue",
@@ -544,7 +545,7 @@ pub fn run() {
             }
         }))
         .setup(|app| {
-            let config_directory = app.path().app_config_dir()?;
+            let config_directory = app.path().config_dir()?.join("com.meetdock.app");
             app.manage(PdfSidecarStore::new(&config_directory));
             app.manage(PathStatusService::default());
             app.manage(NativeLauncher::default());
