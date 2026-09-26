@@ -1739,3 +1739,33 @@ MeetDockの残存課題を、PDF画面デザイン見直しより先に順番に
 推奨モデル: gpt-5.6-sol / medium。理由: 既存課題の限定調査と順次検証が中心。
 ```
 ```
+
+### 16.11 2026-09-26 残存課題の実機確認結果とCMap調査への引継ぎ
+
+- 残存課題1（Adobe Acrobat ReaderのPDF完全パス）は、修正後も実機で未解決。Readerの対象トップレベル／子HWND 67件では `AccessibleObjectFromWindow(OBJID_NATIVEOM)` からDOMを取得できず、`IPDDomDocument` の `QueryInterface` や `GetDocInfo` に到達しなかった。MeetDockからPDFを開く際に `ShellExecuteExW` が返したプロセスにも、3秒後まで対象の表示ウィンドウがなく、Acrobatの全プロセスを終了してから開き直しても同様だった。一時保存したAcrobat項目はPDFの `document_path` ではなく実行ファイルのパスになった。タイトル等から推測して別文書を誤登録する修正は行わず、ユーザー指示で本項目は未実装のまま保留する。今回の一時診断コードとログは削除し、作業ツリーはクリーンに戻した。
+- 残存課題2（PDF注釈のRedo、遅延／stale応答、保存後再読込）は、ユーザーが実機で確認済みと報告した。追加修正なし。
+- 残存課題3（スクリーンリーダーとキーボードのアクセシビリティ）は、ユーザーが実機で確認済みと報告した。追加修正なし。
+- 次チャットの対象は残存課題4（`Adobe-Japan1-UCS2` 以外のCMapを必要とするPDFの互換性調査）のみ。PDF画面デザイン／操作性の見直しは後続へ繰り越す。
+- 現行の `src/pdf-view-adapter.js` はPDF.jsへ `cMapUrl: '/assets/pdfjs/cmaps/'` と `cMapPacked: true` を渡す。`public/assets/pdfjs/cmaps/` にPDF.js標準CMap 169ファイルがあり、`tests/pdf-assets.test.mjs` は `Adobe-Japan1-UCS2.bcmap` と `78-EUC-H.bcmap` の存在を確認する。`no_1.pdf` の日本語本文表示はユーザーが実機確認済みだが、別CMapを要するPDFの実機結果はない。
+- この引継ぎは確認工程が変わるため次チャットへ分割する。対象をCMapに限定でき、単一チャットで静的調査、必要な対象テスト、実機確認依頼まで進められる。
+
+#### 次チャット用引継ぎプロンプト
+
+```text
+MeetDockの残存課題4「Adobe-Japan1-UCS2以外のCMapを必要とするPDFの互換性」だけを調査し、実際に不具合が確認できた場合に限って必要な限定修正をしてください。作業基準は C:\Users\wmasa\Documents\Rust\MeetDock の master です。推奨モデルは gpt-5.6-sol / medium。理由: PDF.jsの既存設定・同梱資産・代表PDFの検証を横断する通常規模の調査だからです。astraは使用しないでください。
+
+現状と完了条件:
+- src/pdf-view-adapter.js はPDF.jsに cMapUrl: '/assets/pdfjs/cmaps/'、cMapPacked: true を指定する。public/assets/pdfjs/cmaps/ に標準CMap 169ファイルがあり、tests/pdf-assets.test.mjs は Adobe-Japan1-UCS2.bcmap と 78-EUC-H.bcmap の存在を確認する。
+- 既存の no_1.pdf は Adobe-Japan1-UCS2 に依存し、追加後の日本語本文表示をユーザーが実機確認済み。他のCMap種別を必要とするPDFの実機結果はない。
+- 別種CMapの参照・配信・本文抽出と表示が成立するかを、利用可能な代表PDFまたは再現可能な最小フィクスチャで確認する。対応済みと断定できない部分は未確認として明記する。実例がなく実機確認が必要なら、必要なPDFの条件とユーザー操作を具体的に依頼する。
+- 原因が確定した場合だけ最小修正する。PDF画面デザイン、Acrobat Readerの完全パス取得、Redoやアクセシビリティの再調査、無関係なファイルへ進まない。
+
+手順と制約:
+1. 最初に git status --short、対象差分、必要なら git log -5 を確認し、既存変更を保持する。対象はまず src/pdf-view-adapter.js、tests/pdf-view-adapter.test.mjs、tests/pdf-assets.test.mjs、public/assets/pdfjs/cmaps/ に限る。
+2. 既存のModel→Effect→IPC、sidecar、保存済みID、厳格検証を維持する。外部PDFから推測したパスや文書内容、OS詳細をログやエラーへ出さない。
+3. アプリ、開発サーバー、Acrobat、Explorer、Office等の実機UIはユーザーの明示許可なしに起動しない。ユーザー自身が実機操作を希望しているため、必要なら手順を指示して結果を受け取る。
+4. 対象テストは node --test tests/pdf-view-adapter.test.mjs tests/pdf-assets.test.mjs。変更後は必要な関連テストと git diff --check を実行する。npm.cmd test の既知の tests/explorer-mode.test.mjs:23 失敗は自動修正しない。
+5. 変更ファイル、調査根拠、テスト結果、実機未確認点を報告する。通常の調査・修正ではコミット・pushしない。
+
+残存課題1のReader完全パス取得は実機で未解決だが、ユーザー指示により未実装のまま保留。残存課題2（Redo、遅延／stale応答、保存後再読込）と3（スクリーンリーダー等）はユーザーが実機確認済み。PDF画面のデザイン／操作性見直しは後続工程とする。
+```
