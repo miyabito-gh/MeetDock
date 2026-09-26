@@ -1769,3 +1769,30 @@ MeetDockの残存課題4「Adobe-Japan1-UCS2以外のCMapを必要とするPDF�
 
 残存課題1のReader完全パス取得は実機で未解決だが、ユーザー指示により未実装のまま保留。残存課題2（Redo、遅延／stale応答、保存後再読込）と3（スクリーンリーダー等）はユーザーが実機確認済み。PDF画面のデザイン／操作性見直しは後続工程とする。
 ```
+
+### 16.12 2026-09-27 別種CMapの調査結果と次工程
+
+- `git status --short` と対象差分は作業開始時に空だった。`src/pdf-view-adapter.js` の `cMapUrl: '/assets/pdfjs/cmaps/'`、`cMapPacked: true` を確認し、同梱CMap 169ファイルのうち `GB-EUC-H.bcmap`、`Adobe-GB1-UCS2.bcmap`、`KSC-EUC-H.bcmap`、`Adobe-Korea1-UCS2.bcmap` の存在を確認した。
+- 一時的にメモリ上で生成した、`ToUnicode` を持たないType0/CIDフォントの最小PDFをPDF.js 5.4.149で解析した。`GB-EUC-H` は「中文」、`KSC-EUC-H` は「가」を `getTextContent()` で抽出でき、両方とも `getOperatorList()` を取得できた。CMap参照先を存在しない場所へ変えるとCMap読み込み警告が出て、抽出文字列は空になった。最小PDFはリポジトリへ保存していない。
+- `node --test tests/pdf-view-adapter.test.mjs tests/pdf-assets.test.mjs` は12件すべて成功。調査中にコード・テスト・資産の変更は行っていない。
+- PDF.jsの公開報告 [#12327](https://github.com/mozilla/pdf.js/issues/12327) は添付PDF `China EE_Handbook_China_JustSomeIndexContent.pdf` で `Adobe-GB1-UCS2.bcmap` の読み込み失敗を記録している。ユーザーはそのPDFがMeetDockで表示されることを実機確認した。添付PDFの本文抽出・検索結果、CMapのHTTP応答、韓国語PDFの実機表示は確認していない。
+- ユーザーは中国語PDFでの追加検証をいったん不要とし、日本語と英語の表示・検索ができればよいと指定した。この範囲では別種CMapの不具合は確認されず、修正は不要。英語PDFの実機表示・検索結果はこのチャットでは報告されていないため、確認済みとは記載しない。
+- 残存課題1のAcrobat Reader完全パス取得はユーザー指示により保留のまま。残存課題2・3は実機確認済み。PDF画面のデザイン／操作性見直しは、ユーザーが次工程として選んだ場合に着手する。今回の引継ぎは調査から後続のUI検討へ目的が変わるためチャットを分ける。UIの限定検討なら単一チャットで進められる。
+
+#### 次チャット用引継ぎプロンプト
+
+```text
+MeetDockのPDF画面デザイン／操作性について、現行画面の情報階層と操作導線を限定的に見直してください。作業基準は C:\Users\wmasa\Documents\Rust\MeetDock の master です。推奨モデルは gpt-5.6-sol / medium。理由: 既存のPDF機能を維持しながら、UIと関連テストをまたぐ通常規模の検討・実装だからです。astraは使用しないでください。
+
+現状:
+- PDF.jsのCMap設定は cMapUrl: '/assets/pdfjs/cmaps/'、cMapPacked: true。同梱CMapは169ファイル。日本語PDF no_1.pdf の本文表示は実機確認済み。
+- 別種CMapの調査では、メモリ上の最小PDFで GB-EUC-H は「中文」、KSC-EUC-H は「가」を抽出でき、CMap参照先を無効にすると抽出不能になることを確認した。対象テスト12件成功。公開報告 #12327 の Adobe-GB1-UCS2 を要するPDFは、ユーザーがMeetDockで表示されることを実機確認した。コード変更なし。
+- ユーザーは中国語PDFの追加検証を不要とし、日本語と英語の表示・検索ができればよいと指定した。英語PDFの実機表示・検索結果は未報告なので、確認済みと断定しない。
+- Acrobat ReaderのPDF完全パス取得は実機で未解決だが、ユーザー指示により保留。Redo、遅延／stale応答、保存後再読込、スクリーンリーダー等はユーザーが実機確認済み。
+
+完了条件と対象:
+- まず git status --short、対象差分、必要なら git log -5 を確認し、既存変更を保持する。
+- 対象を src/view.js、src/mock-styles.css とPDF関連テストに限定して、PDF本文・ツールバーの視認性、ページ移動・ズーム・検索・マーカー・しおりの操作導線、左レール、狭い画面幅を確認する。具体的な改善対象を先に示し、ユーザーが選んだ範囲だけ実装する。
+- 既存のModel→Effect→IPC、sidecar、保存済みID、厳格検証、CMap対応を維持する。Acrobat Readerの完全パス、別種CMapの追加検証、Redoやアクセシビリティの再調査へ広げない。
+- アプリ、開発サーバー、Acrobat、Explorer、Office等の実機UIは明示許可なしに起動しない。変更後は対応する対象テストと git diff --check を実行する。npm.cmd test の既知の tests/explorer-mode.test.mjs:23 失敗は自動修正しない。通常の実装ではコミット・pushしない。
+```
