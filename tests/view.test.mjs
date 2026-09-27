@@ -327,13 +327,13 @@ test('SEC-01 dynamic view uses textContent and does not inject markup', () => {
 
 test('modal key handling is isolated from document shortcuts', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  assert.match(source, /for\(const modal of \[dialog,operationDialog,issue,dndDialog,windowsDialog,exitDialog\]\) modal\.addEventListener\('keydown',e=>e\.stopPropagation\(\)\)/);
-  assert.match(source, /const modalOpen=dialog\.open\|\|operationDialog\.open\|\|issue\.open\|\|dndDialog\.open\|\|windowsDialog\.open\|\|exitDialog\.open;if\(modalOpen\)return/);
+  assert.match(source, /for\(const modal of \[dialog,operationDialog,issue,dndDialog,windowsDialog,exitDialog,reorderSaveDialog\]\) modal\.addEventListener\('keydown',e=>e\.stopPropagation\(\)\)/);
+  assert.match(source, /const modalOpen=dialog\.open\|\|operationDialog\.open\|\|issue\.open\|\|dndDialog\.open\|\|windowsDialog\.open\|\|exitDialog\.open\|\|reorderSaveDialog\.open;if\(modalOpen\)return/);
 });
 
 test('dialogs are named, focus their contents, restore the trigger, and keep pending issues open on Escape', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  for (const name of ['material', 'operation', 'issue', 'dnd', 'windows', 'exit']) assert.ok(source.includes(`${name}-dialog-title`));
+  for (const name of ['material', 'operation', 'issue', 'dnd', 'windows', 'exit', 'reorder-save']) assert.ok(source.includes(`${name}-dialog-title`));
   assert.match(source, /modal\.setAttribute\('aria-labelledby',id\)/);
   assert.match(source, /modal\.addEventListener\('close',\(\)=>restoreFocus\(dialogOrigins\.get\(modal\)\)\)/);
   assert.match(source, /\['RecoveryPending','MigrationPending'\]\.includes\(model\?\.lifecycle\)\)e\.preventDefault\(\)/);
@@ -353,7 +353,7 @@ test('context actions use a button popup with keyboard traversal and focus retur
   assert.match(source, /e\.key==='ContextMenu'\|\|\(e\.shiftKey&&e\.key==='F10'\)/);
   assert.match(source, /if\(!menu\.contains\(e\.target\)\)closeMenu\(\)/);
   assert.match(source, /if\(!menu\.hidden\)\{e\.preventDefault\(\);closeMenu\(true\);return\}/);
-  assert.match(source, /queueMicrotask\(\(\)=>\{if\(!\[dialog,operationDialog,issue,dndDialog,windowsDialog,exitDialog\]/);
+  assert.match(source, /queueMicrotask\(\(\)=>\{if\(!\[dialog,operationDialog,issue,dndDialog,windowsDialog,exitDialog,reorderSaveDialog\]/);
 });
 
 test('exit confirmation stays inside MeetDock and resolves save, discard, cancel, and Escape once',async()=>{
@@ -364,7 +364,7 @@ test('exit confirmation stays inside MeetDock and resolves save, discard, cancel
   assert.doesNotMatch(source,/window\.confirm/);
   const listeners={},exitText={},exitSave={},exitDiscard={},exitCancel={focusCount:0,focus(){this.focusCount++}};
   const exitDialog={open:false,showCount:0,addEventListener(type,handler){listeners[type]=handler},showModal(){this.open=true;this.showCount++},close(){if(!this.open)return;this.open=false;listeners.close?.()}};
-  const scope={exitDialog,exitText,exitSave,exitDiscard,exitCancel,rememberDialog(){}};
+  const scope={exitDialog,exitText,exitSave,exitDiscard,exitCancel,reorderSaveDialog:{addEventListener(){}},rememberDialog(){}};
   const declarations=source.slice(source.indexOf('  let exitChoiceResolve='),source.indexOf('  const closeOperation='));
   const eventStart=source.indexOf("  exitDialog.addEventListener('click'");
   const events=source.slice(eventStart,source.indexOf('  for(const modal of',eventStart));
@@ -628,6 +628,9 @@ test('groups and materials expose internal drag reorder affordances', () => {
   assert.doesNotMatch(source,/reorder-key|addStepControls|reorderPlacement/);
   assert.doesNotMatch(styles,/\.reorder-keys|\.reorder-step-button/);
   assert.match(styles,/\.reorder-mode \.group-row \.group-more\{display:none\}/);
+  assert.ok(source.includes("reorderSaveTitle=el('h2','','並べ替えの変更を保存しますか？')"));
+  assert.ok(source.includes("if(['Dirty','Conflict'].includes(model?.edit)){rememberDialog(reorderSaveDialog);reorderSaveDialog.showModal();reorderSaveConfirm.focus();return}endReorderMode()"));
+  assert.ok(source.includes("if(action==='reorder-save-confirm'){emit('save');reorderSaveDialog.close();endReorderMode()}else if(action==='reorder-save-skip'){reorderSaveDialog.close();endReorderMode()}else if(action==='reorder-save-cancel')reorderSaveDialog.close()"));
 });
 
 test('reorder mode deletes material registration without confirmation',()=>{
@@ -809,7 +812,7 @@ test('keyboard context keys open the focused material, group or snapshot menu wi
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   const line=source.slice(source.indexOf("  search.addEventListener('input'")).split('\n')[0];
   let keydown;const opened=[],document={activeElement:null,addEventListener(type,handler){keydown=handler}};
-  const scope={search:{addEventListener(){}},document,dialog:{},operationDialog:{},issue:{},dndDialog:{},windowsDialog:{},exitDialog:{},host:{contains:()=>true},WINDOW_SNAPSHOT_GROUP_ID:'snapshot',openMenu:(target,event)=>opened.push({target,event})};
+  const scope={search:{addEventListener(){}},document,dialog:{},operationDialog:{},issue:{},dndDialog:{},windowsDialog:{},exitDialog:{},reorderSaveDialog:{},host:{contains:()=>true},WINDOW_SNAPSHOT_GROUP_ID:'snapshot',openMenu:(target,event)=>opened.push({target,event})};
   runInNewContext(line,scope);
   for(const key of ['ContextMenu','F10'])for(const [dataset,kind,id] of [[{materialId:'m'},'material','m'],[{groupId:'g'},'group','g'],[{groupId:'snapshot'},'snapshot','snapshot']]){
     const row={dataset,getBoundingClientRect:()=>({left:30,top:50})},origin={closest:()=>row};document.activeElement=origin;
