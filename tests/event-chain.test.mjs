@@ -212,6 +212,17 @@ test('Runner launches saved window snapshot items individually and sequentially'
     {type:Effect.BatchLaunchWindowSnapshot,request:{indices:[0,1]},generation:1},
   ]);await runner.settled();assert.deepEqual(calls,[2,0,1]);assert.deepEqual(events.map(event=>event.type),[Event.WindowSnapshotLaunchSucceeded,Event.WindowSnapshotLaunchAllCompleted]);
 });
+test('Runner replaces staged window snapshot and correlates the save part',async()=>{
+  const services=ports(),events=[],requests=[];services.windows.replaceSnapshot=async request=>{requests.push(request);return true};
+  const runner=createEffectRunner(services,event=>events.push(event));
+  runner.run([{type:Effect.ReplaceWindowSnapshot,request:{snapshot:null},generation:7,part:'snapshot'}]);
+  await runner.settled();assert.deepEqual(requests,[{snapshot:null}]);assert.equal(events.length,1);assert.equal(events[0].type,Event.SaveSucceeded);assert.equal(events[0].part,'snapshot');assert.equal(events[0].generation,7);
+});
+test('window service routes snapshot replacement through the validated IPC adapter',async()=>{
+  const calls=[],ipc=createIpcAdapter(async(command,payload)=>{calls.push([command,payload]);return true}),services=createServices(ipc,{},{ });
+  await services.windows.replaceSnapshot({snapshot:null});
+  assert.deepEqual(calls,[['replace_window_snapshot',{request:{snapshot:null}}]]);
+});
 test('Runner clears the persisted window snapshot after registration',async()=>{
   const services=ports(),events=[];let calls=0;services.windows.clearSnapshot=async()=>{calls++;return true};
   const runner=createEffectRunner(services,event=>events.push(event));runner.run([{type:Effect.ClearWindowSnapshot,request:{}}]);

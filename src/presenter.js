@@ -44,6 +44,7 @@ export function createPresenter(view, dispatch) {
       dispatch({ type: Event.WindowExclusionsSaveRequested, patterns: patterns.map(String) });
     },
     saveWindowSnapshot() { dispatch({ type: Event.WindowSnapshotSaveRequested }); },
+    removeWindowSnapshotItem(index) { if (!Number.isSafeInteger(index) || index < 0) throw new TypeError('Expected index'); dispatch({ type: Event.WindowSnapshotDraftRemoved, index }); },
     loadWindowSnapshot() { dispatch({ type: Event.WindowSnapshotLoadRequested }); },
     launchWindowSnapshot(index) { if (!Number.isSafeInteger(index) || index < 0) throw new TypeError('Expected index'); dispatch({ type: Event.WindowSnapshotLaunchRequested, index }); },
     launchAllWindowSnapshot() { dispatch({ type: Event.WindowSnapshotLaunchAllRequested }); },

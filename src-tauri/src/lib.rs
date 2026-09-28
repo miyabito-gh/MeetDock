@@ -115,6 +115,47 @@ mod ipc_tests {
     }
 
     #[test]
+    fn replace_snapshot_request_requires_snapshot_and_accepts_explicit_null() {
+        assert!(contracts::decode::<ReplaceWindowSnapshotRequest>(
+            json!({ "snapshot": null }),
+            ErrorCode::InvalidRequest,
+        )
+        .is_ok());
+        for value in [
+            json!({}),
+            json!({ "snapshot": null, "extra": true }),
+            json!([null]),
+        ] {
+            assert!(contracts::decode::<ReplaceWindowSnapshotRequest>(
+                value,
+                ErrorCode::InvalidRequest,
+            )
+            .is_err());
+        }
+        let executable_path = std::env::current_exe()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        let snapshot = json!({
+            "schema_version": 1,
+            "saved_at_unix_ms": 1,
+            "items": [{
+                "app_name": "Test",
+                "title": "Test window",
+                "executable_name": "test.exe",
+                "executable_path": executable_path,
+                "restorability": "restorable",
+                "reason": null
+            }]
+        });
+        assert!(contracts::decode::<ReplaceWindowSnapshotRequest>(
+            json!({ "snapshot": snapshot }),
+            ErrorCode::InvalidRequest,
+        )
+        .is_ok());
+    }
+
+    #[test]
     fn generated_settings_capabilities_are_local_and_main_only() {
         let capabilities: serde_json::Value =
             serde_json::from_str(include_str!("../gen/schemas/capabilities.json")).unwrap();
@@ -334,6 +375,47 @@ async fn load_window_snapshot(
     }
     let service = service.inner().clone();
     tokio::task::spawn_blocking(move || service.load_snapshot())
+        .await
+        .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
+struct ReplaceWindowSnapshotRequest {
+    #[serde(deserialize_with = "deserialize_required_nullable")]
+    snapshot: Option<windowing::WindowSnapshot>,
+}
+
+fn deserialize_required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::Deserialize<'de>,
+{
+    <Option<T> as serde::Deserialize>::deserialize(deserializer)
+}
+
+impl contracts::Validate for ReplaceWindowSnapshotRequest {
+    fn validate(&mut self) -> Result<(), AppError> {
+        if let Some(snapshot) = &self.snapshot {
+            windowing::validate_snapshot(snapshot)?;
+        }
+        Ok(())
+    }
+}
+
+#[tauri::command]
+async fn replace_window_snapshot(
+    window: tauri::WebviewWindow,
+    body: tauri::ipc::Request<'_>,
+    service: tauri::State<'_, WindowService>,
+) -> Result<bool, AppError> {
+    if window.label() != "main" {
+        return Err(AppError::new(ErrorCode::AccessDenied, None));
+    }
+    let request: ReplaceWindowSnapshotRequest =
+        contracts::decode(payload(&window, body, true)?, ErrorCode::InvalidRequest)?;
+    let service = service.inner().clone();
+    tokio::task::spawn_blocking(move || service.replace_snapshot(request.snapshot))
         .await
         .map_err(|_| AppError::new(ErrorCode::InternalError, None))?
 }
@@ -578,6 +660,7 @@ pub fn run() {
             save_window_exclusions,
             save_window_snapshot,
             load_window_snapshot,
+            replace_window_snapshot,
             clear_window_snapshot,
             launch_window_snapshot_item,
             activate_or_launch,

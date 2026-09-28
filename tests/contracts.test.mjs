@@ -30,6 +30,14 @@ test('window snapshot keeps strict Shell locations separate from document paths'
     {...base,document_path:'C:\\Meetings',shell_location:'::{20D04FE0-3AEA-1069-A2D8-08002B30309D}'},
   ]) assert.throws(()=>validate('OptionalWindowSnapshot',{schema_version:1,saved_at_unix_ms:1,items:[item]}),TypeError);
 });
+test('replace window snapshot request accepts null or a strict snapshot', () => {
+  const snapshot = { schema_version: 1, saved_at_unix_ms: 1, items: [] };
+  assert.deepEqual(validate('ReplaceWindowSnapshotRequest', { snapshot }), { snapshot });
+  assert.deepEqual(validate('ReplaceWindowSnapshotRequest', { snapshot: null }), { snapshot: null });
+  assert.throws(() => validate('ReplaceWindowSnapshotRequest', {}), TypeError);
+  assert.throws(() => validate('ReplaceWindowSnapshotRequest', { snapshot, extra: true }), TypeError);
+  assert.throws(() => validate('ReplaceWindowSnapshotRequest', { snapshot: { ...snapshot, extra: true } }), TypeError);
+});
 for (const f of fixtures) test(f.name, () => {
   const decode = () => f.type === 'ConfigDocument' ? decodeConfig(f.value) : validate(f.type, f.value);
   if (!f.valid) assert.throws(decode);
@@ -54,17 +62,22 @@ test('window snapshot commands reach native IPC with exact envelopes', async () 
   const calls = [], responses = {
     save_window_snapshot: { saved: true, saved_count: 1, excluded_count: 0, exclusion_reasons: [] },
     load_window_snapshot: snapshot,
+    replace_window_snapshot: true,
     clear_window_snapshot: true,
     launch_window_snapshot_item: { index: 2 },
   };
   const api = createIpcAdapter(async (command, payload) => { calls.push([command, payload]); return responses[command]; });
   assert.equal((await api.call('save_window_snapshot')).saved, true);
   assert.deepEqual(await api.call('load_window_snapshot'), snapshot);
+  assert.equal(await api.call('replace_window_snapshot', { snapshot }), true);
+  assert.equal(await api.call('replace_window_snapshot', { snapshot: null }), true);
   assert.equal(await api.call('clear_window_snapshot'), true);
   assert.deepEqual(await api.call('launch_window_snapshot_item', { index: 2 }), { index: 2 });
   assert.deepEqual(calls, [
     ['save_window_snapshot', {}],
     ['load_window_snapshot', {}],
+    ['replace_window_snapshot', { request: { snapshot } }],
+    ['replace_window_snapshot', { request: { snapshot: null } }],
     ['clear_window_snapshot', {}],
     ['launch_window_snapshot_item', { request: { index: 2 } }],
   ]);

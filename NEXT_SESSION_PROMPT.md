@@ -275,3 +275,31 @@ MeetDockの実装をPhase 7のWindows/WebView2実機確認から継続してく�
 5. PDFのページ移動、拡大縮小、幅合わせ、最大化、280～800 pxリサイズと高速切替時のcleanupを確認する。
 
 完了条件はSEC-01、UI-01～03と自動UI試験の合格、主要操作のキーボード完結である。Phase 5延期項目やPhase 6実機受入を合格扱いにせず、UI変更へOffice/RM実装を混在させないこと。
+
+## 2026-09-28 次チャット用プロンプト
+
+次回は以下をそのまま依頼として使用する。
+
+```text
+目的: 2026-09-28に追加した一時保存ウィンドウの削除・保存/破棄とOffice文書パス取得のWindows実機確認を行い、結果を引継ぎ文書へ記録する。
+
+完了条件:
+- Tauri画面で一時保存一覧の×削除が並べ替えモードなしで使えることを確認する。
+- 上部「保存」で削除が確定し、再読み込み後も削除状態が維持されることを確認する。
+- 「破棄」で削除前の一覧へ戻ること、最後の1件を保存した場合は一時保存一覧が消えることを確認する。
+- 設定変更と一時保存変更を同時に行い、両保存の成功と片方失敗時に未保存分が保持・再試行可能なことを確認する。
+- 利用可能なOffice環境でExcel複数ブックのパスが各ウィンドウに正しく対応すること、Word/PowerPointのパス候補と通常UNC/拡張UNCが保持されることを確認する。UNC共有へ接続できないケースを安全に用意できる場合は、その状態でもパス文字列が失われないことを確認する。
+- 確認結果を `MANUAL_VERIFICATION_HANDOFF.md` の「2026-09-28 追加変更の手動確認」へ追記する。問題が再現した場合のみ、原因を絞って対象範囲を修正し、関連テストを実行する。
+
+対象ファイル: `src/view.js`, `src/model.js`, `src/effect-runner.js`, `src-tauri/src/windowing.rs`, `src-tauri/src/lib.rs`, `MANUAL_VERIFICATION_HANDOFF.md`。
+
+制約: 作業開始時に `git status --short` と対象差分を確認し、既存変更を保持する。Tauri/Officeなどの実機UIは明示許可なしに起動しない。任意パスを外部コマンドやIPCへ渡さず、曖昧なOfficeウィンドウ対応を推測で採用しない。Office/RMの既存延期項目やWindows全体受入を合格扱いにしない。Astraは利用しない。
+
+実施済み確認: JavaScript関連テスト602件成功。RustのスナップショットIPC入力、Officeパス候補、Excelブック/ウィンドウ対応テスト成功。`cargo check` と `git diff --check` 成功。`cargo fmt --check` は既存コードの整形差分を検出したため一括整形していない。実機UI/Office COMの動作は未確認。
+
+次のテスト: まず実機で上記操作を確認する。コードを変更した場合は `node --test tests/<対象>.test.mjs`、該当Rustテスト、`cargo check --manifest-path src-tauri/Cargo.toml`、`git diff --check` を実行する。広範囲の変更がなければ全テストやproduction buildは追加実行しない。
+
+推奨モデル: gpt-6-sol、reasoning effort: medium。理由: クロスレイヤー実装は完了しており、残りは手順に沿った実機確認と結果記録が中心。
+```
+
+工程は今回の実装から続く短い実機確認なので、別チャットへ分割する必要はない。

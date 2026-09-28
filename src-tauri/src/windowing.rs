@@ -346,6 +346,16 @@ impl WindowService {
         load_snapshot_file(&self.snapshot_path())
     }
 
+    pub fn replace_snapshot(&self, snapshot: Option<WindowSnapshot>) -> Result<bool, AppError> {
+        match snapshot {
+            Some(snapshot) => {
+                persist_snapshot(&self.snapshot_path(), &snapshot)?;
+                Ok(true)
+            }
+            None => clear_snapshot_file(&self.snapshot_path()),
+        }
+    }
+
     pub fn clear_snapshot(&self) -> Result<bool, AppError> {
         clear_snapshot_file(&self.snapshot_path())
     }
@@ -749,19 +759,6 @@ fn resolve_excel_window_paths(
     windows: &[EnumeratedWindow],
     observations: impl IntoIterator<Item = ExcelDocumentObservation>,
 ) -> HashMap<isize, String> {
-    let mut excel_by_pid: HashMap<u32, Vec<isize>> = HashMap::new();
-    for entry in windows.iter().filter(|entry| {
-        entry
-            .window
-            .executable_name
-            .eq_ignore_ascii_case("excel.exe")
-    }) {
-        excel_by_pid
-            .entry(entry.window.identity.pid)
-            .or_default()
-            .push(entry.window.identity.hwnd);
-    }
-
     let mut resolved = HashMap::new();
     let mut ambiguous = HashSet::new();
     for observation in observations {
@@ -774,12 +771,6 @@ fn resolve_excel_window_paths(
         }) else {
             continue;
         };
-        if excel_by_pid
-            .get(&entry.window.identity.pid)
-            .is_none_or(|values| values.len() != 1)
-        {
-            continue;
-        }
         let hwnd = entry.window.identity.hwnd;
         if ambiguous.contains(&hwnd) {
             continue;
@@ -795,6 +786,11 @@ fn resolve_excel_window_paths(
         }
     }
     resolved
+}
+
+fn office_document_path_candidate(path: &str) -> Option<String> {
+    let path = crate::contracts::windows_shell_path(path);
+    crate::contracts::windows_absolute_path(&path).then_some(path)
 }
 
 fn load_snapshot_file(path: &Path) -> Result<Option<WindowSnapshot>, AppError> {
@@ -818,7 +814,7 @@ fn clear_snapshot_file(path: &Path) -> Result<bool, AppError> {
     }
 }
 
-fn validate_snapshot(snapshot: &WindowSnapshot) -> Result<(), AppError> {
+pub(crate) fn validate_snapshot(snapshot: &WindowSnapshot) -> Result<(), AppError> {
     if snapshot.schema_version != SNAPSHOT_SCHEMA_VERSION
         || snapshot.items.is_empty()
         || snapshot.items.len() > MAX_WINDOWS
@@ -1141,30 +1137,64 @@ fn excel_document_observations() -> Vec<ExcelDocumentObservation> {
     ) else {
         return Vec::new();
     };
-    if integer_property(&workbooks, "Count") != Some(1) {
-        return Vec::new();
-    }
-    let mut index = [VARIANT::from(1i32)];
-    let Some(workbook) = invoke(
-        &workbooks,
-        "Item",
-        DISPATCH_PROPERTYGET | DISPATCH_METHOD,
-        &mut index,
-    )
-    .and_then(|value| IDispatch::try_from(&value).ok()) else {
+    let Some(count) = integer_property(&workbooks, "Count") else {
         return Vec::new();
     };
-    let Some(path) = string_property(&workbook, "FullName") else {
-        return Vec::new();
-    };
-    let path = crate::contracts::windows_shell_path(&path);
-    if !crate::contracts::windows_absolute_path(&path) || !Path::new(&path).is_file() {
-        return Vec::new();
+    let mut observations = Vec::new();
+    for index in 1..=count.clamp(0, MAX_WINDOWS as i32) {
+        let mut argument = [VARIANT::from(index)];
+        let Some(workbook) = invoke(
+            &workbooks,
+            "Item",
+            DISPATCH_PROPERTYGET | DISPATCH_METHOD,
+            &mut argument,
+        )
+        .and_then(|value| IDispatch::try_from(&value).ok()) else {
+            continue;
+        };
+        let Some(path) = string_property(&workbook, "FullName")
+            .and_then(|path| office_document_path_candidate(&path))
+        else {
+            continue;
+        };
+        // A workbook can own one or more Excel windows. Use each window's HWND
+        // so multiple open workbooks are mapped independently. Only fall back
+        // to Application.Hwnd for the single-workbook case.
+        let workbook_windows = dispatch_property(&workbook, "Windows");
+        if let Some(workbook_windows) = workbook_windows {
+            if let Some(window_count) = integer_property(&workbook_windows, "Count") {
+                let before = observations.len();
+                for window_index in 1..=window_count.clamp(0, MAX_WINDOWS as i32) {
+                    let mut window_argument = [VARIANT::from(window_index)];
+                    let Some(window) = invoke(
+                        &workbook_windows,
+                        "Item",
+                        DISPATCH_PROPERTYGET | DISPATCH_METHOD,
+                        &mut window_argument,
+                    )
+                    .and_then(|value| IDispatch::try_from(&value).ok()) else {
+                        continue;
+                    };
+                    if let Some(window_hwnd) = integer_property(&window, "Hwnd") {
+                        observations.push(ExcelDocumentObservation {
+                            hwnd: window_hwnd as isize,
+                            document_path: path.clone(),
+                        });
+                    }
+                }
+                if observations.len() != before {
+                    continue;
+                }
+            }
+        }
+        if count == 1 {
+            observations.push(ExcelDocumentObservation {
+                hwnd: hwnd as isize,
+                document_path: path,
+            });
+        }
     }
-    vec![ExcelDocumentObservation {
-        hwnd: hwnd as isize,
-        document_path: path,
-    }]
+    observations
 }
 
 #[cfg(windows)]
@@ -1316,12 +1346,9 @@ fn office_document_observations(
                     let Some(path) = string_property(&document, "FullName") else {
                         continue;
                     };
-                    let path = crate::contracts::windows_shell_path(&path);
-                    if !crate::contracts::windows_absolute_path(&path)
-                        || !Path::new(&path).is_file()
-                    {
+                    let Some(path) = office_document_path_candidate(&path) else {
                         continue;
-                    }
+                    };
                     if window_has_hwnd {
                         let Some(hwnd) = integer_property(&window, "Hwnd") else {
                             continue;
@@ -1358,8 +1385,7 @@ fn office_document_observations(
                     continue;
                 };
                 let path = Path::new(&source_path).join(source_name);
-                let path = crate::contracts::windows_shell_path(&path.to_string_lossy());
-                if crate::contracts::windows_absolute_path(&path) && Path::new(&path).is_file() {
+                if let Some(path) = office_document_path_candidate(&path.to_string_lossy()) {
                     observations.unbound_paths.push(path);
                 }
             }
@@ -2187,14 +2213,40 @@ mod tests {
 
         let mut second = single.clone();
         second.window.identity.hwnd = 102;
-        assert!(resolve_excel_window_paths(
-            &[single.clone(), second],
+        let mapped = resolve_excel_window_paths(
+            &[single.clone(), second.clone()],
             [ExcelDocumentObservation {
                 hwnd: 101,
                 document_path: r"C:\Meetings\agenda.xlsx".into(),
             }],
-        )
-        .is_empty());
+        );
+        assert_eq!(
+            mapped.get(&101).map(String::as_str),
+            Some(r"C:\Meetings\agenda.xlsx")
+        );
+        assert!(!mapped.contains_key(&102));
+
+        let multi_workbook = resolve_excel_window_paths(
+            &[single.clone(), second],
+            [
+                ExcelDocumentObservation {
+                    hwnd: 101,
+                    document_path: r"\\server\share\agenda.xlsx".into(),
+                },
+                ExcelDocumentObservation {
+                    hwnd: 102,
+                    document_path: r"\\server\share\budget.xlsx".into(),
+                },
+            ],
+        );
+        assert_eq!(
+            multi_workbook.get(&101).map(String::as_str),
+            Some(r"\\server\share\agenda.xlsx")
+        );
+        assert_eq!(
+            multi_workbook.get(&102).map(String::as_str),
+            Some(r"\\server\share\budget.xlsx")
+        );
 
         assert!(resolve_excel_window_paths(
             std::slice::from_ref(&single),
@@ -2210,6 +2262,34 @@ mod tests {
             ],
         )
         .is_empty());
+    }
+
+    #[test]
+    fn office_document_candidates_accept_local_unc_and_extended_unc_without_probing() {
+        assert_eq!(
+            office_document_path_candidate(r"C:\Meetings\agenda.xlsx").as_deref(),
+            Some(r"C:\Meetings\agenda.xlsx")
+        );
+        assert_eq!(
+            office_document_path_candidate(r"\\server\share\offline.xlsx").as_deref(),
+            Some(r"\\server\share\offline.xlsx")
+        );
+        assert_eq!(
+            office_document_path_candidate(r"\\?\UNC\server\share\offline.xlsx").as_deref(),
+            Some(r"\\server\share\offline.xlsx")
+        );
+        assert_eq!(
+            office_document_path_candidate(r"\\?\C:\Meetings\agenda.xlsx").as_deref(),
+            Some(r"C:\Meetings\agenda.xlsx")
+        );
+        assert!(office_document_path_candidate(r"relative\agenda.xlsx").is_none());
+        assert!(office_document_path_candidate(r"https://server/share/agenda.xlsx").is_none());
+        assert!(office_document_path_candidate(r"\\.\PhysicalDrive0").is_none());
+        assert!(office_document_path_candidate(
+            r"\\?\GLOBALROOT\Device\HarddiskVolume1\agenda.xlsx"
+        )
+        .is_none());
+        assert!(office_document_path_candidate(r"\\server").is_none());
     }
 
     #[test]

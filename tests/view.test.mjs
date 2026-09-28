@@ -421,6 +421,13 @@ test('saved windows appear as a sidebar group with launch and registration actio
   assert.ok(source.includes('windowsHeadActions.insertBefore(snapshotSave,windowsRefresh)'));
   for(const duplicate of ['window-snapshot-list','window-snapshot-row','保存一覧を表示',"'launch-all-window-snapshot'"])assert.ok(!source.includes(duplicate));
 });
+test('snapshot rows expose staged removal outside reorder mode and lock during save',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8'),styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  assert.ok(source.includes("button('×','remove-window-snapshot-item'"));
+  assert.ok(source.includes("emit('removeWindowSnapshotItem',index)"));
+  assert.ok(source.includes("next.window_snapshot_dirty||next.edit==='Saving'"));
+  assert.ok(styles.includes('.snapshot-remove{display:grid!important'));
+});
 
 test('window inventory groups applications and sorts groups and titles without usage history', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');

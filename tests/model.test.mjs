@@ -294,6 +294,45 @@ test('saved window snapshot supports individual/all launch and group registratio
   assert.equal(registered.state.windowing.snapshot,null);assert.equal(registered.effects[0].type,Effect.ClearWindowSnapshot);assert.equal(registered.state.selected_group_id,registered.state.draft.groups.at(-1).id);
   assert.equal(run(registered.state,Event.WindowSnapshotClearSucceeded,{removed:true}).state.windowing.snapshot,null);
 });
+test('snapshot deletion is a staged edit, can be discarded, and blocks stale-index launches',()=>{
+  const snapshot={schema_version:1,saved_at_unix_ms:1,items:[
+    {app_name:'Editor',title:'A',executable_name:'editor.exe',executable_path:'C:\\Apps\\editor.exe',restorability:'restorable',reason:null},
+    {app_name:'Editor',title:'B',executable_name:'editor.exe',executable_path:'C:\\Apps\\other.exe',restorability:'restorable',reason:null},
+  ]};
+  const loaded=run(ready(),Event.WindowSnapshotLoaded,{response:snapshot}).state;
+  const removed=run(loaded,Event.WindowSnapshotDraftRemoved,{index:0});
+  assert.equal(removed.state.edit,Edit.Dirty);assert.equal(removed.state.windowing.snapshot_dirty,true);assert.equal(removed.state.windowing.snapshot.items[0].title,'B');
+  assert.equal(run(removed.state,Event.WindowSnapshotLaunchRequested,{index:0}).effects.length,0);
+  assert.equal(run(removed.state,Event.WindowSnapshotLaunchAllRequested).effects.length,0);
+  assert.equal(run(removed.state,Event.WindowSnapshotLoadRequested).effects.length,0);
+  const discarded=run(removed.state,Event.EditDiscarded,{confirmed:true});
+  assert.deepEqual(discarded.state.windowing.snapshot,snapshot);assert.equal(discarded.state.edit,Edit.Clean);
+  const finalRemoved=run(loaded,Event.WindowSnapshotDraftRemoved,{index:0});
+  const noItems=run(finalRemoved.state,Event.WindowSnapshotDraftRemoved,{index:0});
+  assert.equal(noItems.state.windowing.snapshot,null);assert.equal(noItems.state.windowing.snapshot_dirty,true);
+});
+test('Save combines config and snapshot and keeps only the failed portion dirty',()=>{
+  const snapshot={schema_version:1,saved_at_unix_ms:1,items:[{app_name:'Editor',title:'A',executable_name:'editor.exe',executable_path:'C:\\Apps\\editor.exe',restorability:'restorable',reason:null}]};
+  const loaded=run(ready(),Event.WindowSnapshotLoaded,{response:snapshot}).state;
+  const edited=run(loaded,Event.WindowSnapshotDraftRemoved,{index:0}).state;
+  const requested=run(edited,Event.SaveRequested);
+  assert.deepEqual(requested.effects.map(effect=>effect.type),[Effect.ReplaceWindowSnapshot]);
+  assert.deepEqual(requested.effects[0].request,{snapshot:null});
+  const success=run(requested.state,Event.SaveSucceeded,{part:'snapshot',generation:requested.state.state_generation});
+  assert.equal(success.state.edit,Edit.Clean);assert.equal(success.state.windowing.snapshot_dirty,false);assert.equal(success.state.windowing.snapshot_original,null);
+  assert.equal(run(success.state,Event.SaveSucceeded,{part:'snapshot',generation:requested.state.state_generation}).state,success.state);
+
+  const bothBase=run(loaded,Event.EditRequested).state;
+  const bothDirty=run(bothBase,Event.WindowSnapshotDraftRemoved,{index:0}).state;
+  const bothSave=run(bothDirty,Event.SaveRequested);
+  assert.deepEqual(bothSave.effects.map(effect=>effect.type),[Effect.SaveSettings,Effect.ReplaceWindowSnapshot]);
+  const configFailure=run(bothSave.state,Event.SaveFailed,{part:'config',generation:bothSave.state.state_generation,error:appError('CONFIG_IO')});
+  assert.equal(configFailure.state.edit,Edit.Saving);assert.ok(configFailure.state.draft);
+  const snapshotSuccess=run(configFailure.state,Event.SaveSucceeded,{part:'snapshot',generation:bothSave.state.state_generation});
+  assert.equal(snapshotSuccess.state.edit,Edit.Dirty);assert.ok(snapshotSuccess.state.draft);assert.equal(snapshotSuccess.state.windowing.snapshot_dirty,false);
+  const retry=run(snapshotSuccess.state,Event.SaveRequested);
+  assert.deepEqual(retry.effects.map(effect=>effect.type),[Effect.SaveSettings]);
+});
 test('window snapshot load, launch all, and registration share normalized restoration target deduplication', () => {
   const item=(title,executable_path,document_path)=>({app_name:'Editor',title,executable_name:'editor.exe',executable_path,...(document_path?{document_path}:{}),restorability:'restorable',reason:null});
   const existingPath=config.materials[0].path;

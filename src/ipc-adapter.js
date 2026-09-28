@@ -11,6 +11,7 @@ const commands = Object.freeze({
   save_window_exclusions: ['SaveWindowExclusionsRequest', 'SaveWindowExclusionsResponse'],
   save_window_snapshot: ['SaveWindowSnapshotRequest', 'SaveWindowSnapshotResponse'],
   load_window_snapshot: ['LoadWindowSnapshotRequest', 'OptionalWindowSnapshot'],
+  replace_window_snapshot: ['ReplaceWindowSnapshotRequest', 'BooleanResponse'],
   clear_window_snapshot: ['ClearWindowSnapshotRequest', 'BooleanResponse'],
   launch_window_snapshot_item: ['LaunchWindowSnapshotItemRequest', 'LaunchWindowSnapshotItemResponse'],
   activate_or_launch: ['ActivateOrLaunchRequest', 'LaunchResponse'],

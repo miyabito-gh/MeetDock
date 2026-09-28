@@ -261,6 +261,12 @@
           "markdownDescription": "Enables the remove_pdf_sidecar command without any pre-configured scope."
         },
         {
+          "description": "Enables the replace_window_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-replace-window-snapshot",
+          "markdownDescription": "Enables the replace_window_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the resolve_settings_issue command without any pre-configured scope.",
           "type": "string",
           "const": "allow-resolve-settings-issue",
@@ -379,6 +385,12 @@
           "type": "string",
           "const": "deny-remove-pdf-sidecar",
           "markdownDescription": "Denies the remove_pdf_sidecar command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the replace_window_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-replace-window-snapshot",
+          "markdownDescription": "Denies the replace_window_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the resolve_settings_issue command without any pre-configured scope.",

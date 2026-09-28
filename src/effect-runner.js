@@ -17,7 +17,7 @@ export function createServices(ipc, pdf, lifecycle, fullscreen = { set: async ()
   return Object.freeze({
     settings: Object.freeze({ load: () => ipc.call('load_settings'), resolve: r => ipc.call('resolve_settings_issue', r), save: r => ipc.call('save_settings', r) }),
     statuses: Object.freeze({ sync: r => ipc.call('sync_material_statuses', r) }),
-    windows: Object.freeze({ list: r => ipc.call('list_windows', r), activate: r => ipc.call('activate_window', r), close: r => ipc.call('close_window', r), saveExclusions: r => ipc.call('save_window_exclusions', r), saveSnapshot:()=>ipc.call('save_window_snapshot'), loadSnapshot:()=>ipc.call('load_window_snapshot'), clearSnapshot:()=>ipc.call('clear_window_snapshot'), launchSnapshotItem:r=>ipc.call('launch_window_snapshot_item',r) }),
+    windows: Object.freeze({ list: r => ipc.call('list_windows', r), activate: r => ipc.call('activate_window', r), close: r => ipc.call('close_window', r), saveExclusions: r => ipc.call('save_window_exclusions', r), saveSnapshot:()=>ipc.call('save_window_snapshot'), replaceSnapshot:r=>ipc.call('replace_window_snapshot',r), loadSnapshot:()=>ipc.call('load_window_snapshot'), clearSnapshot:()=>ipc.call('clear_window_snapshot'), launchSnapshotItem:r=>ipc.call('launch_window_snapshot_item',r) }),
     launch: Object.freeze({ activate: r => ipc.call('activate_or_launch', r), batch: r => ipc.call('batch_launch_main', r), openContainingFolder: r => ipc.call('open_containing_folder', r) }),
     droppedFiles: Object.freeze({ prepare: r => ipc.call('prepare_dropped_files', r) }),
     pdfSidecars: Object.freeze({ load: r => ipc.call('load_pdf_sidecar', r), save: r => ipc.call('save_pdf_sidecar', r), remove: r => ipc.call('remove_pdf_sidecar', r) }),
@@ -40,7 +40,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
     return operation;
   };
   async function execute(f) {
-    const context = { ...(f.background ? { background: true } : {}), ...(f.preserve_until_removed ? { preserve_until_removed: true } : {}), generation: f.generation, material_id: f.request.material_id, pdf_identity: f.request.pdf_identity, sidecar_revision: f.sidecar_revision, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id, index:f.request.index,
+    const context = { ...(f.background ? { background: true } : {}), ...(f.preserve_until_removed ? { preserve_until_removed: true } : {}), ...(f.part?{part:f.part}:{}), generation: f.generation, material_id: f.request.material_id, pdf_identity: f.request.pdf_identity, sidecar_revision: f.sidecar_revision, window_id: f.request.window_id, group_id: f.group_id ?? f.request.group_id, index:f.request.index,
       ...(Number.isSafeInteger(f.request.search_generation) ? { search_generation: f.request.search_generation } : {}) };
     let event;
     try {
@@ -78,6 +78,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
           event = { type: Event.WindowExclusionsSaved, response: r, ...context }; break;
         }
         case Effect.SaveWindowSnapshot: event={type:Event.WindowSnapshotSaved,response:await services.windows.saveSnapshot(),...context};break;
+        case Effect.ReplaceWindowSnapshot: await services.windows.replaceSnapshot(f.request);event={type:Event.SaveSucceeded,...context};break;
         case Effect.LoadWindowSnapshot: event={type:Event.WindowSnapshotLoaded,response:await services.windows.loadSnapshot(),...context};break;
         case Effect.ClearWindowSnapshot: event={type:Event.WindowSnapshotClearSucceeded,removed:await services.windows.clearSnapshot(),...context};break;
         case Effect.LaunchWindowSnapshotItem: {
@@ -149,6 +150,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
       const type = {
         [Effect.LoadSettings]: Event.SettingsLoadFailed, [Effect.ResolveSettings]: Event.ResolutionFailed,
         [Effect.SaveSettings]: error.code === 'CONFIG_CONFLICT' ? Event.SaveConflict : Event.SaveFailed,
+        [Effect.ReplaceWindowSnapshot]: Event.SaveFailed,
         [Effect.SyncStatuses]: Event.SyncFailed, [Effect.SyncWindows]: Event.WindowSyncFailed,
         [Effect.ActivateWindow]: Event.WindowActivateFailed, [Effect.RequestWindowClose]: Event.WindowCloseFailed,
         [Effect.SaveWindowExclusions]: Event.WindowExclusionsSaveFailed,
