@@ -755,6 +755,7 @@ fn is_supported_acrobat_executable(executable_name: &str) -> bool {
         || executable_name.eq_ignore_ascii_case("acrobat.exe")
 }
 
+#[cfg(test)]
 fn resolve_excel_window_paths(
     windows: &[EnumeratedWindow],
     observations: impl IntoIterator<Item = ExcelDocumentObservation>,
@@ -1021,15 +1022,25 @@ fn explorer_file_url_to_path(url: &str) -> Option<String> {
 
 #[cfg(windows)]
 fn excel_window_paths(windows: &[EnumeratedWindow]) -> HashMap<isize, String> {
-    let resolved = resolve_excel_window_paths(windows, excel_document_observations());
-    let protected = office_document_observations("Excel.Application", "Workbook", false, false);
-    resolve_unbound_office_paths(
-        windows,
-        "excel.exe",
-        resolved,
-        &HashSet::new(),
-        protected.unbound_paths,
-    )
+    let mut observations =
+        office_document_observations("Excel.Application", "Workbook", false, false);
+    observations
+        .mapped
+        .extend(excel_document_observations().into_iter().map(|item| {
+            OfficeWindowDocumentObservation {
+                hwnd: item.hwnd,
+                document_path: item.document_path,
+            }
+        }));
+    observations
+        .mapped
+        .extend(office_native_window_observations(
+            windows,
+            "excel.exe",
+            &["Workbook"],
+            true,
+        ));
+    resolve_office_window_paths_with_unbound(windows, "excel.exe", observations)
 }
 
 #[cfg(not(windows))]
@@ -1199,11 +1210,16 @@ fn excel_document_observations() -> Vec<ExcelDocumentObservation> {
 
 #[cfg(windows)]
 fn word_window_paths(windows: &[EnumeratedWindow]) -> HashMap<isize, String> {
-    resolve_office_window_paths_with_unbound(
-        windows,
-        "winword.exe",
-        office_document_observations("Word.Application", "Document", true, true),
-    )
+    let mut observations = office_document_observations("Word.Application", "Document", true, true);
+    observations
+        .mapped
+        .extend(office_native_window_observations(
+            windows,
+            "winword.exe",
+            &["Document"],
+            false,
+        ));
+    resolve_office_window_paths_with_unbound(windows, "winword.exe", observations)
 }
 
 #[cfg(not(windows))]
@@ -1213,16 +1229,212 @@ fn word_window_paths(_: &[EnumeratedWindow]) -> HashMap<isize, String> {
 
 #[cfg(windows)]
 fn powerpoint_window_paths(windows: &[EnumeratedWindow]) -> HashMap<isize, String> {
-    resolve_office_window_paths_with_unbound(
-        windows,
-        "powerpnt.exe",
-        office_document_observations("PowerPoint.Application", "Presentation", false, true),
-    )
+    let mut observations =
+        office_document_observations("PowerPoint.Application", "Presentation", false, true);
+    observations
+        .mapped
+        .extend(powerpoint_native_window_observations(windows));
+    resolve_office_window_paths_with_unbound(windows, "powerpnt.exe", observations)
 }
 
 #[cfg(not(windows))]
 fn powerpoint_window_paths(_: &[EnumeratedWindow]) -> HashMap<isize, String> {
     HashMap::new()
+}
+
+#[cfg(windows)]
+fn powerpoint_native_window_observations(
+    windows: &[EnumeratedWindow],
+) -> Vec<OfficeWindowDocumentObservation> {
+    office_native_window_observations(windows, "powerpnt.exe", &["Presentation"], false)
+}
+
+#[cfg(windows)]
+fn office_native_window_observations(
+    windows: &[EnumeratedWindow],
+    executable_name: &str,
+    document_properties: &[&str],
+    workbook_from_active_sheet: bool,
+) -> Vec<OfficeWindowDocumentObservation> {
+    use std::ffi::c_void;
+    use windows::{
+        core::{Interface, BOOL, BSTR, GUID, PCWSTR},
+        Win32::{
+            Foundation::{HWND, LPARAM},
+            System::{
+                Com::{
+                    CoInitializeEx, CoUninitialize, IDispatch, COINIT_APARTMENTTHREADED,
+                    DISPATCH_PROPERTYGET, DISPPARAMS,
+                },
+                Variant::VARIANT,
+            },
+            UI::{
+                Accessibility::AccessibleObjectFromWindow,
+                WindowsAndMessaging::{EnumChildWindows, OBJID_NATIVEOM},
+            },
+        },
+    };
+
+    struct ComApartment;
+    impl Drop for ComApartment {
+        fn drop(&mut self) {
+            unsafe { CoUninitialize() }
+        }
+    }
+
+    fn invoke(
+        dispatch: &IDispatch,
+        name: &str,
+        flags: windows::Win32::System::Com::DISPATCH_FLAGS,
+        arguments: &mut [VARIANT],
+    ) -> Option<VARIANT> {
+        let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        let name = PCWSTR(wide.as_ptr());
+        let mut id = 0;
+        unsafe {
+            dispatch
+                .GetIDsOfNames(&GUID::zeroed(), &name, 1, 0, &mut id)
+                .ok()?;
+        }
+        let parameters = DISPPARAMS {
+            rgvarg: arguments.as_mut_ptr(),
+            cArgs: arguments.len() as u32,
+            ..Default::default()
+        };
+        let mut result = VARIANT::default();
+        unsafe {
+            dispatch
+                .Invoke(
+                    id,
+                    &GUID::zeroed(),
+                    0,
+                    flags,
+                    &parameters,
+                    Some(&mut result),
+                    None,
+                    None,
+                )
+                .ok()?;
+        }
+        Some(result)
+    }
+
+    fn dispatch_property(dispatch: &IDispatch, name: &str) -> Option<IDispatch> {
+        IDispatch::try_from(&invoke(dispatch, name, DISPATCH_PROPERTYGET, &mut [])?).ok()
+    }
+
+    fn full_name(document: &IDispatch) -> Option<String> {
+        let value = invoke(document, "FullName", DISPATCH_PROPERTYGET, &mut [])?;
+        if value.vt() != windows::Win32::System::Variant::VT_BSTR {
+            return None;
+        }
+        let value: &BSTR =
+            unsafe { std::mem::transmute(&value.Anonymous.Anonymous.Anonymous.bstrVal) };
+        office_document_path_candidate(&value.to_string())
+    }
+
+    fn string_property(dispatch: &IDispatch, property: &str) -> Option<String> {
+        let value = invoke(dispatch, property, DISPATCH_PROPERTYGET, &mut [])?;
+        if value.vt() != windows::Win32::System::Variant::VT_BSTR {
+            return None;
+        }
+        let value: &BSTR =
+            unsafe { std::mem::transmute(&value.Anonymous.Anonymous.Anonymous.bstrVal) };
+        Some(value.to_string())
+    }
+
+    fn native_object_path(
+        native_object: &IDispatch,
+        document_properties: &[&str],
+        workbook_from_active_sheet: bool,
+    ) -> Option<String> {
+        for property in document_properties {
+            if let Some(document) = dispatch_property(native_object, property) {
+                if let Some(path) = full_name(&document) {
+                    return Some(path);
+                }
+            }
+        }
+        if workbook_from_active_sheet {
+            if let Some(sheet) = dispatch_property(native_object, "ActiveSheet") {
+                if let Some(workbook) = dispatch_property(&sheet, "Parent") {
+                    if let Some(path) = full_name(&workbook) {
+                        return Some(path);
+                    }
+                }
+            }
+        }
+
+        // ProtectedViewWindow exposes its source path/name rather than a
+        // DocumentWindow HWND property. When Office returns that object for
+        // this exact native pane HWND, use those documented source fields.
+        let source_path = string_property(native_object, "SourcePath")?;
+        let source_name = string_property(native_object, "SourceName")?;
+        office_document_path_candidate(
+            &std::path::Path::new(&source_path)
+                .join(source_name)
+                .to_string_lossy(),
+        )
+    }
+
+    unsafe extern "system" fn collect_child(hwnd: HWND, parameter: LPARAM) -> BOOL {
+        let children = unsafe { &mut *(parameter.0 as *mut Vec<isize>) };
+        if children.len() >= MAX_WINDOWS {
+            return false.into();
+        }
+        children.push(hwnd.0 as isize);
+        true.into()
+    }
+
+    if unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) }.is_err() {
+        return Vec::new();
+    }
+    let _apartment = ComApartment;
+    let mut observations = Vec::new();
+    for entry in windows.iter().filter(|entry| {
+        entry
+            .window
+            .executable_name
+            .eq_ignore_ascii_case(executable_name)
+    }) {
+        let top_level = entry.window.identity.hwnd;
+        let mut candidates = vec![top_level];
+        unsafe {
+            let _ = EnumChildWindows(
+                Some(HWND(top_level as *mut c_void)),
+                Some(collect_child),
+                LPARAM(&mut candidates as *mut Vec<isize> as isize),
+            );
+        }
+        for hwnd in candidates {
+            let mut object: *mut c_void = std::ptr::null_mut();
+            if unsafe {
+                AccessibleObjectFromWindow(
+                    HWND(hwnd as *mut c_void),
+                    OBJID_NATIVEOM.0 as u32,
+                    &IDispatch::IID,
+                    &mut object,
+                )
+            }
+            .is_err()
+                || object.is_null()
+            {
+                continue;
+            }
+            let native_object = unsafe { IDispatch::from_raw(object) };
+            if let Some(document_path) = native_object_path(
+                &native_object,
+                document_properties,
+                workbook_from_active_sheet,
+            ) {
+                observations.push(OfficeWindowDocumentObservation {
+                    hwnd: top_level,
+                    document_path,
+                });
+            }
+        }
+    }
+    observations
 }
 
 #[cfg(windows)]
@@ -2598,6 +2810,90 @@ mod tests {
                 ],
                 unbound_paths: vec![r"C:\Meetings\protected.pptx".into()],
             },
+        );
+        assert!(ambiguous.is_empty());
+    }
+
+    #[test]
+    fn powerpoint_protected_paths_map_by_hwnd_when_mixed_with_normal_windows() {
+        let normal = office_window(401, 71, "POWERPNT.EXE");
+        let protected = office_window(402, 72, "POWERPNT.EXE");
+        let resolved = resolve_office_window_paths_with_unbound(
+            &[normal, protected],
+            "powerpnt.exe",
+            OfficeDocumentObservations {
+                mapped: vec![
+                    OfficeWindowDocumentObservation {
+                        hwnd: 401,
+                        document_path: r"C:\Meetings\normal.pptx".into(),
+                    },
+                    OfficeWindowDocumentObservation {
+                        hwnd: 402,
+                        document_path: r"\\server\share\protected.pptx".into(),
+                    },
+                ],
+                // The COM collection still reports protected-view paths
+                // without HWNDs. It must not override conflicting/unmapped
+                // windows once an exact native-pane association exists.
+                unbound_paths: vec![r"\\server\share\protected.pptx".into()],
+            },
+        );
+        assert_eq!(
+            resolved.get(&401).map(String::as_str),
+            Some(r"C:\Meetings\normal.pptx")
+        );
+        assert_eq!(
+            resolved.get(&402).map(String::as_str),
+            Some(r"\\server\share\protected.pptx")
+        );
+    }
+
+    #[test]
+    fn word_and_excel_protected_paths_use_exact_mappings_without_guessing() {
+        for executable in ["winword.exe", "excel.exe"] {
+            let normal = office_window(501, 81, executable);
+            let protected = office_window(502, 82, executable);
+            let resolved = resolve_office_window_paths_with_unbound(
+                &[normal, protected],
+                executable,
+                OfficeDocumentObservations {
+                    mapped: vec![
+                        OfficeWindowDocumentObservation {
+                            hwnd: 501,
+                            document_path: r"C:\Meetings\normal.office".into(),
+                        },
+                        OfficeWindowDocumentObservation {
+                            hwnd: 502,
+                            document_path: r"\\server\share\protected.office".into(),
+                        },
+                    ],
+                    unbound_paths: vec![r"\\server\share\protected.office".into()],
+                },
+            );
+            assert_eq!(resolved.len(), 2);
+            assert_eq!(
+                resolved.get(&501).map(String::as_str),
+                Some(r"C:\Meetings\normal.office")
+            );
+            assert_eq!(
+                resolved.get(&502).map(String::as_str),
+                Some(r"\\server\share\protected.office")
+            );
+        }
+
+        let ambiguous = resolve_office_window_paths(
+            std::slice::from_ref(&office_window(601, 91, "WINWORD.EXE")),
+            "winword.exe",
+            [
+                OfficeWindowDocumentObservation {
+                    hwnd: 601,
+                    document_path: r"C:\Meetings\one.docx".into(),
+                },
+                OfficeWindowDocumentObservation {
+                    hwnd: 601,
+                    document_path: r"C:\Meetings\two.docx".into(),
+                },
+            ],
         );
         assert!(ambiguous.is_empty());
     }

@@ -281,25 +281,25 @@ MeetDockの実装をPhase 7のWindows/WebView2実機確認から継続してく�
 次回は以下をそのまま依頼として使用する。
 
 ```text
-目的: 2026-09-28に追加した一時保存ウィンドウの削除・保存/破棄とOffice文書パス取得のWindows実機確認を行い、結果を引継ぎ文書へ記録する。
+目的: Office文書のパス取得修正をWindows実機で検証し、Protected Viewを含む各ネイティブウィンドウと資料パスの対応結果を `MANUAL_VERIFICATION_HANDOFF.md` に記録する。
 
 完了条件:
-- Tauri画面で一時保存一覧の×削除が並べ替えモードなしで使えることを確認する。
-- 上部「保存」で削除が確定し、再読み込み後も削除状態が維持されることを確認する。
-- 「破棄」で削除前の一覧へ戻ること、最後の1件を保存した場合は一時保存一覧が消えることを確認する。
-- 設定変更と一時保存変更を同時に行い、両保存の成功と片方失敗時に未保存分が保持・再試行可能なことを確認する。
-- 利用可能なOffice環境でExcel複数ブックのパスが各ウィンドウに正しく対応すること、Word/PowerPointのパス候補と通常UNC/拡張UNCが保持されることを確認する。UNC共有へ接続できないケースを安全に用意できる場合は、その状態でもパス文字列が失われないことを確認する。
-- 確認結果を `MANUAL_VERIFICATION_HANDOFF.md` の「2026-09-28 追加変更の手動確認」へ追記する。問題が再現した場合のみ、原因を絞って対象範囲を修正し、関連テストを実行する。
+- M365 x64のPowerPoint、Word、Excelで通常の複数文書を開き、各資料のFullNameが対応するHWNDへ結びつくことを確認する。
+- 各Officeで複数Protected View、および通常文書とProtected Viewの混在を確認する。AccessibleObjectFromWindow/OBJID_NATIVEOMが対象ウィンドウの資料オブジェクトを返さない場合は未割当を許容し、タイトル・表示名・列挙順で推測して割り当てない。
+- ローカル、通常UNC、拡張UNCのパス文字列が保持されることを確認する。可能なら到達できないUNC共有でも存在確認に依存せず取得できることを確認する。
+- 対象HWND、Officeの表示状態、取得パス、結果を `MANUAL_VERIFICATION_HANDOFF.md` の「2026-09-28 Office文書パス対応の追補」へ記録する。
 
-対象ファイル: `src/view.js`, `src/model.js`, `src/effect-runner.js`, `src-tauri/src/windowing.rs`, `src-tauri/src/lib.rs`, `MANUAL_VERIFICATION_HANDOFF.md`。
+対象ファイル: `src-tauri/src/windowing.rs`, `MANUAL_VERIFICATION_HANDOFF.md`, `NEXT_SESSION_PROMPT.md`。
 
-制約: 作業開始時に `git status --short` と対象差分を確認し、既存変更を保持する。Tauri/Officeなどの実機UIは明示許可なしに起動しない。任意パスを外部コマンドやIPCへ渡さず、曖昧なOfficeウィンドウ対応を推測で採用しない。Office/RMの既存延期項目やWindows全体受入を合格扱いにしない。Astraは利用しない。
+制約: 開始時に `git status --short` と対象差分を確認し、既存変更を保持する。現在のユーザー指示ではOffice/Tauri実機UIの起動は不可。明示的な指示が変わるまでは起動せず、自動テストとビルド確認のみ行う。未検証のOffice UI動作を合格扱いしない。任意パスを外部コマンドやIPCへ渡さず、タイトルや列挙順で対応づけない。Astraは利用しない。
 
-実施済み確認: JavaScript関連テスト602件成功。RustのスナップショットIPC入力、Officeパス候補、Excelブック/ウィンドウ対応テスト成功。`cargo check` と `git diff --check` 成功。`cargo fmt --check` は既存コードの整形差分を検出したため一括整形していない。実機UI/Office COMの動作は未確認。
+実施済み確認: `cargo test --manifest-path src-tauri/Cargo.toml windowing::tests::` 26件成功。`cargo check --manifest-path src-tauri/Cargo.toml`、`rustfmt --check src-tauri/src/windowing.rs`、`git diff --check` 成功。サブエージェントが類似するWord/Excel問題を監査し、変更を独立レビューした。Office実機UIはユーザーの指示により未起動。
 
-次のテスト: まず実機で上記操作を確認する。コードを変更した場合は `node --test tests/<対象>.test.mjs`、該当Rustテスト、`cargo check --manifest-path src-tauri/Cargo.toml`、`git diff --check` を実行する。広範囲の変更がなければ全テストやproduction buildは追加実行しない。
+未解決: Office Native Object ModelからProtected Viewの資料オブジェクトが個別ペインHWND経由で取得できるかは実機未確認。未取得または曖昧な場合は安全のため未割当てを維持する。
 
-推奨モデル: gpt-6-sol、reasoning effort: medium。理由: クロスレイヤー実装は完了しており、残りは手順に沿った実機確認と結果記録が中心。
+次のテスト: ユーザーが実機確認を許可した場合に限り上記のOfficeケースを実行する。コード変更時は該当Rustテスト、`cargo check --manifest-path src-tauri/Cargo.toml`、`rustfmt --check src-tauri/src/windowing.rs`、`git diff --check` を実行する。全体テストやproduction buildは影響範囲または明示依頼に応じて実施する。
+
+推奨モデル: gpt-6-sol、reasoning effort: medium。理由: 実装と自動検証は完了し、残りはOffice実機固有のCOM/HWND対応確認が中心。
 ```
 
-工程は今回の実装から続く短い実機確認なので、別チャットへ分割する必要はない。
+工程は今回の実装から続くOffice実機確認なので、別チャットへ分割する必要はない。

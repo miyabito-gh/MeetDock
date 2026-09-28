@@ -79,3 +79,11 @@ $cfg01Run = 'seedが表示した32桁RUN_ID'
 - 自動確認: JavaScript関連602件、Office候補/Excel対応/IPC入力のRust対象テスト、`cargo check`、`git diff --check`が成功。`cargo fmt --check`は既存コードの整形差分を検出したため一括整形していない。
 - 未実施: Tauri画面上の×・保存・破棄・最後の1件の操作、および実Office COM/複数ブック/UNC共有の動作確認。プロジェクト指示に従い、今回の作業ではTauri・Officeを起動していない。
 - 次の確認: 利用可能なWindows/WebView2環境で保存/破棄と再起動後の状態を確認し、M365 Excelで複数ブックのHWND対応とUNC（可能なら一時的に到達不能な共有）のパス保持を確認する。結果をこの節へ追記する。実機確認のためアプリ起動が必要なら、ユーザーの明示許可を得る。
+
+## 2026-09-28 Office文書パス対応の追補
+
+- PowerPoint複数資料の取得漏れに対し、Office Native Object Modelを各ネイティブウィンドウの子ペインから取得し、資料のFullNameを親HWNDへ対応づける処理を追加。Word/Excelにも適用し、ExcelはActiveSheet.Parent経由も使う。通常のCOMコレクション経路は維持し、異なるパスが同一HWNDへ対応する場合は曖昧として割当てを破棄する。
+- Word/ExcelのProtected Viewも同じ窓単位の経路を試し、取得したオブジェクトがSourcePath/SourceNameを公開した場合だけ当該HWNDへ割当てる。従来のProtectedViewWindows由来のパスは一意な未割当窓が1つの場合に限り補完する。タイトル・表示名・列挙順による推測はしない。
+- 自動確認: `cargo test --manifest-path src-tauri/Cargo.toml windowing::tests::` 26件成功、`cargo check --manifest-path src-tauri/Cargo.toml`、`rustfmt --check src-tauri/src/windowing.rs`、`git diff --check` 成功。サブエージェントの独立レビューでも曖昧な割当てを破棄することを確認。
+- 未確認: Office実機でのAccessibleObjectFromWindow/OBJID_NATIVEOM取得、特に複数Protected Viewと通常窓混在時に保護ビューの資料オブジェクトが対象ペインHWNDから得られるか。ユーザーの指示によりこの作業ではOffice/Tauri UIを起動していない。取得不能・曖昧な場合はパス未割当てを維持する。
+- 次の確認: ユーザーが実機確認を許可するまでOffice/Tauriを起動しない。許可後、M365 x64でPowerPoint/Word/Excelの通常複数文書、複数Protected View、通常窓とProtected View混在、ローカル/UNC/拡張UNCの各ケースを確認し、取得パスと対象HWNDの対応を記録する。
