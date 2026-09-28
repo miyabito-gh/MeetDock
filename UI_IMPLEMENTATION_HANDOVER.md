@@ -1816,3 +1816,30 @@ MeetDockのPDF画面デザイン／操作性について、現行画面の情報
 - 既存のModel→Effect→IPC、sidecar、保存済みID、厳格検証、CMap対応を維持する。Acrobat Readerの完全パス、別種CMapの追加検証、Redoやアクセシビリティの再調査へ広げない。
 - アプリ、開発サーバー、Acrobat、Explorer、Office等の実機UIは明示許可なしに起動しない。変更後は対応する対象テストと git diff --check を実行する。npm.cmd test の既知の tests/explorer-mode.test.mjs:23 失敗は自動修正しない。通常の実装ではコミット・pushしない。
 ```
+
+### 2026-09-29 画面刷新の実装・検証と次工程
+
+- ブランチ `codex/meetdock-screen-review` で、既存スタイルの後に `src/screen-refresh.css` を読み込むよう `src/main.js` を更新した。資料一覧、グループナビ、PDFプレビュー、ウィンドウ一覧、編集・復旧ダイアログの色・余白・状態表示を揃え、狭幅の状態列／ツールバー、フォーカス表示、forced colors、reduced motionを見直した。
+- frontend-designスキルで自己レビューし、サブエージェントの読み取り専用レビューも反映した。共通モーダルとウィンドウ一覧の余白衝突、誤記・未使用セレクタ、一覧の過剰なカード影、狭幅の編集操作配置を修正した。
+- `node --test tests/view.test.mjs` 67件成功、`npm run build` 成功、`git diff --check` 成功。ビルドでは500 KB超チャンク警告が残る。実機UIは起動しておらず、視覚的な受け入れ確認は未実施。
+- 開始時から存在した `src-tauri/src/contracts.rs`、`src-tauri/src/launcher.rs`、`src-tauri/src/lib.rs` の変更は今回のUIコミットに含めず保持する。
+- 次チャットではUIの視覚的受け入れ確認だけを扱う。実機起動はユーザーの明示許可が必要。
+
+#### 次チャット用引継ぎプロンプト
+
+```textMeetDockの画面刷新を最終確認してください。作業基準は C:\Users\wmasa\Documents\Rust\MeetDock、ブランチは codex/meetdock-screen-review です。推奨モデル: gpt-6-sol / medium。理由: 変更はCSS中心で、自動検証済みの画面を限定的に受け入れ確認する作業だからです。Astraは使用しないでください。
+
+完了条件:
+- src/screen-refresh.css と src/main.js の変更を読み、既存画面の階層、一覧、PDFプレビュー、ウィンドウ管理、復旧／編集ダイアログを確認する。
+- 画面の目視確認が必要なら、開始前にユーザーの明示許可を得る。許可がない間はTauri、開発サーバー、ブラウザー等を起動しない。
+- 実機確認が許可された場合、通常幅、狭い一覧＋PDFペイン、ウィンドウ一覧、設定復旧／編集ダイアログで視認性、操作優先順位、フォーカス、狭幅レイアウトを確認する。確認できない項目は未確認と記録する。
+- 実際に見つかった問題だけを限定修正する。既存のRust変更を保持し、無関係な整理へ広げない。
+
+実施済み:
+- 青緑と霧色を基調に、メイン資料一覧、PDF、ウィンドウ／操作ダイアログを揃えた。
+- 共通モーダルの余白衝突、狭いPDFペインの状態列、未使用セレクタ、狭幅のツールバー配置を見直し、ブランド印に製品固有の形を加えた。
+- サブエージェントの独立レビューを反映した。
+- node --test tests/view.test.mjs は67件成功。npm run build 成功（500 KB超のチャンク警告あり）。git diff --check 成功。
+- 実機UIは未起動。視覚的な最終受け入れは未確認。
+
+対象ファイル: src/screen-refresh.css、src/main.js。開始時に git status --short と対象差分を確認し、他の変更を保持する。必要なコード修正後は node --test tests/view.test.mjs、npm run build、git diff --check を実行する。通常の確認・修正ではコミット／pushしない。```

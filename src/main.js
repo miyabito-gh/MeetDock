@@ -11,6 +11,7 @@ import { handleCloseRequest } from './event-chain.js';
 import { createAppView } from './view.js';
 import './mock-styles.css';
 import './visibility.css';
+import './screen-refresh.css';
 
 const view = createAppView(document.querySelector('#app'));
 const pdf = createProductionPdfViewAdapter({ canvas: view.canvas, requestPassword: request => view.requestPassword(request) });

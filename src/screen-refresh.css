@@ -1,0 +1,152 @@
+/* MeetDock's meeting-material workspace: calm navigation, clear actions, one surface system. */
+:root {
+  color-scheme: light;
+  --bg: #f1f5f4;
+  --text: #20343a;
+  --muted: #5e7176;
+  --line: #d4dfdd;
+  --line-light: #e5ecea;
+  --accent: #087e83;
+  --accent2: #e0f2ef;
+  --accent3: #075c61;
+  --success: #28734e;
+  --success-bg: #e5f3eb;
+  --danger: #b54742;
+  --danger-bg: #fae9e7;
+  --main: #76520e;
+  --main-bg: #f7f0dd;
+  --shadow: 0 2px 8px #183b4510, 0 14px 34px #183b450c;
+}
+
+body { background: var(--bg); color: var(--text); }
+.app-shell { background: var(--bg); }
+.sidebar { background: #f7f9f8; border-color: var(--line); }
+.brand { height: 58px; padding-inline: 16px; border-color: var(--line-light); }
+.brand-mark { position: relative; border-radius: 2px 8px 2px 8px; background: var(--accent3); box-shadow: none; font-size: 0; }
+.brand-mark::before { content: ''; width: 14px; height: 2px; border-radius: 1px; background: #fff; box-shadow: 0 5px 0 #b5d8d4; }
+.brand-title { color: var(--text); letter-spacing: -.02em; }
+.section-head { padding: 14px 12px 5px; }
+.section-head h2 { color: var(--muted); font-size: 10px; letter-spacing: .02em; text-transform: none; }
+.group-button { min-height: 34px; color: #344b50; }
+.group-button:hover { background: #eaf0ee; }
+.group-button.selected { background: var(--accent2); color: var(--accent3); box-shadow: inset 3px 0 var(--accent); }
+.sidebar-resizer:hover, .preview-resizer:hover { background: var(--accent); }
+
+.main { background: #fff; }
+.toolbar { min-height: 70px; padding: 10px 20px; border-color: var(--line); }
+.toolbar h1 { color: var(--text); font-size: 16px; letter-spacing: -.025em; }
+.context { color: var(--muted); font-size: 11px; }
+.title-block .context { margin-top: 4px; }
+.primary, .secondary { min-height: 34px; border-radius: 7px; font-size: 11.5px; transition: background-color .14s ease, border-color .14s ease, color .14s ease; }
+.primary, .actions .primary, .toolbar-edit-actions [data-action="save"] { background: var(--accent3); border-color: var(--accent3); color: #fff; }
+.primary:hover:not(:disabled), .actions .primary:hover:not(:disabled), .toolbar-edit-actions [data-action="save"]:hover:not(:disabled) { background: #06494d; border-color: #06494d; }
+.secondary { border-color: var(--line); color: #344b50; }
+.secondary:hover:not(:disabled) { background: #f0f5f3; border-color: #b8cbc7; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible, [role="separator"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.toolbar-runtime-actions, .pdf-display-modes { border-color: var(--line); background: #f3f7f5; }
+.toolbar-auxiliary-actions { border-color: var(--line-light); }
+.toolbar-more-panel, .context-menu { border-color: var(--line); border-radius: 9px; box-shadow: var(--shadow); }
+.toolbar-more>summary:hover, .toolbar-more[open]>summary { border-color: var(--line); background: #eef4f2; color: var(--text); }
+.toolbar-menu-button:hover, .toolbar-menu-button.active, .menu-item:hover, .menu-item:focus { background: var(--accent2); color: var(--accent3); }
+
+.list-pane { padding: 22px clamp(18px, 3vw, 34px); }
+.role-header { margin-top: 20px; padding-bottom: 7px; border-color: var(--line-light); }
+.role-header h2 { color: #40565b; font-size: 11px; text-transform: none; letter-spacing: 0; }
+.role-badge { padding: 3px 8px; border-radius: 5px; }
+.role-badge.main { background: var(--main-bg); color: var(--main); }
+.role-badge.reference { background: #edf2f1; color: #53676b; }
+.panel { border-color: var(--line); border-radius: 6px; box-shadow: none; }
+.list-header { background: #f6f9f8; color: var(--muted); }
+.material-row { min-height: 56px; border-color: var(--line-light); transition: background-color .14s ease; }
+.material-row:hover { background: #f7faf9; }
+.material-row.pdf-current { background: #eaf5f4; box-shadow: inset 3px 0 var(--accent); }
+.file-icon { border-radius: 6px; border-color: var(--line-light); }
+.status[data-tone="available"] .status-mark { background: var(--success); }
+.status[data-tone="warning"] .status-mark { background: var(--danger); }
+.row-action-button { border-radius: 6px; }
+.row-action-button:hover:not(:disabled) { background: #e8f1ef !important; color: var(--accent3); }
+.row-action-button.active, .pdf-preview-button.active { background: var(--accent2) !important; color: var(--accent3); }
+.drop-zone { margin-top: 18px; padding: 14px; border-color: #bdcfcb; border-radius: 9px; background: #f8fbfa; color: #536a6e; }
+.drop-zone.dragover { border-color: var(--accent); background: var(--accent2); }
+.empty-state { border-color: #bdcfcb; border-radius: 10px; background: #f8fbfa; }
+.empty-state strong { color: var(--text); }
+.notice, .batch-details { border: 1px solid #ead8ad; border-radius: 8px; background: #fbf6e9; color: #76541a; }
+.notice[data-tone="success"] { border-color: #c9e3d2; background: var(--success-bg); color: #246544; }
+.editbar { border-color: #ead8ad; border-radius: 10px; box-shadow: var(--shadow); }
+.edit-state[data-state="Dirty"] { color: #815b13; }
+.edit-state[data-state="Saving"] { color: var(--accent3); }
+.reorder-controls { background: #f1f7f5; border-color: #d4e4df; }
+.reorder-mode .toolbar { box-shadow: inset 0 -2px var(--accent); }
+
+dialog.modal:not(.windows-dialog) { border: 1px solid var(--line); border-radius: 10px; padding: 22px; box-shadow: 0 18px 60px #102e342e; }
+dialog::backdrop { background: #18343b70; backdrop-filter: blur(2px); }
+.modal-form { gap: 13px; }
+.modal-form h2, .issue-dialog > h2, .windows-dialog-head h2 { margin: 0 0 4px; color: var(--text); font-size: 16px; letter-spacing: -.02em; }
+.issue-dialog > p { margin: 0; color: var(--muted); line-height: 1.6; }
+.operation-dialog-text, .windows-updated, .window-exclusion-hint { color: var(--muted); line-height: 1.6; }
+.field { color: #42575c; font-size: 12px; }
+.field input, .field select, .window-exclusion-form input, .windows-dialog input { border-color: var(--line); border-radius: 7px; }
+.modal-actions { gap: 8px; margin-top: 10px; }
+.danger-button { border-color: var(--danger) !important; background: var(--danger) !important; }
+.windows-dialog-head { padding: 18px 22px; border-color: var(--line); }
+.windows-list { padding: 8px 20px; }
+.window-row { border-color: var(--line-light); }
+.window-app-group { border-color: var(--line); border-radius: 9px; }
+.window-app-head { background: #f5f8f7; border-color: var(--line-light); }
+.window-app-mark { background: var(--accent2); color: var(--accent3); }
+.window-count { background: #eaf0ee; color: #53676b; }
+.window-exclusions { border-color: var(--line); }
+.window-exclusion-row { border-color: var(--line); background: #f5f8f7; }
+
+.preview { background: #f0f4f3; box-shadow: -8px 0 24px #183b4510; }
+.preview-head { border-color: var(--line); }
+.preview-resizer { border-color: var(--line); background: #e7efed; }
+.viewer-toolbar, .annotation-toolbar, .pdf-search { background: #f8faf9; border-color: var(--line); }
+.viewer-toolbar button:hover:not(:disabled), .pdf-document-nav:hover:not(:disabled), .preview-actions .pdf-display-button:hover:not(:disabled) { border-color: #b8d6d0; background: var(--accent2); color: var(--accent3); }
+.viewer-toolbar .pdf-icon-button[aria-expanded="true"], .pdf-display-modes .pdf-display-button[aria-pressed="true"] { border-color: #b8d6d0; background: var(--accent2); color: var(--accent3); }
+.pdf-document-select, .pdf-search-input, .page-input { border-color: var(--line); border-radius: 7px; }
+.canvas-wrap { background: #e6edeb; }
+.canvas-wrap canvas { box-shadow: 0 4px 14px #183b4524, 0 18px 38px #183b4512; }
+.bookmark-panel { background: #fff; border-color: var(--line); }
+.bookmark-head { border-color: var(--line-light); }
+.bookmark-head strong { color: #344b50; }
+.bookmark-row-main:hover, .bookmark-row-main:focus-within { background: #f1f6f4; }
+.bookmark-jump { color: #344b50; }
+.bookmark-jump:hover, .bookmark-head .pdf-icon-button { color: var(--accent3); }
+.bookmark-row-main .bookmark-more-toggle:hover, .bookmark-row-main .bookmark-more-toggle[aria-expanded="true"] { border-color: #b8d6d0; background: var(--accent2); color: var(--accent3); }
+.bookmark-actions button { background: #f1f6f4; color: #344b50; }
+.bookmark-actions button:hover:not(:disabled) { background: var(--accent2); color: var(--accent3); }
+.pdf-state { border: 1px solid var(--line); border-radius: 9px; box-shadow: var(--shadow); }
+
+@media (max-width: 720px) {
+  .list-pane { padding: 16px 12px; }
+  .toolbar { gap: 10px; }
+  .toolbar-left { width: 100%; flex-wrap: wrap; }
+  .title-block { flex: 1 1 55%; }
+  .toolbar-auxiliary-actions { border: 0; }
+  .toolbar-edit-actions { min-width: 0; padding-left: 8px; }
+  .actions { display: flex; width: 100%; flex-wrap: wrap; }
+  .toolbar-primary-actions { flex: 1 0 100%; }
+  .toolbar-primary-actions .primary { width: 100%; }
+}
+@media (max-width: 540px) {
+  dialog.modal:not(.windows-dialog) { padding: 18px; }
+  .windows-dialog-head { padding: 14px; }
+  .windows-list { padding-inline: 12px; }
+  .window-exclusions { padding-inline: 12px; }
+  .pdf-display-modes { gap: 0; }
+  .toolbar-edit-actions { flex-basis: 100%; margin-left: 40px; padding-left: 0; border-left: 0; }
+}
+@container material-list (max-width: 540px) {
+  .material-row .status { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+@media (forced-colors: active) {
+  .group-button.selected, .material-row.pdf-current, .primary, .file-icon { border: 1px solid ButtonText; }
+  dialog.modal, .panel, .window-app-group { border: 1px solid CanvasText; }
+}
