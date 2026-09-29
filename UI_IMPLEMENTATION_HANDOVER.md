@@ -1888,3 +1888,24 @@ MeetDockのPDFレビュー表示状態保持の引継ぎです。作業基準は
 - ユーザーから確認結果の詳細が提供された場合、UI_IMPLEMENTATION_HANDOVER.md と必要ならこのプロンプトを正確に更新する。
 - 問題の報告がなければ、追加のコード変更や再検証を推測で始めない。
 - 実機UIの起動はAGENTS.mdに従いユーザーの明示許可がない限り行わない。作業開始時に git status --short を確認して既存変更を保持する。```
+
+### 2026-09-29 PDFプレビュー資料切替ショートカット
+
+- PDF本文にフォーカスしている間、`Alt+←` / `Alt+→` で前後のPDF資料へ切り替える処理を `src/view.js` に追加した。入力欄・ボタン・編集可能要素、ダイアログ、メニュー、パン／リサイズ中は処理しない。切替候補がない端では何もせず、WebViewの戻る／進む動作も抑止する。
+- 資料切替イベントと既存のページ番号・倍率保持、資料ごとの注釈・しおり保持は既存実装を利用し、変更していない。
+- `tests/view.test.mjs` に修飾キー、キーリピート、IME入力等の判定テストを追加。`node --test tests/view.test.mjs` は68件成功。資料ごとのページ・倍率保持を確認する `node --test --test-name-pattern="document switches and closing the preview preserve each PDF page and zoom" tests/pdf-view-adapter.test.mjs` は1件成功。`git diff --check` も成功。
+- 実機UI操作は未確認。未解決のコード課題はない。ユーザーが実機確認を希望した場合も、明示許可なしにアプリを起動しない。
+- 対象コード・テストは `src/view.js` と `tests/view.test.mjs`。この引継ぎ依頼に伴い本書を更新する。既存の `src-tauri/src/contracts.rs`、`src-tauri/src/launcher.rs`、`src-tauri/src/lib.rs` の変更は本件に含めない。
+
+#### 次チャット用引継ぎプロンプト
+
+```text
+MeetDockのPDFプレビュー資料切替ショートカット実装の引継ぎです。作業基準は C:\Users\wmasa\Documents\Rust\MeetDock。推奨モデル: gpt-6-luna / low。理由: ショートカット実装と対象テストは完了しており、追加対応があれば限定的な確認になるためです。Astraは使用しないでください。
+
+完了内容:
+- PDF本文にフォーカスして `Alt+←` / `Alt+→` を押すと前後のPDFへ切り替える。候補がない端では何もせず、WebViewの戻る／進む動作を抑止する。入力欄等の操作中やモーダル・メニュー表示中は反応しない。
+- ページ番号・倍率の資料別保持、および注釈・しおり保持の既存処理は変更していない。
+- `src/view.js`、`tests/view.test.mjs` を変更。`node --test tests/view.test.mjs` 68件、ページ・倍率保持の対象テスト1件、`git diff --check` は成功。
+
+実機UI操作は未確認。ユーザーから不具合報告があれば、最初に `git status --short` と対象差分を確認してから限定調査する。実機UIは明示許可なしに起動しない。既存の `src-tauri/src/contracts.rs`、`src-tauri/src/launcher.rs`、`src-tauri/src/lib.rs` の変更を本件へ混ぜない。追加依頼がなければ作業は完了として扱う。
+```

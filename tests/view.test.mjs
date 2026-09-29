@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm';
 import { createFocusSync } from '../src/focus-sync.js';
 import { accumulatePdfWheel, createPdfWheelState } from '../src/pdf-wheel.js';
 import { annotationSessionChange, commitAnnotations, createAnnotationHistory, createStroke, redoAnnotations, undoAnnotations } from '../src/pdf-annotations.js';
-import { batchButtonAction, batchSummary, displayPath, groupTreeRenderKey, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+import { batchButtonAction, batchSummary, displayPath, groupTreeRenderKey, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfDocumentKeyDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
 
 test('PDF annotation canvas follows the rendered page and stays transparent',()=>{
   assert.deepEqual(pdfOverlayBounds({offsetLeft:24,offsetTop:24,clientWidth:712,clientHeight:1007}),{left:24,top:24,width:712,height:1007});
@@ -638,6 +638,19 @@ test('groups and materials expose internal drag reorder affordances', () => {
   assert.ok(source.includes("reorderSaveTitle=el('h2','','並べ替えの変更を保存しますか？')"));
   assert.ok(source.includes("if(['Dirty','Conflict'].includes(model?.edit)){rememberDialog(reorderSaveDialog);reorderSaveDialog.showModal();reorderSaveConfirm.focus();return}endReorderMode()"));
   assert.ok(source.includes("if(action==='reorder-save-confirm'){emit('save');reorderSaveDialog.close();endReorderMode()}else if(action==='reorder-save-skip'){reorderSaveDialog.close();endReorderMode()}else if(action==='reorder-save-cancel')reorderSaveDialog.close()"));
+});
+
+test('PDF preview Alt+Left/Right switches documents only with an unmodified non-repeating chord', () => {
+  assert.equal(pdfDocumentKeyDirection({ key: 'ArrowLeft', altKey: true }), -1);
+  assert.equal(pdfDocumentKeyDirection({ key: 'ArrowRight', altKey: true }), 1);
+  for (const event of [
+    { key: 'ArrowLeft' }, { key: 'ArrowRight' }, { key: 'ArrowLeft', altKey: true, ctrlKey: true },
+    { key: 'ArrowRight', altKey: true, metaKey: true }, { key: 'ArrowLeft', altKey: true, shiftKey: true },
+    { key: 'ArrowRight', altKey: true, repeat: true }, { key: 'ArrowLeft', altKey: true, isComposing: true },
+    { key: 'ArrowRight', altKey: true, keyCode: 229 }, { key: 'PageDown', altKey: true },
+  ]) assert.equal(pdfDocumentKeyDirection(event), 0);
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.match(source, /documentDirection&&model\?\.pdf\.kind==='Viewing'\)\{e\.preventDefault\(\);const index=model\.pdf_candidates\.findIndex\(item=>item\.id===model\.pdf\.material_id\),target=model\.pdf_candidates\[index\+documentDirection\];if\(target\)emit\(documentDirection<0\?'pdfDocumentPrevious':'pdfDocumentNext'\)/);
 });
 
 test('reorder mode deletes material registration without confirmation',()=>{
