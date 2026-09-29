@@ -82,6 +82,8 @@ export class PdfViewAdapter {
   #destroying = Promise.resolve();
   #pageNumber = 1;
   #scale = 1;
+  #materialId = null;
+  #viewStates = new Map();
   #requestGeneration = null;
   #searchToken = 0;
   #searchQuery = '';
@@ -165,14 +167,17 @@ export class PdfViewAdapter {
     }
     if (token !== this.#generation) { await document.destroy?.(); return; }
     this.#document = document;
-    this.#pageNumber = 1;
-    this.#scale = 1;
+    this.#materialId = material_id;
+    const savedView = this.#viewStates.get(material_id);
+    this.#pageNumber = savedView ? Math.min(savedView.page, document.numPages) : 1;
+    this.#scale = savedView?.scale ?? 1;
     await this.#renderPage(token);
     return this.#snapshot(generation);
   }
 
   #snapshot(generation) {
     if (!this.#document || generation !== this.#requestGeneration) return null;
+    this.#viewStates.set(this.#materialId, { page: this.#pageNumber, scale: this.#scale });
     return Object.freeze({
       current_page: this.#pageNumber,
       total_pages: this.#document.numPages,

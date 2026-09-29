@@ -147,6 +147,25 @@ test('view snapshot starts at page 1 and 100%, follows navigation and zoom, fits
   assert.equal((await adapter.fit(432, { generation: 7 })).zoom_percent, 200);
 });
 
+test('document switches and closing the preview preserve each PDF page and zoom for the app session', async () => {
+  const pdfjs = {
+    GlobalWorkerOptions: {},
+    getDocument: ({ url }) => loading(document([], Promise.resolve(), url.endsWith('/m1') ? 4 : 2), []),
+  };
+  const adapter = new PdfViewAdapter({ canvas: canvas([]), pdfjs });
+  await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 1 });
+  await adapter.goToPage(3, { generation: 1 });
+  await adapter.zoomIn({ generation: 1 });
+
+  assert.deepEqual(await adapter.replace({ url: 'material://pdf/m2', material_id: 'm2', generation: 2 }), { current_page: 1, total_pages: 2, zoom_percent: 100, ...emptySearch });
+  await adapter.goToPage(2, { generation: 2 });
+  await adapter.zoomIn({ generation: 2 });
+  assert.deepEqual(await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 3 }), { current_page: 3, total_pages: 4, zoom_percent: 125, ...emptySearch });
+
+  await adapter.close();
+  assert.deepEqual(await adapter.replace({ url: 'material://pdf/m2', material_id: 'm2', generation: 4 }), { current_page: 2, total_pages: 2, zoom_percent: 125, ...emptySearch });
+});
+
 test('superseded generation cannot report view information for the replacement PDF', async () => {
   const adapter = new PdfViewAdapter({ canvas: canvas([]), pdfjs: { GlobalWorkerOptions: {}, getDocument: () => loading(document([], Promise.resolve()), []) } });
   await adapter.replace({ url: 'material://pdf/m1', material_id: 'm1', generation: 1 });
