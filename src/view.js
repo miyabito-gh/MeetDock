@@ -42,7 +42,7 @@ const svgIcon=paths=>{const svg=document.createElementNS('http://www.w3.org/2000
 const actionIcon=(action,cls,label,paths)=>{const n=button('',action,`row-action-button ${cls}`);n.title=label;n.setAttribute('aria-label',label);n.append(svgIcon(paths));return n};
 const pdfIconButton=(action,label,paths,cls='')=>{const n=button('',action,`pdf-icon-button ${cls}`.trim());n.title=label;n.setAttribute('aria-label',label);n.append(svgIcon(paths));return n};
 const lower=v=>String(v??'').toLocaleLowerCase('ja');
-export const displayPath=value=>{const path=String(value??'').replaceAll('/','\\');return path.slice(0,8).toLowerCase()==='\\\\?\\unc\\'?`\\\\${path.slice(8)}`:path.slice(0,4).toLowerCase()==='\\\\?\\'?path.slice(4):path};
+export const displayPath=value=>{const raw=String(value??'');if(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw))return raw;const path=raw.replaceAll('/','\\');return path.slice(0,8).toLowerCase()==='\\\\?\\unc\\'?`\\\\${path.slice(8)}`:path.slice(0,4).toLowerCase()==='\\\\?\\'?path.slice(4):path};
 const isPdf=m=>m.target_type==='file'&&/\.pdf$/i.test(m.path);
 export function materialIcon(m){
   if(m.target_type==='folder')return{label:'📁',kind:'folder'};

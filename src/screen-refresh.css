@@ -181,6 +181,12 @@ input::placeholder { color: var(--muted); }
 .group-button:hover, .group-row:hover { background: var(--hover); }
 .group-button.selected, .group-row.selected { background: var(--accent2); color: var(--accent3); box-shadow: inset 3px 0 var(--accent); }
 .group-button > svg, .group-disclosure, .group-more { color: var(--muted); }
+/* child groups: tree guide lines per ancestor level, no folder icon, quieter text */
+.group-row::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--group-depth, 0) * 18px); pointer-events: none; background: repeating-linear-gradient(to right, transparent 0 12px, var(--line-strong) 12px 13px, transparent 13px 18px); }
+.group-row:not(.root) .group-button > svg { display: none; }
+.group-row:not(.root) .group-button { color: var(--muted); }
+.group-row:not(.root):hover .group-button { color: var(--text-soft); }
+.group-row:not(.root).selected .group-button, .group-row:not(.root) .group-button.selected { color: var(--accent3); }
 .group-disclosure:hover:not(:disabled), .group-more:hover, .group-more:focus-visible { background: var(--hover); }
 .group-add { color: var(--accent3); border-radius: var(--radius-sm); }
 .group-add:hover { border-color: var(--line-strong); background: var(--accent2); }

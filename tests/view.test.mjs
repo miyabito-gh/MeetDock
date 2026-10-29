@@ -255,6 +255,8 @@ test('Windows extended paths are normalized for display', () => {
   assert.equal(displayPath('\\\\?\\C:\\資料\\folder'), 'C:\\資料\\folder');
   assert.equal(displayPath('\\\\?\\unc\\server\\share\\folder'), '\\\\server\\share\\folder');
   assert.equal(displayPath('D:/資料/folder'), 'D:\\資料\\folder');
+  assert.equal(displayPath('https://www.youtube.com/watch?v=abc'), 'https://www.youtube.com/watch?v=abc');
+  assert.equal(displayPath('HTTP://example.com/a/b'), 'HTTP://example.com/a/b');
   const longUnc = `\\\\?\\UNC\\server\\share\\${'資料'.repeat(8000)}`;
   assert.equal(displayPath(longUnc), `\\\\server\\share\\${'資料'.repeat(8000)}`);
 });
