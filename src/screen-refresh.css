@@ -156,6 +156,14 @@ input::placeholder { color: var(--muted); }
 .toolbar-menu-heading:not(:first-child) { border-color: var(--line-light); }
 .menu-item.danger, .danger { color: var(--danger); }
 
+@media (min-width: 721px) {
+  .toolbar { flex-wrap: wrap; row-gap: 8px; }
+  .toolbar-left { flex: 1 1 240px; min-width: min(240px, 100%); }
+  .actions { flex: 0 1 auto; justify-content: flex-end; }
+}
+.title-block { min-width: 0; }
+.toolbar h1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* material list */
 .list-pane { padding: 24px clamp(18px, 3vw, 36px); }
 .role-header { margin-top: 24px; padding-bottom: 8px; border-color: var(--line); }
@@ -273,6 +281,11 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 .pdf-outline-empty { color: var(--muted); }
 .pdf-state { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: none; }
 .marker-badge { border-radius: 999px; }
+
+@media (prefers-color-scheme: dark) {
+  button.danger:not(.danger-button) { border-color: #f6a79d; background: var(--danger-bg); color: #f6a79d; }
+  button.danger:not(.danger-button):hover:not(:disabled) { background: #55312d; }
+}
 
 /* narrow layouts */
 @media (max-width: 720px) {
