@@ -266,11 +266,51 @@ export function createAppView(host){
     for(const page of pdfViewer.querySelectorAll('.page')){const rect=page.getBoundingClientRect();if(rect.width>0&&rect.height>0&&rect.bottom>top)return{page,x:left-rect.left,y:top-rect.top}}
     return null;
   }
+  // Fullscreen: reveal the hidden PDF chrome as an overlay when the pointer reaches the top edge.
+  let chromeVisible=false,chromeTimer=0,chromeListening=false;
+  const chromeEls=()=>[ph,ptools,...(pdfSearchOpen?[searchTools]:[])];
+  const chromeBusy=()=>chromeEls().some(c=>c.matches(':hover')||c.contains(document.activeElement))||!menu.hidden||Boolean(document.querySelector('dialog[open]'));
+  function showChrome(){
+    if(drawing||panning)return;
+    clearTimeout(chromeTimer);chromeTimer=0;
+    if(chromeVisible)return;
+    chromeVisible=true;host.classList.add('pdf-chrome-visible');
+    for(const c of [ph,ptools,searchTools])c.inert=false;
+    const head=ph.offsetHeight,tools=ptools.offsetHeight;
+    host.style.setProperty('--chrome-top-1',`${head}px`);host.style.setProperty('--chrome-top-2',`${head+tools}px`);
+  }
+  function hideChrome(){
+    clearTimeout(chromeTimer);chromeTimer=0;
+    if(!chromeVisible)return;
+    chromeVisible=false;host.classList.remove('pdf-chrome-visible');
+    for(const c of [ph,ptools,searchTools])c.inert=true;
+  }
+  function scheduleChromeHide(){
+    if(!chromeVisible||chromeTimer)return;
+    chromeTimer=setTimeout(()=>{chromeTimer=0;if(chromeBusy())scheduleChromeHide();else hideChrome()},600);
+  }
+  function onChromePointerMove(e){
+    if(e.buttons)return;
+    if(e.clientY-preview.getBoundingClientRect().top<=8){showChrome();return}
+    if(!chromeVisible)return;
+    if(chromeEls().some(c=>c.contains(e.target))){clearTimeout(chromeTimer);chromeTimer=0}else scheduleChromeHide();
+  }
+  const onChromePointerLeave=()=>scheduleChromeHide();
+  const onChromeFocusOut=()=>scheduleChromeHide();
+  function setChromeReveal(active){
+    if(active===chromeListening)return;
+    chromeListening=active;
+    const method=active?'addEventListener':'removeEventListener';
+    preview[method]('pointermove',onChromePointerMove);preview[method]('pointerleave',onChromePointerLeave);preview[method]('focusout',onChromeFocusOut);
+    if(!active)hideChrome();
+  }
   function updatePdfContentOnly(next,position){
     const active=Boolean(next.layout.pdf_maximized&&next.pdf.kind==='Viewing'&&!next.layout.pdf_fullscreen_recovery);
     if(active===pdfContentOnly)return;
     pdfContentOnly=active;host.classList.toggle('pdf-content-only',active);
+    if(!active)setChromeReveal(false);
     for(const control of [ph,ptools,searchTools,annotationTools,bookmarkPanel,menu])control.inert=active;
+    if(active)setChromeReveal(true);
     if(active){closeMenu();moreActions.open=false;drawing=null;panning=null;spacePan=false;wrap.classList.remove('panning')}
     if(position?.page.isConnected){const rect=position.page.getBoundingClientRect(),bounds=wrap.getBoundingClientRect();wrap.scrollLeft+=rect.left-bounds.left-wrap.clientLeft+position.x;wrap.scrollTop+=rect.top-bounds.top-wrap.clientTop+position.y}
     if(active)wrap.focus({preventScroll:true});else{const control=next.pdf.kind==='Viewing'?pdfWindowButton:pdfPaneButton;(control.disabled?wrap:control).focus({preventScroll:true})}

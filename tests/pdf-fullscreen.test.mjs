@@ -11,7 +11,7 @@ function setup(){
   const page={isConnected:true,getBoundingClientRect:()=>({left:(fullscreen?0:30)-wrap.scrollLeft,top:(fullscreen?0:30)-wrap.scrollTop,bottom:(fullscreen?0:30)-wrap.scrollTop+1200,width:800,height:1200})};
   const wrap={clientWidth:600,clientHeight:400,clientLeft:0,clientTop:0,scrollTop:300,scrollLeft:90,classList:{remove(){}},getBoundingClientRect:()=>({left:0,top:0}),focus:()=>focus.push('body')};
   const controls=Array.from({length:6},()=>({hidden:false,inert:false})),[ph,ptools,searchTools,annotationTools,bookmarkPanel,menu]=controls;
-  const scope={pdfContentOnly:false,host:{classList:{toggle(name,value){if(value)classes.add(name);else classes.delete(name);fullscreen=value}}},wrap,pdfViewer:{querySelectorAll:()=>[page]},ph,ptools,searchTools,annotationTools,bookmarkPanel,menu,moreActions:{open:true},drawing:{},panning:{},spacePan:true,markerTool:'marker',closeMenu(){menu.hidden=true},pdfWindowButton:{disabled:false,focus:()=>focus.push('window')},pdfPaneButton:{disabled:false,focus:()=>focus.push('pane')}};
+  const scope={pdfContentOnly:false,clearTimeout,setTimeout,preview:{addEventListener(){},removeEventListener(){},getBoundingClientRect:()=>({top:0})},host:{classList:{toggle(name,value){if(value)classes.add(name);else classes.delete(name);fullscreen=value}}},wrap,pdfViewer:{querySelectorAll:()=>[page]},ph,ptools,searchTools,annotationTools,bookmarkPanel,menu,moreActions:{open:true},drawing:{},panning:{},spacePan:true,markerTool:'marker',closeMenu(){menu.hidden=true},pdfWindowButton:{disabled:false,focus:()=>focus.push('window')},pdfPaneButton:{disabled:false,focus:()=>focus.push('pane')}};
   runInNewContext(helper,scope);return {scope,classes,focus,page,wrap,controls};
 }
 
@@ -81,4 +81,13 @@ test('content-only CSS fills the viewport and has no hover-revealing menus while
   assert.match(fullscreen,/\.preview\.maximized\s*\{[^}]*inset:\s*0;[^}]*border:\s*0;/s);
   assert.match(fullscreen,/\.canvas-wrap\s*\{\s*padding:\s*0;/);assert.doesNotMatch(fullscreen,/:hover/);
   assert.match(css,/\.pdf-internal-link > a\s*\{\s*pointer-events:\s*auto !important/);
+});
+
+test('fullscreen top-edge reveal is overlaid, timed, and torn down on exit', () => {
+  const view = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/screen-refresh.css', import.meta.url), 'utf8');
+  for (const token of ['setChromeReveal(active)', 'e.clientY-preview.getBoundingClientRect().top<=8', "setTimeout(()=>{chromeTimer=0;if(chromeBusy())", ',600)', 'if(drawing||panning)return', "document.querySelector('dialog[open]')", "removeEventListener", 'if(!active)setChromeReveal(false)']) assert.ok(view.includes(token), token);
+  assert.match(css, /\.pdf-chrome-visible \.preview > \.viewer-toolbar \{ display: flex !important; top: var\(--chrome-top-1/);
+  assert.match(css, /position: absolute; left: 0; right: 0; z-index: 30/);
+  assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.app-shell\.pdf-content-only\.pdf-chrome-visible/);
 });

@@ -181,9 +181,10 @@ input::placeholder { color: var(--muted); }
 .group-button:hover, .group-row:hover { background: var(--hover); }
 .group-button.selected, .group-row.selected { background: var(--accent2); color: var(--accent3); box-shadow: inset 3px 0 var(--accent); }
 .group-button > svg, .group-disclosure, .group-more { color: var(--muted); }
-/* child groups: tree guide lines per ancestor level, no folder icon, quieter text */
+/* group rows: tree guide lines per ancestor level, no folder icon at any level (child text quieter) */
 .group-row::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--group-depth, 0) * 18px); pointer-events: none; background: repeating-linear-gradient(to right, transparent 0 12px, var(--line-strong) 12px 13px, transparent 13px 18px); }
-.group-row:not(.root) .group-button > svg { display: none; }
+.group-row .group-button > svg { display: none; }
+.group-row .group-button { padding-left: 8px; }
 .group-row:not(.root) .group-button { color: var(--muted); }
 .group-row:not(.root):hover .group-button { color: var(--text-soft); }
 .group-row:not(.root).selected .group-button, .group-row:not(.root) .group-button.selected { color: var(--accent3); }
@@ -396,4 +397,19 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
   dialog.modal, .panel, .window-app-group, .context-menu, .toolbar-more-panel, .notice { border: 1px solid CanvasText; }
   button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 3px solid Highlight; }
   .danger-button { border: 2px solid ButtonText !important; }
+}
+
+/* PDF fullscreen: top-edge reveal of the hidden chrome, overlaid so the document never shifts. */
+.app-shell.pdf-content-only.pdf-chrome-visible .preview > .preview-head,
+.app-shell.pdf-content-only.pdf-chrome-visible .preview > .viewer-toolbar,
+.app-shell.pdf-content-only.pdf-chrome-visible .preview > .pdf-search:not([hidden]) {
+  position: absolute; left: 0; right: 0; z-index: 30; box-shadow: var(--shadow);
+  animation: pdf-chrome-in .16s ease-out;
+}
+.app-shell.pdf-content-only.pdf-chrome-visible .preview > .preview-head { display: flex !important; top: 0; }
+.app-shell.pdf-content-only.pdf-chrome-visible .preview > .viewer-toolbar { display: flex !important; top: var(--chrome-top-1, 44px); }
+.app-shell.pdf-content-only.pdf-chrome-visible .preview > .pdf-search:not([hidden]) { display: grid !important; top: var(--chrome-top-2, 78px); }
+@keyframes pdf-chrome-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .app-shell.pdf-content-only.pdf-chrome-visible .preview > * { animation: none !important; }
 }
