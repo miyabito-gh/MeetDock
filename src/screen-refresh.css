@@ -413,3 +413,12 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 @media (prefers-reduced-motion: reduce) {
   .app-shell.pdf-content-only.pdf-chrome-visible .preview > * { animation: none !important; }
 }
+
+/* PDF fullscreen: marker tools and bookmark rail opened from the revealed toolbar overlay the document too. */
+.app-shell.pdf-content-only.pdf-chrome-visible .preview > .annotation-toolbar:not([hidden]) {
+  display: flex !important; position: absolute; left: 0; right: 0; top: var(--chrome-top-3, 78px); z-index: 30; box-shadow: var(--shadow);
+}
+.app-shell.pdf-content-only.pdf-chrome-visible .bookmark-panel:not([hidden]) {
+  display: flex !important; position: absolute; left: 0; top: var(--chrome-top-4, 112px); bottom: 0; width: min(220px, 42%); z-index: 29;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); overflow: hidden;
+}

@@ -91,3 +91,11 @@ test('fullscreen top-edge reveal is overlaid, timed, and torn down on exit', () 
   assert.match(css, /position: absolute; left: 0; right: 0; z-index: 30/);
   assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.app-shell\.pdf-content-only\.pdf-chrome-visible/);
 });
+
+test('fullscreen marker tools and bookmark rail overlay the document and keep the chrome open', () => {
+  const view = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/screen-refresh.css', import.meta.url), 'utf8');
+  for (const token of ['!annotationTools.hidden||!bookmarkPanel.hidden||Boolean(document.querySelector', 'function layoutChrome()', '--chrome-top-3', '--chrome-top-4', 'for(const c of [ph,ptools,searchTools,annotationTools,bookmarkPanel])c.inert=false', 'for(const c of [ph,ptools,searchTools,annotationTools,bookmarkPanel])c.inert=true']) assert.ok(view.includes(token), token);
+  assert.match(css, /\.pdf-chrome-visible \.preview > \.annotation-toolbar:not\(\[hidden\]\) \{\s*display: flex !important; position: absolute;[^}]*top: var\(--chrome-top-3/);
+  assert.match(css, /\.pdf-chrome-visible \.bookmark-panel:not\(\[hidden\]\) \{\s*display: flex !important; position: absolute;[^}]*top: var\(--chrome-top-4[^}]*bottom: 0;[^}]*background: var\(--surface\)/);
+});
