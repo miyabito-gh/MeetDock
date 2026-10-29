@@ -303,11 +303,18 @@ export function createAppView(host){
   }
   const onChromePointerLeave=()=>scheduleChromeHide();
   const onChromeFocusOut=()=>scheduleChromeHide();
+  // Keyboard users cannot hover: Tab from the document reveals the chrome and moves focus into it.
+  function onChromeKeyDown(e){
+    if(e.key!=='Tab'||chromeVisible||e.defaultPrevented||drawing||panning)return;
+    showChrome();
+    const items=[...ph.querySelectorAll('button:not(:disabled),select,input')],target=e.shiftKey?items.at(-1):items[0];
+    if(target){e.preventDefault();target.focus()}
+  }
   function setChromeReveal(active){
     if(active===chromeListening)return;
     chromeListening=active;
     const method=active?'addEventListener':'removeEventListener';
-    preview[method]('pointermove',onChromePointerMove);preview[method]('pointerleave',onChromePointerLeave);preview[method]('focusout',onChromeFocusOut);
+    preview[method]('pointermove',onChromePointerMove);preview[method]('pointerleave',onChromePointerLeave);preview[method]('focusout',onChromeFocusOut);preview[method]('keydown',onChromeKeyDown);
     if(!active)hideChrome();
   }
   function updatePdfContentOnly(next,position){

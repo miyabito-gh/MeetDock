@@ -100,3 +100,8 @@ test('fullscreen marker tools and bookmark rail overlay the document and keep th
   assert.match(css, /\.pdf-chrome-visible \.preview > \.annotation-toolbar:not\(\[hidden\]\) \{\s*display: flex !important; position: absolute;[^}]*top: var\(--chrome-top-3/);
   assert.match(css, /\.pdf-chrome-visible \.bookmark-panel:not\(\[hidden\]\) \{\s*display: flex !important; position: absolute;[^}]*top: var\(--chrome-top-4[^}]*bottom: 0;[^}]*background: var\(--surface\)/);
 });
+
+test('fullscreen chrome is reachable by keyboard and torn down with its listeners', () => {
+  const view = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  for (const token of ["function onChromeKeyDown(e)", "e.key!=='Tab'||chromeVisible", "preview[method]('keydown',onChromeKeyDown)", 'target.focus()']) assert.ok(view.includes(token), token);
+});
