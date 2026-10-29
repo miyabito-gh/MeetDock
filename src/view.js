@@ -149,7 +149,7 @@ export function createAppView(host){
       if(!width||!height)continue;
       let overlay=page.querySelector('.annotation-overlay');
       if(!overlay){overlay=el('canvas','annotation-overlay');overlay.setAttribute('aria-hidden','true');page.append(overlay);bindAnnotationOverlay(overlay,pageNumber)}
-      overlay.hidden=model?.pdf?.kind!=='Viewing';overlay.classList.toggle('drawing',Boolean(markerTool)&&!spacePan&&!handTool&&!(model?.layout?.pdf_maximized&&model?.pdf?.kind==='Viewing'&&!model?.layout?.pdf_fullscreen_recovery));
+      overlay.hidden=model?.pdf?.kind!=='Viewing';overlay.classList.toggle('drawing',Boolean(markerTool)&&!spacePan&&!handTool);
       overlay.width=Math.ceil(width);overlay.height=Math.ceil(height);overlay.style.width=`${width}px`;overlay.style.height=`${height}px`;
       const ctx=overlay.getContext('2d');ctx.clearRect(0,0,width,height);ctx.lineCap='round';ctx.lineJoin='round';
       for(const stroke of annotationHistory.present)if(stroke.page===pageNumber){ctx.beginPath();ctx.strokeStyle=colors[stroke.color];ctx.lineWidth=Math.max(2,MARKER_WIDTHS[stroke.width]*width);stroke.points.forEach((point,index)=>index?ctx.lineTo(point.x*width,point.y*height):ctx.moveTo(point.x*width,point.y*height));ctx.stroke()}
@@ -228,7 +228,7 @@ export function createAppView(host){
   function bindAnnotationOverlay(overlay,pageNumber){
     const overlayPoint=e=>{const rect=overlay.getBoundingClientRect();return{x:Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width)),y:Math.max(0,Math.min(1,(e.clientY-rect.top)/rect.height))}};
     overlay.addEventListener('pointerdown',e=>{
-      if(!markerTool||spacePan||handTool||model?.pdf.kind!=='Viewing'||e.button!==0||(model?.layout?.pdf_maximized&&model?.pdf?.kind==='Viewing'&&!model?.layout?.pdf_fullscreen_recovery))return;
+      if(!markerTool||spacePan||handTool||model?.pdf.kind!=='Viewing'||e.button!==0)return;
       wrap.focus({preventScroll:true});
       const point=overlayPoint(e);e.stopPropagation();overlay.setPointerCapture?.(e.pointerId);
       if(markerTool==='eraser'){annotationHistory=commitAnnotations(annotationHistory,eraseAt(annotationHistory.present,pageNumber,point,.018));persistSidecar();updateAnnotations(model)}

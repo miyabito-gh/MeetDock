@@ -60,7 +60,7 @@ test('fullscreen blocks search/save/context menu shortcuts and normal window mod
   h.scope.model.layout.pdf_maximized=false;h.press('f',{ctrlKey:true});assert.deepEqual(h.searches,[true]);
 });
 
-test('right-click menus and marker pointer editing stay inactive in content-only fullscreen',()=>{
+test('right-click menus stay inactive and marker editing works in content-only fullscreen',()=>{
   let contextmenu;const model={...state(),pdf:{kind:'Viewing',material_id:'m1',generation:2}};
   const contextLine=source.slice(source.indexOf("  host.addEventListener('contextmenu'")).split('\n')[0];
   runInNewContext(contextLine,{model,host:{addEventListener:(name,fn)=>contextmenu=fn}});
@@ -70,8 +70,9 @@ test('right-click menus and marker pointer editing stay inactive in content-only
   const scope={model,markerTool:'marker',spacePan:false,handTool:false,drawing:null,wrap:{focus(){}},overlay};
   runInNewContext(source.slice(start,end),scope);scope.bindAnnotationOverlay(overlay,1);
   const pointer={button:0,pointerId:1,clientX:20,clientY:30,stopPropagation(){},preventDefault(){}};
-  handlers.pointerdown(pointer);assert.equal(scope.drawing,null);
-  model.layout.pdf_maximized=false;handlers.pointerdown(pointer);assert.equal(scope.drawing.page,1);
+  handlers.pointerdown(pointer);assert.equal(scope.drawing.page,1);
+  scope.drawing=null;scope.markerTool=null;handlers.pointerdown(pointer);assert.equal(scope.drawing,null);
+  scope.markerTool='marker';scope.handTool=true;handlers.pointerdown(pointer);assert.equal(scope.drawing,null);
 });
 
 test('content-only CSS fills the viewport and has no hover-revealing menus while internal links remain enabled',()=>{
@@ -79,7 +80,7 @@ test('content-only CSS fills the viewport and has no hover-revealing menus while
   const fullscreen=css.slice(css.indexOf('/* Native PDF fullscreen'));
   assert.match(fullscreen,/\.preview > :not\(\.pdf-viewer-body\)/);assert.match(fullscreen,/\.bookmark-panel/);assert.match(fullscreen,/display:\s*none !important/);
   assert.match(fullscreen,/\.preview\.maximized\s*\{[^}]*inset:\s*0;[^}]*border:\s*0;/s);
-  assert.match(fullscreen,/\.canvas-wrap\s*\{\s*padding:\s*0;/);assert.doesNotMatch(fullscreen,/:hover/);
+  assert.match(fullscreen,/\.canvas-wrap\s*\{\s*padding:\s*0;/);assert.doesNotMatch(fullscreen,/annotation-overlay\s*\{[^}]*pointer-events/);assert.doesNotMatch(fullscreen,/:hover/);
   assert.match(css,/\.pdf-internal-link > a\s*\{\s*pointer-events:\s*auto !important/);
 });
 
