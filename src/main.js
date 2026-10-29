@@ -1,3 +1,4 @@
+import { applyTheme, getTheme } from './theme.js';
 import { invoke } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { createIpcAdapter } from './ipc-adapter.js';
@@ -13,6 +14,7 @@ import './mock-styles.css';
 import './visibility.css';
 import './screen-refresh.css';
 
+applyTheme(getTheme());
 const view = createAppView(document.querySelector('#app'));
 const pdf = createProductionPdfViewAdapter({
   container: view.pdfContainer, viewer: view.pdfViewer,

@@ -54,7 +54,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #262624;
     --surface: #30302e;
     --surface-2: #2b2a28;
@@ -92,6 +92,46 @@
     --shadow: 0 1px 2px #00000040, 0 6px 18px #00000040;
     --shadow-modal: 0 12px 40px #00000099;
   }
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] {
+color-scheme: dark;
+  --bg: #262624;
+  --surface: #30302e;
+  --surface-2: #2b2a28;
+  --sidebar: #1f1e1d;
+  --hover: #3a3936;
+  --canvas: #1c1b1a;
+  --scrim: #000000a6;
+  --line: #3d3c38;
+  --line-light: #34332f;
+  --line-strong: #4d4b45;
+  --text: #f0eee6;
+  --text-soft: #d6d3c8;
+  --muted: #a8a69c;
+  --accent: #d97757;
+  --accent-fill: #c96442;
+  --accent-hover: #d97757;
+  --accent2: #43302a;
+  --accent3: #efa98c;
+  --success: #7fc193;
+  --success-bg: #26382c;
+  --danger: #ee8378;
+  --danger-hover: #f09a90;
+  --danger-bg: #432825;
+  --warn: #e6cd86;
+  --warn-bg: #3b3322;
+  --warn-line: #5b4d2c;
+  --main: #e0b66a;
+  --main-bg: #3d3321;
+  --kind-green: #7fc193;
+  --kind-blue: #8fb8e6;
+  --kind-red: #ee8378;
+  --kind-amber: #e0b66a;
+  --kind-orange: #f0a070;
+  --kind-purple: #b9a2e0;
+  --shadow: 0 1px 2px #00000040, 0 6px 18px #00000040;
+  --shadow-modal: 0 12px 40px #00000099;
 }
 
 /* base */
@@ -288,9 +328,13 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 .marker-badge { border-radius: 999px; }
 
 @media (prefers-color-scheme: dark) {
-  button.danger:not(.danger-button) { border-color: #f6a79d; background: var(--danger-bg); color: #f6a79d; }
-  button.danger:not(.danger-button):hover:not(:disabled) { background: #55312d; }
+  :root:not([data-theme="light"]) button.danger:not(.danger-button) { border-color: #f6a79d; background: var(--danger-bg); color: #f6a79d; }
+  :root:not([data-theme="light"]) button.danger:not(.danger-button):hover:not(:disabled) { background: #55312d; }
 }
+:root[data-theme="dark"] button.danger:not(.danger-button) { border-color: #f6a79d; background: var(--danger-bg); color: #f6a79d; }
+:root[data-theme="dark"] button.danger:not(.danger-button):hover:not(:disabled) { background: #55312d; }
+.toolbar-theme-option[aria-checked="true"]::before { content: "¹3"; margin-right: 6px; color: var(--accent3); }
+.toolbar-theme-option[aria-checked="false"]::before { content: ""; display: inline-block; width: 1em; margin-right: 6px; }
 
 /* narrow layouts */
 @media (max-width: 720px) {
