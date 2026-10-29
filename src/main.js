@@ -14,7 +14,12 @@ import './visibility.css';
 import './screen-refresh.css';
 
 const view = createAppView(document.querySelector('#app'));
-const pdf = createProductionPdfViewAdapter({ canvas: view.canvas, requestPassword: request => view.requestPassword(request) });
+const pdf = createProductionPdfViewAdapter({
+  container: view.pdfContainer, viewer: view.pdfViewer,
+  requestPassword: request => view.requestPassword(request),
+  onViewChanged: event => root?.dispatch({ type: Event.PdfViewChanged, ...event }),
+  onLayoutChanged: () => view.refreshPdfLayout(),
+});
 const services = createServices(createIpcAdapter(invoke), pdf, { close: async () => getCurrentWindow().destroy() }, { set: value => getCurrentWindow().setFullscreen(value) });
 let root;
 const presenter = createPresenter(view, event => root.dispatch(event));

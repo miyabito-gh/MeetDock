@@ -91,10 +91,19 @@ export class PdfViewAdapter {
   #searchIndex = -1;
   #pageText = '';
   #pageTextNumber = null;
+  #viewerPort;
+  #onViewChanged;
+  #viewerReady = false;
+  #outline = null;
+  #outlineStatus = null;
+  #outlineDestinations = new Map();
 
-  constructor({ canvas, requestPassword = async () => null, resolveUrl = url => url, pdfjs }) {
-    if (!canvas?.getContext || typeof requestPassword !== 'function' || typeof resolveUrl !== 'function' || !pdfjs?.getDocument) throw new TypeError('invalid PDF adapter ports');
+  constructor({ canvas, viewerPort = null, onViewChanged = () => {}, onLayoutChanged = () => {}, requestPassword = async () => null, resolveUrl = url => url, pdfjs }) {
+    if ((!viewerPort && !canvas?.getContext) || typeof requestPassword !== 'function' || typeof resolveUrl !== 'function' || !pdfjs?.getDocument) throw new TypeError('invalid PDF adapter ports');
     this.#canvas = canvas;
+    this.#viewerPort = viewerPort;
+    this.#onViewChanged = onViewChanged;
+    viewerPort?.listen(change => this.#viewerChanged(change), onLayoutChanged);
     this.#requestPassword = requestPassword;
     this.#resolveUrl = resolveUrl;
     this.#pdfjs = pdfjs;
@@ -102,12 +111,20 @@ export class PdfViewAdapter {
   }
 
   async #teardown() {
+    if (this.#viewerReady && this.#document) {
+      const viewport = this.#viewerPort?.captureView?.();
+      if (viewport) this.#viewStates.set(this.#materialId, { page: viewport.page, scale: viewport.scale, viewport });
+    }
+    this.#viewerReady = false;
+    this.#outline = null;
+    this.#outlineStatus = null;
+    this.#outlineDestinations.clear();
     const render = this.#renderTask;
     this.#renderTask = null;
     render?.cancel?.();
     const token = ++this.#generation;
-    this.#canvas.width = 0;
-    this.#canvas.height = 0;
+    await this.#viewerPort?.setDocument(null);
+    if (this.#canvas) { this.#canvas.width = 0; this.#canvas.height = 0; }
     const document = this.#document;
     this.#document = null;
     const loading = this.#loadingTask;
@@ -171,21 +188,58 @@ export class PdfViewAdapter {
     const savedView = this.#viewStates.get(material_id);
     this.#pageNumber = savedView ? Math.min(savedView.page, document.numPages) : 1;
     this.#scale = savedView?.scale ?? 1;
+    if (this.#viewerPort) {
+      try { await this.#viewerPort.setDocument(document); }
+      catch { if (token !== this.#generation) return; throw pdfError('PDF_CORRUPT'); }
+      if (token !== this.#generation) return;
+      this.#viewerPort.setScale(this.#scale);
+      const restored = savedView?.viewport && this.#viewerPort.restoreView
+        ? await this.#viewerPort.restoreView({ ...savedView.viewport, page: this.#pageNumber }) : null;
+      if (token !== this.#generation) return;
+      if (restored) { this.#pageNumber = restored.page; this.#scale = restored.scale; }
+      else this.#viewerPort.showPage(this.#pageNumber);
+      this.#viewerReady = true;
+    }
+    if (typeof document.getOutline === 'function') {
+      let outline;
+      try { outline = await document.getOutline(); }
+      catch { outline = null; if (token === this.#generation) this.#outlineStatus = 'unavailable'; }
+      if (token !== this.#generation) return;
+      let index = 0;
+      const seen = new Set();
+      const tree = (items, depth = 0) => {
+        if (!Array.isArray(items) || depth > 32) return [];
+        const result = [];
+        for (const item of items) {
+          if (!item || typeof item !== 'object' || seen.has(item) || index >= 10000) continue;
+          seen.add(item);
+          const id = `${generation}:${++index}`;
+          const dest = item.dest;
+          const navigable = !item.url && !item.action && ((typeof dest === 'string' && dest.length > 0) || (Array.isArray(dest) && (typeof this.#pdfjs.isValidExplicitDest === 'function' ? this.#pdfjs.isValidExplicitDest(dest) : dest.length >= 2 && typeof dest[1]?.name === 'string')));
+          if (navigable) this.#outlineDestinations.set(id, dest);
+          result.push({ id, title: typeof item.title === 'string' ? item.title : '', navigable, children: tree(item.items, depth + 1) });
+        }
+        return result;
+      };
+      this.#outline = tree(outline);
+      this.#outlineStatus ??= this.#outline.length ? 'ready' : 'empty';
+    }
     await this.#renderPage(token);
     return this.#snapshot(generation);
   }
 
   #snapshot(generation) {
     if (!this.#document || generation !== this.#requestGeneration) return null;
-    this.#viewStates.set(this.#materialId, { page: this.#pageNumber, scale: this.#scale });
+    this.#viewStates.set(this.#materialId, { ...this.#viewStates.get(this.#materialId), page: this.#pageNumber, scale: this.#scale });
     return Object.freeze({
+      ...(this.#outline !== null ? { outline: this.#outline, outline_status: this.#outlineStatus } : {}),
       current_page: this.#pageNumber,
       total_pages: this.#document.numPages,
       zoom_percent: Math.round(this.#scale * 100),
       search_query: this.#searchQuery,
       search_index: this.#searchIndex < 0 ? 0 : this.#searchIndex + 1,
       search_total: this.#searchMatches.length,
-      page_text: this.#pageText,
+      page_text: this.#pageTextNumber === this.#pageNumber ? this.#pageText : '',
     });
   }
 
@@ -197,12 +251,14 @@ export class PdfViewAdapter {
       const pageNumber = this.#pageNumber;
       const page = await document.getPage(pageNumber);
       if (token !== this.#generation || pageNumber !== this.#pageNumber) return;
-      const viewport = page.getViewport({ scale: this.#scale });
-      this.#canvas.width = Math.ceil(viewport.width);
-      this.#canvas.height = Math.ceil(viewport.height);
-      const render = page.render({ canvasContext: this.#canvas.getContext('2d'), viewport });
-      this.#renderTask = render;
-      await render.promise;
+      if (!this.#viewerPort) {
+        const viewport = page.getViewport({ scale: this.#scale });
+        this.#canvas.width = Math.ceil(viewport.width);
+        this.#canvas.height = Math.ceil(viewport.height);
+        const render = page.render({ canvasContext: this.#canvas.getContext('2d'), viewport });
+        this.#renderTask = render;
+        await render.promise;
+      }
       if (token !== this.#generation || pageNumber !== this.#pageNumber) return;
       if (this.#pageTextNumber !== pageNumber) {
         let content;
@@ -217,19 +273,64 @@ export class PdfViewAdapter {
     }
   }
 
-  async previous({ generation } = {}) { if (generation !== this.#requestGeneration) return null; if (this.#document && this.#pageNumber > 1) { this.#pageNumber--; await this.#renderPage(); } return this.#snapshot(generation); }
-  async next({ generation } = {}) { if (generation !== this.#requestGeneration) return null; if (this.#document && this.#pageNumber < this.#document.numPages) { this.#pageNumber++; await this.#renderPage(); } return this.#snapshot(generation); }
+  async #viewerChanged({ page, scale }) {
+    if (!this.#viewerReady || !this.#document || !Number.isSafeInteger(page) || !Number.isFinite(scale)) return;
+    const token = this.#generation, generation = this.#requestGeneration, material_id = this.#materialId;
+    this.#pageNumber = page;
+    this.#scale = scale;
+    // Keep controls and bookmark actions in sync immediately, then update accessible reading text.
+    this.#onViewChanged({ material_id, generation, view: this.#snapshot(generation) });
+    try { await this.#renderPage(token); } catch { return; }
+    if (token === this.#generation && generation === this.#requestGeneration && page === this.#pageNumber)
+      this.#onViewChanged({ material_id, generation, view: this.#snapshot(generation) });
+  }
+
+  #showPage() { this.#viewerPort?.showPage(this.#pageNumber); }
+
+  async previous({ generation } = {}) { if (generation !== this.#requestGeneration) return null; if (this.#document && this.#pageNumber > 1) { this.#pageNumber--; this.#showPage(); await this.#renderPage(); } return this.#snapshot(generation); }
+  async next({ generation } = {}) { if (generation !== this.#requestGeneration) return null; if (this.#document && this.#pageNumber < this.#document.numPages) { this.#pageNumber++; this.#showPage(); await this.#renderPage(); } return this.#snapshot(generation); }
   async goToPage(pageNumber, { generation } = {}) {
     if (generation !== this.#requestGeneration || !Number.isSafeInteger(pageNumber) || !this.#document || pageNumber < 1 || pageNumber > this.#document.numPages) return null;
-    if (pageNumber !== this.#pageNumber) { this.#pageNumber = pageNumber; await this.#renderPage(); }
+    this.#pageNumber = pageNumber; this.#showPage(); await this.#renderPage();
     return this.#snapshot(generation);
   }
-  async zoomIn({ generation } = {}) { if (generation !== this.#requestGeneration) return null; if (this.#document) { this.#scale = Math.min(3, this.#scale + .25); await this.#renderPage(); } return this.#snapshot(generation); }
-  async zoomOut({ generation } = {}) { if (generation !== this.#requestGeneration) return null; if (this.#document) { this.#scale = Math.max(.5, this.#scale - .25); await this.#renderPage(); } return this.#snapshot(generation); }
+  // PDF links may specify scales beyond button limits; never reverse the requested zoom direction.
+  async zoomIn({ generation, origin } = {}) { if (generation !== this.#requestGeneration) return null; if (this.#document) { this.#scale = Math.max(this.#scale, Math.min(3, this.#scale + .25)); if (this.#viewerPort) this.#scale = this.#viewerPort.zoom(this.#scale, origin); await this.#renderPage(); } return this.#snapshot(generation); }
+  async zoomOut({ generation, origin } = {}) { if (generation !== this.#requestGeneration) return null; if (this.#document) { this.#scale = Math.min(this.#scale, Math.max(.5, this.#scale - .25)); if (this.#viewerPort) this.#scale = this.#viewerPort.zoom(this.#scale, origin); await this.#renderPage(); } return this.#snapshot(generation); }
   async fit(viewportWidth, { generation } = {}) {
     if (generation !== this.#requestGeneration || !this.#document || !Number.isFinite(viewportWidth) || viewportWidth <= 0) return null;
-    const page = await this.#document.getPage(this.#pageNumber), base = page.getViewport({ scale: 1 });
-    this.#scale = Math.max(.5, Math.min(3, (viewportWidth - 32) / base.width)); await this.#renderPage();
+    if (this.#viewerPort) this.#scale = this.#viewerPort.fit();
+    else {
+      const page = await this.#document.getPage(this.#pageNumber), base = page.getViewport({ scale: 1 });
+      this.#scale = Math.max(.5, Math.min(3, (viewportWidth - 32) / base.width));
+    }
+    await this.#renderPage();
+    return this.#snapshot(generation);
+  }
+
+  async fitHeight(viewportHeight, { generation } = {}) {
+    if (generation !== this.#requestGeneration || !this.#document || !Number.isFinite(viewportHeight) || viewportHeight <= 0) return null;
+    const token = this.#generation;
+    if (this.#viewerPort) {
+      const scale = await this.#viewerPort.fitHeight();
+      if (token !== this.#generation || scale === null) return null;
+      this.#scale = scale;
+    } else {
+      const pageNumber = this.#pageNumber, page = await this.#document.getPage(pageNumber);
+      if (token !== this.#generation || pageNumber !== this.#pageNumber) return null;
+      this.#scale = Math.max(.01, (viewportHeight - 32) / page.getViewport({ scale: 1 }).height);
+    }
+    await this.#renderPage(token);
+    return this.#snapshot(generation);
+  }
+
+  async goToOutline(id, { generation } = {}) {
+    if (generation !== this.#requestGeneration || !this.#document || !this.#outlineDestinations.has(id) || !this.#viewerPort?.goToDestination) return null;
+    const token = this.#generation;
+    const result = await this.#viewerPort.goToDestination(this.#outlineDestinations.get(id));
+    if (token !== this.#generation || !result) return null;
+    this.#pageNumber = result.page; this.#scale = result.scale;
+    await this.#renderPage(token);
     return this.#snapshot(generation);
   }
 
@@ -262,6 +363,7 @@ export class PdfViewAdapter {
     this.#searchIndex = matches.length ? 0 : -1;
     if (matches.length) {
       this.#pageNumber = matches[0].page;
+      this.#showPage();
       await this.#renderPage();
     }
     return this.#snapshot(generation);
@@ -275,6 +377,7 @@ export class PdfViewAdapter {
     const pageNumber = this.#searchMatches[this.#searchIndex].page;
     if (pageNumber !== this.#pageNumber) {
       this.#pageNumber = pageNumber;
+      this.#showPage();
       await this.#renderPage();
     }
     return this.#snapshot(generation);

@@ -4,19 +4,21 @@ import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { runInNewContext } from 'node:vm';
 import { createFocusSync } from '../src/focus-sync.js';
-import { accumulatePdfWheel, createPdfWheelState } from '../src/pdf-wheel.js';
+import { createPdfViewerPort } from '../src/pdf-viewer-port.js';
 import { annotationSessionChange, commitAnnotations, createAnnotationHistory, createStroke, redoAnnotations, undoAnnotations } from '../src/pdf-annotations.js';
 import { batchButtonAction, batchSummary, displayPath, groupTreeRenderKey, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfDocumentKeyDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
 
-test('PDF annotation canvas follows the rendered page and stays transparent',()=>{
+test('PDF annotation canvases follow rendered pages without allocating all document pages',()=>{
   assert.deepEqual(pdfOverlayBounds({offsetLeft:24,offsetTop:24,clientWidth:712,clientHeight:1007}),{left:24,top:24,width:712,height:1007});
   assert.deepEqual(pdfOverlayBounds({offsetLeft:163,offsetTop:24,clientWidth:390,clientHeight:552}),{left:163,top:24,width:390,height:552});
   const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
-  assert.match(view,/overlay\.style\.left=`\$\{bounds\.left\}px`/);
-  assert.match(view,/overlay\.style\.top=`\$\{bounds\.top\}px`/);
-  assert.match(view,/new ResizeObserver\(\(\)=>drawAnnotations\(\)\)\.observe\(canvas\)/);
-  assert.match(styles,/\.canvas-wrap \.annotation-overlay\{[^}]*background:transparent;box-shadow:none/);
+  const styles=readFileSync(new URL('../src/visibility.css',import.meta.url),'utf8');
+  assert.match(view,/for\(const page of pdfViewer\.querySelectorAll\('\.page'\)\)/);
+  assert.match(view,/if\(!page\.querySelector\('\.canvasWrapper canvas'\)\)continue/);
+  assert.match(view,/page\.append\(overlay\);bindAnnotationOverlay\(overlay,pageNumber\)/);
+  assert.match(view,/stroke\.page===pageNumber/);
+  assert.match(view,/new ResizeObserver\(\(\)=>drawAnnotations\(\)\)\.observe\(wrap\)/);
+  assert.match(styles,/\.canvas-wrap \.pdfViewer \.annotation-overlay\s*\{[^}]*inset:\s*0 auto auto 0;[^}]*background:\s*transparent;[^}]*box-shadow:\s*none;[^}]*pointer-events:\s*none/s);
 });
 
 test('PDF marker and bookmark controls use the standard menu background',()=>{
@@ -35,7 +37,7 @@ test('PDF marker and bookmark controls are collapsible and bookmarks use a scrol
   assert.match(view,/a==='marker-tools-toggle'.*annotationTools\.hidden=!annotationTools\.hidden/s);
   assert.match(view,/a==='bookmark-tools-toggle'.*bookmarkPanel\.hidden=!bookmarkPanel\.hidden/s);
   assert.match(view,/pdfViewerBody=el\('div','pdf-viewer-body'\)/);
-  assert.match(view,/pdfViewerBody\.insertBefore\(bookmarkPanel,wrap\)/);
+  assert.match(view,/pdfViewerBody\.insertBefore\(bookmarkPanel,scrollHost\)/);
   assert.match(styles,/\.pdf-viewer-body\{[^}]*display:flex;flex:1;[^}]*min-height:0;overflow:hidden/);
   assert.match(styles,/\.bookmark-panel\{[^}]*flex:0 0 min\(210px,42%\);[^}]*border-right:1px solid var\(--line\);[^}]*display:flex;flex-direction:column;overflow:hidden/);
   assert.match(styles,/\.bookmark-list\{[^}]*flex:1;min-height:0;[^}]*overflow-y:auto;overscroll-behavior:contain/);
@@ -103,7 +105,7 @@ test('opening one bookmark action menu closes the other and keeps the control st
 test('PDF reading toolbar separates primary controls and keeps narrow bookmark rail over the canvas',()=>{
   const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
-  assert.match(view,/zoomGroup\.append\([^;]+\);utilityGroup\.append\(pdfSearchToggle,markerToolsToggle,bookmarkToolsToggle\);ptools\.append\(pageGroup,zoomGroup,utilityGroup\)/);
+  assert.match(view,/utilityGroup\.append\(selectTool,handButton,pdfSearchToggle,markerToolsToggle,bookmarkToolsToggle\);ptools\.append\(pageGroup,zoomGroup,utilityGroup\)/);
   for(const action of ['pdf-search-toggle','marker-tools-toggle','bookmark-tools-toggle','pdf-fit','bookmark-add']) assert.ok(view.includes(`pdfIconButton('${action}'`));
   assert.match(styles,/\.viewer-toolbar \.pdf-zoom-group,\.viewer-toolbar \.pdf-utility-group\{[^}]*border-left:1px solid/);
   assert.match(styles,/@container pdf-preview \(max-width:520px\)\{[^\n]*\.bookmark-panel\{position:absolute;inset:0 auto 0 0/);
@@ -115,18 +117,21 @@ test('PDF marker colors visibly expose selection and retain toggle and eraser be
   const control=color=>({dataset:{color},setAttribute(name,value){this[name]=value}});
   const colors=['yellow','green','pink'].map(control),eraser=control();
   const handlers={};
-  const scope={selectSidecar(){},annotationUndo:{},annotationRedo:{},clearMarkers:{},bookmarkAdd:{},overlay:{classList:{toggle(){}}},colorTools:{querySelectorAll:()=>colors},eraser,drawAnnotations(){},renderBookmarks(){},annotationHistory:createAnnotationHistory(),markerTool:null,markerColor:'yellow',model:{pdf:{kind:'Viewing'}},annotationTools:{addEventListener:(type,handler)=>{handlers[type]=handler}},widthSelect:{addEventListener(){}}};
+  const scope={selectSidecar(){},annotationUndo:{},annotationRedo:{},clearMarkers:{},bookmarkAdd:{},selectTool:control(),handButton:control(),wrap:{classList:{toggle(){}}},handTool:false,spacePan:false,colorTools:{querySelectorAll:()=>colors},eraser,drawAnnotations(){},renderBookmarks(){},renderPdfOutline(){},annotationHistory:createAnnotationHistory(),markerTool:null,markerColor:'yellow',model:{pdf:{kind:'Viewing'}},annotationTools:{addEventListener:(type,handler)=>{handlers[type]=handler}},widthSelect:{addEventListener(){}}};
   const update=view.slice(view.indexOf('  function updateAnnotations(')).split('\n')[0];
   runInNewContext(update,scope);
   const start=view.indexOf("annotationTools.addEventListener('click'");
-  runInNewContext(view.slice(start,view.indexOf('const overlayPoint=',start)),scope);
+  runInNewContext(view.slice(start,view.indexOf('  function bindAnnotationOverlay(',start)),scope);
   const pressed=()=>colors.map(item=>item['aria-pressed']);
   const click=(action,color)=>handlers.click({target:{closest:()=>({dataset:{action,color}})}});
   scope.updateAnnotations(scope.model);
   assert.deepEqual(pressed(),['false','false','false']);
+  assert.equal(scope.selectTool['aria-pressed'],'true');
+  assert.equal(scope.handButton['aria-pressed'],'false');
   for(const [index,color] of ['yellow','green','pink'].entries()){
     click('marker-color',color);
     assert.deepEqual(pressed(),colors.map((_,i)=>String(i===index)));
+    assert.equal(scope.selectTool['aria-pressed'],'false');
     assert.equal(eraser['aria-pressed'],'false');
     click('marker-color',color);
     assert.deepEqual(pressed(),['false','false','false']);
@@ -146,27 +151,39 @@ test('PDF marker colors visibly expose selection and retain toggle and eraser be
   assert.match(styles,/\.marker-color\[aria-pressed="true"\]::before\{visibility:visible\}/);
 });
 
-test('PDF marker pointer and toolbar events retain Undo across model renders and reset tools on preview changes',()=>{
+test('PDF marker pointer events retain their actual page and support Undo across model renders',()=>{
   const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  const handlers={},saved=[];
-  const scope={annotationTools:{addEventListener:(type,handler)=>{handlers[type]=handler}},widthSelect:{addEventListener(){}},markerTool:'marker',markerColor:'yellow',markerWidth:'standard',drawing:{pointerId:7,points:[{x:.2,y:.3}]},newId:()=> 'stroke',createStroke,annotationHistory:createAnnotationHistory(),undoAnnotations,redoAnnotations,commitAnnotations,persistSidecar(){saved.push(scope.annotationHistory.present)},updateAnnotations(){},model:{pdf:{current_page:1}},overlay:{addEventListener:(type,handler)=>{handlers[type]=handler}}};
+  const handlers={},saved=[],focus=[];
+  const scope={annotationTools:{addEventListener:(type,handler)=>{handlers[type]=handler}},widthSelect:{addEventListener(){}},wrap:{focus:options=>focus.push(options)},handTool:false,spacePan:false,markerTool:'marker',markerColor:'yellow',markerWidth:'standard',drawing:null,newId:()=> 'stroke',createStroke,eraseAt(){},annotationHistory:createAnnotationHistory(),undoAnnotations,redoAnnotations,commitAnnotations,persistSidecar(){saved.push(scope.annotationHistory.present)},updateAnnotations(){},drawAnnotations(){},model:{pdf:{kind:'Viewing',material_id:'m1',generation:2,current_page:3}},overlay:{getBoundingClientRect:()=>({left:0,top:0,width:100,height:100}),setPointerCapture(){},addEventListener:(type,handler)=>{handlers[type]=handler}}};
   const start=view.indexOf("annotationTools.addEventListener('click'");
-  const end=view.indexOf('const overlayPoint=',start);
+  const end=view.indexOf('  function bindAnnotationOverlay(',start);
   assert.ok(start>=0&&end>start);
   runInNewContext(view.slice(start,end),scope);
   const click=action=>handlers.click({target:{closest:()=>({dataset:{action}})}});
-  const finishStart=view.indexOf('const finishStroke=e=>');
-  const finishEnd=view.indexOf("overlay.addEventListener('pointercancel'",finishStart);
-  assert.ok(finishStart>=0&&finishEnd>finishStart);
-  runInNewContext(view.slice(finishStart,finishEnd),scope);
+  const bindStart=view.indexOf('  function bindAnnotationOverlay('),bindEnd=view.indexOf("  bookmarkPanel.addEventListener('click'",bindStart);
+  runInNewContext(view.slice(bindStart,bindEnd),scope);
+  scope.bindAnnotationOverlay(scope.overlay,2);
+  handlers.pointerdown({pointerId:7,button:0,clientX:20,clientY:30,stopPropagation(){},preventDefault(){}});
+  assert.equal(focus.length,1,'drawing must move focus from the marker toolbar so Space can temporarily pan');
+  assert.equal(focus[0].preventScroll,true);
+  assert.equal(scope.drawing.page,2);
+  scope.model.pdf.current_page=4;
   handlers.pointerup({pointerId:7,stopPropagation(){}});
   assert.equal(scope.annotationHistory.past.length,1);
+  assert.equal(scope.annotationHistory.present[0].page,2);
   click('marker-undo');
   assert.deepEqual(scope.annotationHistory.present,[]);
   assert.equal(scope.annotationHistory.future.length,1);
   click('marker-redo');
   assert.deepEqual(scope.annotationHistory.present.map(item=>item.id),['stroke']);
   assert.deepEqual(saved.map(value=>Array.from(value,item=>item.id)),[['stroke'],[],['stroke']]);
+  handlers.pointerdown({pointerId:8,button:0,clientX:20,clientY:30,stopPropagation(){},preventDefault(){}});
+  scope.model.pdf.generation=3;
+  handlers.pointerup({pointerId:8,stopPropagation(){}});
+  assert.equal(saved.length,3,'a stale stroke must not be persisted into another PDF generation');
+  scope.markerTool=null;
+  handlers.pointerdown({pointerId:9,button:0,clientX:20,clientY:30,stopPropagation(){},preventDefault(){}});
+  assert.equal(focus.length,2,'ordinary text selection must not have its focus stolen by marker handling');
   assert.match(view,/function selectSidecar\(\).*annotationSessionChange\(.*if\(change==='keep'\)return;if\(change==='reset'\)\{markerTool=null;drawing=null;annotationDirty=false/s);
   assert.match(view,/function persistSidecar\(\).*annotationDirty=true/);
 });
@@ -183,11 +200,12 @@ test('collapsed sidebar plus maximized PDF removes width limit and background fo
 
 test('marker pointer capture cannot enter the pan handler and can be released', () => {
   const view = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  const css = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/visibility.css', import.meta.url), 'utf8');
   assert.match(view, /overlay\.addEventListener\('pointerdown'.*e\.stopPropagation\(\);overlay\.setPointerCapture/s);
-  assert.match(view, /wrap\.addEventListener\('pointerdown'.*\|\|markerTool\|\|/s);
+  assert.match(view, /wrap\.addEventListener\('pointerdown'.*\(!handTool&&!spacePan\)/s);
   assert.match(view, /overlay\.addEventListener\('lostpointercapture'/);
-  assert.match(css, /\.annotation-overlay\{pointer-events:none\}\.annotation-overlay\.drawing\{pointer-events:auto\}/);
+  assert.match(css, /\.annotation-overlay\s*\{[^}]*pointer-events:\s*none/s);
+  assert.match(css, /\.annotation-overlay\.drawing\s*\{[^}]*pointer-events:\s*auto/s);
 });
 
 test('pointer release dispatches reorder, role move and empty drop correctly',()=>{
@@ -453,30 +471,175 @@ test('PDF preview supports Ctrl-wheel zoom and pointer drag panning', () => {
   assert.match(styles, /\.canvas-wrap canvas\s*\{[^}]*max-width:\s*none/s);
 });
 
-test('PDF wheel scrolls within a page and only pages at vertical boundaries',()=>{
+test('PDF fit shares zoom limits and retains native appearances with external actions disabled',()=>{
+  let options,viewerInstance,linkInstance;
+  const events={},layer={inert:true,children:[]};
+  class FakeEventBus { on(type,listener){events[type]=listener} }
+  class FakeLinkService {
+    constructor(){linkInstance=this}
+    setViewer(value){this.viewer=value}
+    setDocument(value){this.document=value}
+  }
+  class FakeViewer {
+    currentScale=1;
+    fittedScale=1;
+    constructor(value){options=value;viewerInstance=this}
+    set currentScaleValue(value){assert.equal(value,'page-width');this.currentScale=this.fittedScale}
+    updateScale({scaleFactor}){this.currentScale*=scaleFactor}
+  }
+  const port=createPdfViewerPort({container:{},viewer:{querySelectorAll:selector=>{assert.equal(selector,'.annotationLayer');return [layer]}},PDFViewer:FakeViewer,PDFLinkService:FakeLinkService,EventBus:FakeEventBus,annotationMode:1});
+  assert.equal(options.enablePermissions,true);
+  assert.equal(options.annotationMode,1);
+  assert.equal(options.annotationEditorMode,-1);
+  assert.equal(options.enableAutoLinking,false);
+  assert.equal(options.linkService,linkInstance);
+  assert.equal(linkInstance.externalLinkEnabled,false);
+  assert.equal(linkInstance.viewer,viewerInstance);
+  let layouts=0;port.listen(()=>{},()=>layouts++);
+  events.annotationlayerrendered();
+  assert.equal(layer.inert,false,'the layer permits destination links while each other annotation stays inert');
+  layer.inert=true;events.pagerendered();
+  assert.equal(layer.inert,false);
+  assert.equal(layouts,2);
+  for(const [fitted,expected] of [[.2,.5],[1.2,1.2],[8,3]]){
+    viewerInstance.fittedScale=fitted;
+    assert.equal(port.fit(),expected);
+    assert.ok(port.zoom(Math.min(3,expected+.25))>=expected,'zoom in after fit cannot shrink the page');
+    viewerInstance.fittedScale=fitted;port.fit();
+    assert.ok(port.zoom(Math.max(.5,expected-.25))<=expected,'zoom out after fit cannot enlarge the page');
+  }
+  const runtime=readFileSync(new URL('../src/pdf-runtime.js',import.meta.url),'utf8');
+  const css=readFileSync(new URL('../src/visibility.css',import.meta.url),'utf8');
+  assert.match(runtime,/annotationMode: pdfjs\.AnnotationMode\.ENABLE\b/);
+  assert.match(css,/\.canvas-wrap \.pdfViewer \.annotationLayer,\s*\.canvas-wrap \.pdfViewer \.annotationLayer \*\s*\{\s*pointer-events:\s*none !important;\s*\}/);
+  assert.doesNotMatch(css,/\.annotationLayer[^}]*display:\s*none/);
+});
+
+test('PDF annotation layout permits only nonempty in-document destination links and keyboard focus',()=>{
+  const events={};
+  const annotation=(internal,href)=>{
+    const attributes=new Map([['href',href]]),classes=new Set();
+    const link={title:'',tabIndex:-1,getAttribute:name=>attributes.get(name),hasAttribute:name=>attributes.has(name),setAttribute:(name,value)=>attributes.set(name,value)};
+    return {inert:false,link,classes,matches:()=>internal,querySelector:selector=>{assert.equal(selector,':scope > a');return link},classList:{toggle:(name,enabled)=>enabled?classes.add(name):classes.delete(name)}};
+  };
+  const named=annotation(true,'#chapter2'),explicit=annotation(true,'#%5B1%2C%7B%22name%22%3A%22Fit%22%7D%5D');
+  const actions=[annotation(true,''),annotation(true,'#'),annotation(false,'https://example.com/'),annotation(false,'#chapter2')];
+  const layer={inert:true,children:[named,explicit,...actions]};
+  class EventBus {on(type,listener){events[type]=listener}}
+  class PDFLinkService {setViewer(){}setDocument(){}}
+  class PDFViewer {}
+  createPdfViewerPort({container:{},viewer:{querySelectorAll:()=>[layer]},PDFViewer,PDFLinkService,EventBus,annotationMode:1});
+  for(const event of ['annotationlayerrendered','pagerendered','pagesinit']){
+    events[event]();
+    assert.equal(layer.inert,false);
+    for(const item of [named,explicit]){
+      assert.equal(item.inert,false);
+      assert.equal(item.classes.has('pdf-internal-link'),true);
+      assert.equal(item.link.tabIndex,0);
+      assert.equal(item.link.getAttribute('aria-label'),'PDF内のリンク');
+    }
+    for(const item of actions){assert.equal(item.inert,true);assert.equal(item.classes.has('pdf-internal-link'),false);assert.equal(item.link.tabIndex,-1)}
+  }
+  const css=readFileSync(new URL('../src/visibility.css',import.meta.url),'utf8');
+  assert.match(css,/\.annotationLayer \.linkAnnotation\.pdf-internal-link > a\s*\{\s*pointer-events:\s*auto !important/);
+  assert.match(css,/\.pdf-internal-link > a:focus-visible\s*\{\s*outline:/);
+});
+
+test('PDF destinations preserve coordinates and zoom while stale, invalid or failed destinations do not navigate',async()=>{
+  let links,pdfViewer;
+  const moves=[],focus=[];
+  class EventBus {on(){}}
+  class PDFLinkService {constructor(){links=this}setViewer(){}setDocument(document){this.pdfDocument=document}}
+  class PDFViewer {constructor(){pdfViewer=this}setDocument(document){this.pdfDocument=document}getPageView(){return {pdfPage:{}}}}
+  const port=createPdfViewerPort({container:{focus:options=>focus.push(options)},viewer:{querySelectorAll:()=>[]},PDFViewer,PDFLinkService,EventBus,annotationMode:1,isValidExplicitDest:dest=>Array.isArray(dest)&&dest.length>=2&&typeof dest[1]?.name==='string'});
+  pdfViewer.scrollPageIntoView=value=>moves.push(value);
+  const explicit=[1,{name:'XYZ'},30,400,1.5],reference={num:8,gen:0};
+  const document={numPages:4,getDestination:async()=>explicit,cachedPageNumber:()=>0,getPageIndex:async()=>2};
+  links.setDocument(document);
+  await links.goToDestination('chapter2');
+  assert.deepEqual(moves.at(-1),{pageNumber:2,destArray:explicit});
+  const referenced=[reference,{name:'FitH'},240];
+  await links.goToDestination(referenced);
+  assert.deepEqual(moves.at(-1),{pageNumber:3,destArray:referenced});
+  assert.equal(focus.length,2);
+  assert.deepEqual(focus[0],{preventScroll:true});
+  const count=moves.length;
+  for(const invalid of [null,[],[1],[-1,{name:'Fit'}],[4,{name:'Fit'}]])await links.goToDestination(invalid);
+  assert.equal(moves.length,count);
+  let resolve;
+  document.getDestination=()=>new Promise(done=>resolve=done);
+  const stale=links.goToDestination('delayed');
+  links.setDocument({numPages:4});resolve(explicit);await stale;
+  assert.equal(moves.length,count);
+  links.setDocument(document);
+  document.getPageIndex=()=>new Promise(done=>resolve=done);
+  const stalePage=links.goToDestination(referenced);
+  await Promise.resolve();
+  await port.setDocument(null);resolve(2);await stalePage;
+  assert.equal(moves.length,count);
+  links.setDocument(document);document.getDestination=async()=>{throw new Error('invalid destination')};
+  await links.goToDestination('broken');
+  assert.equal(moves.length,count);
+});
+
+test('PDF default drag permits text selection and panning requires hand tool or Space',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8'),handlers={},focus=[];
+  const scope={wrap:{scrollLeft:10,scrollTop:20,focus:value=>focus.push(value),setPointerCapture(){},classList:{add(){},remove(){}},addEventListener:(type,handler)=>{handlers[type]=handler}},handTool:false,spacePan:false,panning:null,model:{pdf:{kind:'Viewing'}}};
+  const start=source.indexOf("wrap.addEventListener('pointerdown',e=>{if(e.button!==0||model?.pdf.kind!=='Viewing'");
+  runInNewContext(source.slice(start,source.indexOf('\n',start)),scope);
+  const pointer=(link=false)=>{let prevented=false;handlers.pointerdown({button:0,pointerId:7,clientX:50,clientY:75,target:{closest:selector=>{assert.ok(selector.includes('a,'));return link?{}:null}},preventDefault(){prevented=true}});return prevented};
+  assert.equal(pointer(),false);
+  assert.equal(scope.panning,null);
+  assert.equal(focus.length,0);
+  scope.handTool=true;
+  assert.equal(pointer(true),false,'hand tool must allow clicking a PDF link');
+  assert.equal(scope.panning,null);
+  assert.equal(pointer(),true);
+  assert.equal(scope.panning.pointerId,7);
+  scope.panning=null;scope.handTool=false;scope.spacePan=true;
+  assert.equal(pointer(),true);
+  assert.equal(scope.panning.pointerId,7);
+});
+
+test('PDF keyboard leaves ordinary scrolling native and uses Space only for temporary pan',()=>{
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8'),handlers={},events=[];
+  const scope={wrap:{addEventListener:(type,handler)=>{handlers[type]=handler},classList:{add(){}}},spacePan:false,drawAnnotations(){},model:{pdf:{kind:'Viewing'}},dialog:{open:false},issue:{open:false},dndDialog:{open:false},menu:{hidden:true},resizing:null,pdfDocumentKeyDirection,pdfPageKeyDirection,emit:action=>events.push(action)};
+  const start=source.indexOf("  wrap.addEventListener('keydown'"),end=source.indexOf('  const releaseSpace=',start);
+  runInNewContext(source.slice(start,end),scope);
+  const key=event=>{let prevented=false;handlers.keydown({target:{closest:()=>null},preventDefault(){prevented=true},...event});return prevented};
+  for(const keyName of ['Enter',' '])assert.equal(key({key:keyName,code:keyName===' '?'Space':'Enter',target:{closest:selector=>{assert.ok(selector.startsWith('a,'));return {}}}}),false,'focused links retain their keyboard handling');
+  for(const keyName of ['ArrowUp','ArrowDown','PageUp','PageDown'])assert.equal(key({key:keyName}),false);
+  assert.deepEqual(events,[]);
+  assert.equal(key({key:'PageUp',ctrlKey:true}),true);
+  assert.equal(key({key:'PageDown',ctrlKey:true}),true);
+  assert.deepEqual(events,['pdfPrevious','pdfNext']);
+  assert.equal(key({key:' ',code:'Space'}),true);
+  assert.equal(scope.spacePan,true);
+  assert.equal(events.length,2);
+  assert.equal(key({key:'PageDown',ctrlKey:true,target:{closest:()=>({})}}),false);
+});
+
+test('PDF wheel keeps native continuous scrolling at every boundary and anchors Ctrl zoom',()=>{
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   const events=[],handlers={};
   const wrap={scrollTop:100,clientHeight:400,scrollHeight:1000,addEventListener:(type,handler)=>{handlers[type]=handler}};
-  const scope={wrap,model:{pdf:{kind:'Viewing',current_page:2,total_pages:3}},pdfWheel:createPdfWheelState(),createPdfWheelState,accumulatePdfWheel,pendingPdfScrollPosition:null,emit:action=>events.push(action)};
+  const scope={wrap,model:{pdf:{kind:'Viewing',current_page:2,total_pages:3}},emit:(action,origin)=>events.push({action,origin})};
   const start=source.indexOf("  wrap.addEventListener('wheel'");
   runInNewContext(source.slice(start,source.indexOf("  annotationTools.addEventListener",start)),scope);
-  const wheel=(deltaY,extra={})=>{let prevented=false;handlers.wheel({deltaY,deltaX:0,preventDefault(){prevented=true},...extra});return prevented};
+  const wheel=(deltaY,extra={})=>{let prevented=false;handlers.wheel({deltaY,deltaX:0,clientX:235,clientY:410,preventDefault(){prevented=true},...extra});return prevented};
   assert.equal(wheel(120),false);
   assert.equal(wheel(-120),false);
   assert.deepEqual(events,[]);
   wrap.scrollTop=600;
   assert.equal(wheel(60),false);
   wrap.scrollTop=500;
-  assert.equal(wheel(120),false); // Native scroll must also discard prior boundary input.
+  assert.equal(wheel(120),false);
   wrap.scrollTop=600;
   assert.equal(wheel(60),false);
-  assert.equal(wheel(40),true);
-  assert.deepEqual(events,['pdfNext']);
-  assert.equal(scope.pendingPdfScrollPosition,'start');
+  assert.equal(wheel(40),false);
+  assert.deepEqual(events,[]);
   wrap.scrollTop=0;
-  assert.equal(wheel(-100),true);
-  assert.equal(events.at(-1),'pdfPrevious');
-  assert.equal(scope.pendingPdfScrollPosition,'end');
+  assert.equal(wheel(-100),false);
   const count=events.length;
   for(const extra of [{shiftKey:true},{deltaX:140}])assert.equal(wheel(-120,extra),false);
   assert.equal(wheel(0,{deltaX:120}),false);
@@ -487,11 +650,13 @@ test('PDF wheel scrolls within a page and only pages at vertical boundaries',()=
   assert.equal(wheel(100),false);
   assert.equal(events.length,count);
   assert.equal(wheel(-50,{ctrlKey:true}),true);
-  assert.equal(events.at(-1),'pdfZoomIn');
+  assert.equal(events.at(-1).action,'pdfZoomIn');
+  assert.deepEqual(Array.from(events.at(-1).origin),[235,410]);
   assert.equal(wheel(50,{ctrlKey:true}),true);
-  assert.equal(events.at(-1),'pdfZoomOut');
+  assert.equal(events.at(-1).action,'pdfZoomOut');
   scope.model.pdf.kind='Closed';
   assert.equal(wheel(120),false);
+  assert.equal(wheel(120,{ctrlKey:true}),false);
 });
 
 test('PDF preview keyboard paging maps supported keys and ignores unsafe key events', () => {
@@ -512,7 +677,8 @@ test('PDF preview keyboard paging maps supported keys and ignores unsafe key eve
   assert.equal(pdfPageKeyDirection({ key: 'PageDown', ctrlKey: true, keyCode: 229 }), 0);
   assert.equal(pdfPageKeyDirection({ key: 'Home', ctrlKey: true }), 0);
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  for (const token of ["wrap.tabIndex=0", "'PDFプレビュー本文'", "'aria-describedby'", "'aria-live','polite'", "interactive=e.target.closest?.('input,textarea,select,button,[contenteditable]", 'dialog.open||issue.open||dndDialog.open', '!menu.hidden||panning||resizing', "emit('pdfPrevious')", "emit('pdfNext')", 'wrap.focus({preventScroll:true})', "pendingPdfScrollPosition='end'", "pendingPdfScrollPosition='start'", "wrap.scrollTop=pendingPdfScrollPosition==='end'?wrap.scrollHeight:0"]) assert.ok(source.includes(token));
+  for (const token of ["wrap.tabIndex=0", "'PDFプレビュー本文'", "'aria-describedby'", "'aria-live','polite'", "interactive=e.target.closest?.('a,input,textarea,select,button,[contenteditable]", 'dialog.open||issue.open||dndDialog.open', '!menu.hidden||resizing', "emit(direction<0?'pdfPrevious':'pdfNext')", 'wrap.focus({preventScroll:true})']) assert.ok(source.includes(token));
+  assert.doesNotMatch(source,/pendingPdfScrollPosition|accumulatePdfWheel/);
   const styles = readFileSync(new URL('../src/visibility.css', import.meta.url), 'utf8');
   assert.match(styles, /\.canvas-wrap:focus-visible\s*\{[^}]*outline:/s);
 });
@@ -650,7 +816,18 @@ test('PDF preview Alt+Left/Right switches documents only with an unmodified non-
     { key: 'ArrowRight', altKey: true, keyCode: 229 }, { key: 'PageDown', altKey: true },
   ]) assert.equal(pdfDocumentKeyDirection(event), 0);
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  assert.match(source, /documentDirection&&model\?\.pdf\.kind==='Viewing'\)\{e\.preventDefault\(\);const index=model\.pdf_candidates\.findIndex\(item=>item\.id===model\.pdf\.material_id\),target=model\.pdf_candidates\[index\+documentDirection\];if\(target\)emit\(documentDirection<0\?'pdfDocumentPrevious':'pdfDocumentNext'\)/);
+  const handlers={},events=[];
+  const scope={wrap:{addEventListener:(type,handler)=>{handlers[type]=handler}},model:{pdf:{kind:'Viewing'}},dialog:{open:false},issue:{open:false},dndDialog:{open:false},menu:{hidden:true},resizing:null,pdfDocumentKeyDirection,pdfPageKeyDirection,emit:action=>events.push(action)};
+  const start=source.indexOf("  wrap.addEventListener('keydown'"),end=source.indexOf('  const releaseSpace=',start);
+  runInNewContext(source.slice(start,end),scope);
+  const key=event=>{let prevented=false;handlers.keydown({target:{closest:()=>null},preventDefault(){prevented=true},...event});return prevented};
+  assert.equal(key({key:'ArrowLeft',altKey:true}),true);
+  assert.equal(key({key:'ArrowRight',altKey:true}),true);
+  assert.deepEqual(events,['pdfDocumentPrevious','pdfDocumentNext']);
+  assert.equal(key({key:'ArrowRight',altKey:true,repeat:true}),false);
+  scope.model.pdf.kind='Closed';
+  assert.equal(key({key:'ArrowRight',altKey:true}),false);
+  assert.equal(events.length,2);
 });
 
 test('reorder mode deletes material registration without confirmation',()=>{

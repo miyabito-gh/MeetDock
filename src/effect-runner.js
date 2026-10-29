@@ -139,6 +139,8 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         case Effect.PdfZoomIn: event = { type: Event.PdfViewChanged, view: await services.pdf.zoomIn(f.request), ...context }; break;
         case Effect.PdfZoomOut: event = { type: Event.PdfViewChanged, view: await services.pdf.zoomOut(f.request), ...context }; break;
         case Effect.PdfFit: event = { type: Event.PdfViewChanged, view: await services.pdf.fit(f.request.viewport_width, f.request), ...context }; break;
+        case Effect.PdfFitHeight: event = { type: Event.PdfViewChanged, view: await services.pdf.fitHeight(f.request.viewport_height, f.request), ...context }; break;
+        case Effect.PdfOutline: event = { type: Event.PdfViewChanged, view: await services.pdf.goToOutline(f.request.outline_id, f.request), ...context }; break;
         case Effect.PdfSearch: event = { type: Event.PdfSearchCompleted, view: await services.pdf.search(f.request.query, f.request), ...context }; break;
         case Effect.PdfSearchPrevious: event = { type: Event.PdfSearchCompleted, view: await services.pdf.searchPrevious(f.request), ...context }; break;
         case Effect.PdfSearchNext: event = { type: Event.PdfSearchCompleted, view: await services.pdf.searchNext(f.request), ...context }; break;
@@ -162,7 +164,7 @@ export function createEffectRunner(services, dispatch, onIdle = () => {}) {
         [Effect.ReplacePdf]: error.code === 'PDF_PASSWORD_REQUIRED' ? Event.PdfPasswordRequired : Event.PdfFailed,
         [Effect.SetFullscreen]: Event.PdfFullscreenFailed,
         [Effect.ClosePdf]: Event.EffectFailed, [Effect.LoadPdfSidecar]: Event.PdfSidecarFailed, [Effect.SavePdfSidecar]: Event.PdfSidecarFailed, [Effect.RemovePdfSidecar]: Event.PdfSidecarFailed, [Effect.PdfPrevious]: Event.PdfFailed, [Effect.PdfNext]: Event.PdfFailed,
-        [Effect.PdfZoomIn]: Event.PdfFailed, [Effect.PdfZoomOut]: Event.PdfFailed, [Effect.PdfFit]: Event.PdfFailed,
+        [Effect.PdfZoomIn]: Event.PdfFailed, [Effect.PdfZoomOut]: Event.PdfFailed, [Effect.PdfFit]: Event.PdfFailed, [Effect.PdfFitHeight]: Event.PdfFailed, [Effect.PdfOutline]: Event.PdfFailed,
         [Effect.PdfSearch]: Event.PdfFailed, [Effect.PdfSearchPrevious]: Event.PdfFailed, [Effect.PdfSearchNext]: Event.PdfFailed, [Effect.CloseWindow]: Event.EffectFailed,
       }[f.type] ?? Event.FatalError;
       event = { type, error, ...context, value: f.request.value, request: f.request.request, effect_type: f.type, request_id: f.request.request_id };

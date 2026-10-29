@@ -147,6 +147,28 @@ test('view snapshot starts at page 1 and 100%, follows navigation and zoom, fits
   assert.equal((await adapter.fit(432, { generation: 7 })).zoom_percent, 200);
 });
 
+test('button and wheel zoom preserve direction after PDF links specify scales beyond normal limits', async () => {
+  let changed;
+  const zooms=[],origin=[120,240];
+  const viewerPort={listen(listener){changed=listener},async setDocument(){},setScale(){},showPage(){},zoom(scale,point){zooms.push({scale,point});return scale}};
+  const adapter=new PdfViewAdapter({viewerPort,pdfjs:{GlobalWorkerOptions:{},getDocument:()=>loading(document([],Promise.resolve()),[])}});
+  await adapter.replace({url:'material://pdf/m1',material_id:'m1',generation:1});
+  for(const [scale,action,expected] of [
+    [4,'zoomIn',4],[4,'zoomOut',3.75],
+    [.25,'zoomOut',.25],[.25,'zoomIn',.5],
+    [.1,'zoomOut',.1],[.1,'zoomIn',.35],
+    [3,'zoomIn',3],[.5,'zoomOut',.5],
+    [1,'zoomIn',1.25],[1,'zoomOut',.75],
+  ]){
+    await changed({page:1,scale});
+    const view=await adapter[action]({generation:1,origin});
+    assert.equal(view.zoom_percent,Math.round(expected*100),`${action} at ${scale}x`);
+    assert.equal(zooms.at(-1).scale,expected);
+    assert.deepEqual(zooms.at(-1).point,origin);
+  }
+  await adapter.close();
+});
+
 test('document switches and closing the preview preserve each PDF page and zoom for the app session', async () => {
   const pdfjs = {
     GlobalWorkerOptions: {},
@@ -185,4 +207,38 @@ test('PDF text search counts matches, opens the first page, wraps navigation, an
   assert.equal((await adapter.searchNext({ generation: 3 })).search_index, 1);
   assert.equal((await adapter.searchPrevious({ generation: 3 })).search_index, 3);
   assert.deepEqual(await adapter.search('', { generation: 3 }), { current_page: 3, total_pages: 3, zoom_percent: 100, ...emptySearch, page_text: 'agenda' });
+});
+
+test('viewer viewport is captured at detach and restored per PDF despite delayed page events and intervening snapshots', async () => {
+  let viewport=null;
+  const restored=[];
+  const viewerPort={listen(){},async setDocument(){},setScale(){},showPage(page){viewport={page,scale:1,x:0,y:0}},
+    captureView:()=>viewport,async restoreView(position){restored.push({...position});viewport={...position};return {page:position.page,scale:position.scale}}};
+  const adapter=new PdfViewAdapter({viewerPort,pdfjs:{GlobalWorkerOptions:{},getDocument:()=>loading(document([],Promise.resolve()),[])}});
+  const open=(id,generation)=>adapter.replace({url:`material://pdf/${id}`,material_id:id,generation});
+  await open('m1',1);viewport={page:3,scale:1.5,x:17.25,y:293.125};
+  await open('m2',2);viewport={page:2,scale:1,x:-20,y:50};
+  const view=await open('m1',3);
+  assert.equal(view.current_page,3);assert.equal(view.zoom_percent,150);
+  assert.deepEqual(restored[0],{page:3,scale:1.5,x:17.25,y:293.125});
+  viewport=null;await adapter.goToPage(3,{generation:3});viewport=null;
+  await open('m2',4);assert.deepEqual(restored[1],{page:2,scale:1,x:-20,y:50});
+  await open('m1',5);assert.deepEqual(restored[2],{page:3,scale:1.5,x:17.25,y:293.125});
+  await adapter.close();
+});
+
+test('switching during a pending viewport restore keeps the prior completed viewport and ignores its stale result', async () => {
+  let viewport=null,gate=null,captures=0;
+  const restored=[];
+  const viewerPort={listen(){},async setDocument(){},setScale(){},showPage(page){viewport={page,scale:1,x:0,y:0}},captureView(){captures++;return viewport},
+    async restoreView(position){restored.push({...position});viewport={page:1,scale:1,x:0,y:0};if(gate)return gate.promise;viewport={...position};return {page:position.page,scale:position.scale}}};
+  const adapter=new PdfViewAdapter({viewerPort,pdfjs:{GlobalWorkerOptions:{},getDocument:()=>loading(document([],Promise.resolve()),[])}});
+  const open=(id,generation)=>adapter.replace({url:`material://pdf/${id}`,material_id:id,generation});
+  await open('m1',1);viewport={page:3,scale:1.5,x:5,y:210};await open('m2',2);
+  gate=deferred();const old=open('m1',3);await new Promise(resolve=>setImmediate(resolve));
+  const capturesBefore=captures,newer=open('m2',4);await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(captures,capturesBefore,'intermediate restored geometry must not overwrite the good saved viewport');
+  const release=gate;gate=null;release.resolve({page:1,scale:1});await Promise.all([old,newer]);
+  const view=await open('m1',5);assert.equal(view.current_page,3);
+  assert.deepEqual(restored.at(-1),{page:3,scale:1.5,x:5,y:210});await adapter.close();
 });

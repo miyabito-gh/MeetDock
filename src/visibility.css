@@ -9,8 +9,8 @@ body > [hidden] {
 
 .canvas-wrap {
   display: block;
-  cursor: grab;
-  touch-action: none;
+  cursor: auto;
+  touch-action: pan-x pan-y;
 }
 
 .canvas-wrap:focus-visible {
@@ -34,3 +34,89 @@ body > [hidden] {
 .canvas-wrap.panning canvas {
   pointer-events: none;
 }
+
+.pdf-scroll-host {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pdf-scroll-host > .canvas-wrap {
+  position: absolute;
+  inset: 0;
+  padding: 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.canvas-wrap .pdfViewer .page {
+  margin: 0 auto 16px;
+  box-shadow: 0 3px 12px #26334430, 0 16px 36px #26334422;
+}
+
+.canvas-wrap .pdfViewer .canvasWrapper canvas {
+  box-shadow: none;
+  margin: 0;
+}
+
+/* Keep native appearances painted; the port only enables in-document links. */
+.canvas-wrap .pdfViewer .annotationLayer,
+.canvas-wrap .pdfViewer .annotationLayer * {
+  pointer-events: none !important;
+}
+
+.canvas-wrap .pdfViewer .annotationLayer .linkAnnotation.pdf-internal-link,
+.canvas-wrap .pdfViewer .annotationLayer .linkAnnotation.pdf-internal-link > a {
+  pointer-events: auto !important;
+}
+
+.canvas-wrap .pdfViewer .annotationLayer .pdf-internal-link > a:focus-visible {
+  outline: 2px solid #0754a3;
+  outline-offset: 2px;
+}
+
+.canvas-wrap .pdfViewer .annotation-overlay {
+  position: absolute;
+  inset: 0 auto auto 0;
+  z-index: 5;
+  margin: 0;
+  max-width: none;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.canvas-wrap .pdfViewer .annotation-overlay.drawing {
+  pointer-events: auto;
+}
+
+.canvas-wrap.hand-tool,
+.canvas-wrap.hand-tool .textLayer {
+  cursor: grab;
+}
+
+.canvas-wrap.panning .textLayer {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.viewer-toolbar .pdf-icon-button[aria-pressed="true"] {
+  background: #e8f2ff;
+  border-color: #b6d4fb;
+  color: #0754a3;
+}
+
+.pdf-outline-section { padding: 10px 12px; border-bottom: 1px solid #dce4ed; }
+.pdf-outline-list { margin: 8px 0 0; padding: 0; list-style: none; }
+.pdf-outline-list .pdf-outline-list { margin-left: 12px; }
+.pdf-outline-row { margin-block: 4px; min-width: 0; }
+.pdf-outline-row .bookmark-jump, .pdf-outline-label { overflow-wrap: anywhere; white-space: normal; text-align: left; }
+.pdf-outline-branch > summary { cursor: pointer; }
+.pdf-outline-branch > summary .bookmark-jump { max-width: calc(100% - 18px); }
+.pdf-outline-empty { font-size: 12px; color: #68788b; line-height: 1.6; }
+
+.pdf-outline-section { flex: 0 1 55%; min-height: 0; overflow: auto; }
+.bookmark-panel > .bookmark-head { flex: 0 0 auto; }
+.bookmark-panel > .bookmark-list { flex: 1 1 auto; min-height: 0; overflow: auto; }
