@@ -36,6 +36,12 @@
   --warn-line: #e6d8a6;
   --main: #8a5a14;
   --main-bg: #f4ead3;
+  --badge-main-bg: #f4ead3;
+  --badge-main-fg: #8a5a14;
+  --badge-marker-bg: #fff3b0;
+  --badge-marker-fg: #745500;
+  --badge-bookmark-bg: #fff3b0;
+  --badge-bookmark-fg: #745500;
   /* file kinds */
   --kind-green: #3d7a4e;
   --kind-blue: #3a6ea5;
@@ -62,6 +68,12 @@
     --hover: #3a3936;
     --canvas: #1c1b1a;
     --scrim: #000000a6;
+    --badge-main-bg: #d9775738;
+    --badge-main-fg: #f3bda6;
+    --badge-marker-bg: #e6be3c33;
+    --badge-marker-fg: #efd88a;
+    --badge-bookmark-bg: #6eaae633;
+    --badge-bookmark-fg: #b4d3f2;
     --line: #3d3c38;
     --line-light: #34332f;
     --line-strong: #4d4b45;
@@ -103,6 +115,12 @@ color-scheme: dark;
   --hover: #3a3936;
   --canvas: #1c1b1a;
   --scrim: #000000a6;
+  --badge-main-bg: #d9775738;
+  --badge-main-fg: #f3bda6;
+  --badge-marker-bg: #e6be3c33;
+  --badge-marker-fg: #efd88a;
+  --badge-bookmark-bg: #6eaae633;
+  --badge-bookmark-fg: #b4d3f2;
   --line: #3d3c38;
   --line-light: #34332f;
   --line-strong: #4d4b45;
@@ -209,7 +227,7 @@ input::placeholder { color: var(--muted); }
 .role-header { margin-top: 24px; padding-bottom: 8px; border-color: var(--line); }
 .role-header h2 { color: var(--text-soft); font-size: 12px; font-weight: 600; text-transform: none; letter-spacing: 0; }
 .role-badge { padding: 2px 9px; border-radius: 999px; }
-.role-badge.main, .role-tag.main { background: var(--main-bg); color: var(--main); }
+.role-badge.main, .role-tag.main { background: var(--badge-main-bg); color: var(--badge-main-fg); }
 .role-badge.reference, .role-tag.ref { background: var(--surface-2); color: var(--muted); }
 .panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: none; }
 .list-header { background: var(--surface-2); border-color: var(--line); color: var(--muted); }
@@ -325,7 +343,9 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 .pdf-outline-section { border-color: var(--line-light); }
 .pdf-outline-empty { color: var(--muted); }
 .pdf-state { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: none; }
-.marker-badge { border-radius: 999px; }
+.marker-badge { border-radius: 999px; background: var(--badge-marker-bg); color: var(--badge-marker-fg); font-weight: 600; }
+.marker-badge.bookmark-badge { background: var(--badge-bookmark-bg); color: var(--badge-bookmark-fg); }
+.icon { border-color: var(--line); background: var(--surface); color: var(--text); }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) button.danger:not(.danger-button) { border-color: #f6a79d; background: var(--danger-bg); color: #f6a79d; }
