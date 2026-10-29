@@ -1,5 +1,5 @@
 /** PDF.js UI is isolated from the document lifecycle and model event boundary. */
-export function createPdfViewerPort({ container, viewer, PDFViewer, PDFLinkService, EventBus, annotationMode, isValidExplicitDest }) {
+export function createPdfViewerPort({ container, viewer, PDFViewer, PDFLinkService, EventBus, annotationMode, isValidExplicitDest, ResizeObserverClass = globalThis.ResizeObserver }) {
   const eventBus = new EventBus();
   const linkService = new PDFLinkService({ eventBus });
   linkService.externalLinkEnabled = false;
@@ -99,6 +99,14 @@ export function createPdfViewerPort({ container, viewer, PDFViewer, PDFLinkServi
   eventBus.on('pagerendered', refreshLayout);
   eventBus.on('annotationlayerrendered', refreshLayout);
   eventBus.on('pagesinit', () => { pending?.resolve(); pending = null; refreshLayout(); });
+  // Enlarging the viewport can reveal pages without changing scrollTop. PDF.js's
+  // own resize observer only updates height CSS, so explicitly refresh visibility.
+  if (ResizeObserverClass) {
+    const resizeObserver = new ResizeObserverClass(entries => {
+      if (pdfViewer.pdfDocument && entries.some(entry => entry.target === container)) pdfViewer.update();
+    });
+    resizeObserver.observe(container);
+  }
   return Object.freeze({
     listen(change, layout) { listener = change; layoutListener = layout; },
     async setDocument(document) {

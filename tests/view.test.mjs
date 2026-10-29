@@ -1009,7 +1009,7 @@ test('keyboard context keys open the focused material, group or snapshot menu wi
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   const line=source.slice(source.indexOf("  search.addEventListener('input'")).split('\n')[0];
   let keydown;const opened=[],document={activeElement:null,addEventListener(type,handler){keydown=handler}};
-  const scope={search:{addEventListener(){}},document,dialog:{},operationDialog:{},issue:{},dndDialog:{},windowsDialog:{},exitDialog:{},reorderSaveDialog:{},host:{contains:()=>true},WINDOW_SNAPSHOT_GROUP_ID:'snapshot',openMenu:(target,event)=>opened.push({target,event})};
+  const scope={model:null,search:{addEventListener(){}},document,dialog:{},operationDialog:{},issue:{},dndDialog:{},windowsDialog:{},exitDialog:{},reorderSaveDialog:{},host:{contains:()=>true},WINDOW_SNAPSHOT_GROUP_ID:'snapshot',openMenu:(target,event)=>opened.push({target,event})};
   runInNewContext(line,scope);
   for(const key of ['ContextMenu','F10'])for(const [dataset,kind,id] of [[{materialId:'m'},'material','m'],[{groupId:'g'},'group','g'],[{groupId:'snapshot'},'snapshot','snapshot']]){
     const row={dataset,getBoundingClientRect:()=>({left:30,top:50})},origin={closest:()=>row};document.activeElement=origin;

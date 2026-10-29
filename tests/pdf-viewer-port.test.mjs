@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { createPdfViewerPort } from '../src/pdf-viewer-port.js';
 
 const deferred = () => { let resolve; const promise = new Promise(done => resolve = done); return {promise,resolve}; };
-function harness() {
+function harness(ResizeObserverClass) {
   let instance;
   const events={},moves=[],handlers={};
+  let updates=0;
   let hidden=false;
   const container={clientLeft:2,clientTop:3,clientHeight:400,clientWidth:600,addEventListener:(name,handler)=>handlers[name]=handler,getBoundingClientRect:()=>({left:10,top:20,width:hidden?0:600,height:hidden?0:400})};
   let scrollLeft=0;
@@ -31,11 +32,11 @@ function harness() {
       queueMicrotask(()=>events.pagesinit());
     }
     scrollPageIntoView({pageNumber}){moves.push(pageNumber);this.currentPageNumber=pageNumber;container.scrollTop+=this.pages[pageNumber-1].div.getBoundingClientRect().top-23}
-    update(){const page=this.pages.findIndex(p=>p.div.getBoundingClientRect().bottom>23);this.currentPageNumber=page+1}
+    update(){updates++;const page=this.pages.findIndex(p=>p.div.getBoundingClientRect().bottom>23);this.currentPageNumber=page+1}
   }
-  const port=createPdfViewerPort({container,viewer:{querySelectorAll:()=>[]},PDFViewer,PDFLinkService,EventBus,annotationMode:1,isValidExplicitDest:dest=>Array.isArray(dest)&&dest.length>=2&&typeof dest[1]?.name==='string'});
+  const port=createPdfViewerPort({container,viewer:{querySelectorAll:()=>[]},PDFViewer,PDFLinkService,EventBus,annotationMode:1,ResizeObserverClass,isValidExplicitDest:dest=>Array.isArray(dest)&&dest.length>=2&&typeof dest[1]?.name==='string'});
   const document=(heights,widths=heights.map(()=>800))=>({numPages:heights.length,heights,widths,getPage:async number=>({height:heights[number-1],width:widths[number-1]})});
-  return {port,container,moves,document,handlers,hide(){hidden=true},show(){hidden=false},get viewer(){return instance}};
+  return {port,container,moves,document,handlers,hide(){hidden=true},show(){hidden=false},get updates(){return updates},get viewer(){return instance}};
 }
 
 test('viewport capture uses current scroll geometry before pagechanging RAF and preserves fractional pan and whitespace',async()=>{
@@ -140,4 +141,21 @@ test('outline geometry loading cannot scroll a document opened while its destina
   await new Promise(resolve=>setImmediate(resolve));
   await h.port.setDocument(h.document([500]));gate.resolve({height:900,width:800});
   assert.equal(await pending,null);assert.deepEqual(h.moves,[]);
+});
+
+
+test('viewport resize refreshes newly visible pages without refitting or moving the document',async()=>{
+  let resized,observed;
+  class ResizeObserver {constructor(callback){resized=callback}observe(target){observed=target}}
+  const h=harness(ResizeObserver);
+  assert.equal(observed,h.container);
+  resized([{target:h.container}]);assert.equal(h.updates,0,'there is no document before loading');
+  await h.port.setDocument(h.document([600,600,600]));
+  h.viewer.currentScale=1.5;h.container.scrollTop=700;h.container.scrollLeft=100;
+  const before={scale:h.viewer.currentScale,top:h.container.scrollTop,left:h.container.scrollLeft};
+  h.container.clientHeight=800;resized([{target:h.container}]);
+  assert.equal(h.updates,1);
+  assert.deepEqual({scale:h.viewer.currentScale,top:h.container.scrollTop,left:h.container.scrollLeft},before);
+  resized([{target:{}}]);assert.equal(h.updates,1,'other resize entries do not refresh this viewer');
+  await h.port.setDocument(null);resized([{target:h.container}]);assert.equal(h.updates,1);
 });
