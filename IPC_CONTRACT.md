@@ -102,7 +102,7 @@ Tauri commandは`load_settings`を除き、表のrequest全体を単一引数`re
 - 旧試作候補はcurrentも復旧残存ファイルもない場合だけ提示する。元ファイルは変更せず、import_legacy以外で移行しない。open_read_only後はセッション終了まで再提示・保存・復旧を禁止する。schema 1/2も将来schemaも自動migrationしない。
 - 読込時に将来/旧schemaを検出したセッションも読み取り専用を維持する。復旧承認後にcurrentが変わっていれば競合とし、未知schemaに変わっていればREAD_ONLY_SCHEMAで拒否する。読み取りのI/Oエラーは破損/不存在と区別し、初期化しない。
 - 保存のMutexはblocking処理の完了まで所有する。最終置換の直前にもcurrentのbyte列を再確認するが、外部プロセスとのOSレベルCASではない。アプリの単一プロセス前提は変えない。
-- ReplaceFileW成功をcommit点とする。成功後の残存退避ファイル削除失敗で保存失敗へ戻さない。ReplaceFileWの1177等ではcurrent名が失われ得るため、明示退避先と検証済みbackup/tempで旧/新内容を保護してCONFIG_IOを返す。無断の復元やMoveFileExWへの置換再試行はしない。詳細は基本・詳細設計書2.3とCFG_01_VERIFICATION.mdを参照。
+- ReplaceFileW成功をcommit点とする。成功後の残存退避ファイル削除失敗で保存失敗へ戻さない。ReplaceFileWの1177等ではcurrent名が失われ得るため、明示退避先と検証済みbackup/tempで旧/新内容を保護してCONFIG_IOを返す。無断の復元やMoveFileExWへの置換再試行はしない。詳細は基本・詳細設計書2.3を参照。
 
 ## 状態・起動DTO
 
