@@ -333,7 +333,7 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 }
 :root[data-theme="dark"] button.danger:not(.danger-button) { border-color: #f6a79d; background: var(--danger-bg); color: #f6a79d; }
 :root[data-theme="dark"] button.danger:not(.danger-button):hover:not(:disabled) { background: #55312d; }
-.toolbar-theme-option[aria-checked="true"]::before { content: "¹3"; margin-right: 6px; color: var(--accent3); }
+.toolbar-theme-option[aria-checked="true"]::before { content: "\2713"; margin-right: 6px; color: var(--accent3); }
 .toolbar-theme-option[aria-checked="false"]::before { content: ""; display: inline-block; width: 1em; margin-right: 6px; }
 
 /* narrow layouts */
