@@ -49,8 +49,8 @@
   --radius-modal: 16px;
   --shadow: 0 1px 2px #1414130a, 0 6px 18px #1414130d;
   --shadow-modal: 0 12px 40px #14141324;
-  --font-ui: "Segoe UI Variable", "Segoe UI", "Yu Gothic UI", "Meiryo UI", system-ui, sans-serif;
-  --font-title: Georgia, "Yu Mincho", "YuMincho", serif;
+  --font-ui: "Segoe UI Variable", "Segoe UI", "Meiryo UI", Meiryo, "Yu Gothic UI", system-ui, sans-serif;
+  --font-title: Georgia, "Meiryo UI", Meiryo, "Yu Gothic UI", serif;
 }
 
 @media (prefers-color-scheme: dark) {
