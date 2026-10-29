@@ -24,9 +24,10 @@ test('group Explorer override wins and batch/individual/reveal carry the resolve
   const config = validate('AppConfig', legacyConfig);
   config.explorer_open_mode = 'new_window';
   config.groups[0].explorer_open_mode = 'existing_tab';
+  config.materials.push({ id: 'm2', group_id: 'g1', name: 'file', role: 'main', target_type: 'file', path: 'C:\\Docs\\a.pdf', window_match_pattern: null, order: 2 });
   const state = ready(config);
   assert.equal(transition(state, { type: Event.ActivateRequested, material_id: 'm1' }).effects[0].request.explorer_open_mode, 'existing_tab');
-  assert.equal(transition(state, { type: Event.OpenContainingFolderRequested, material_id: 'm1' }).effects[0].request.explorer_open_mode, 'existing_tab');
+  assert.equal(transition(state, { type: Event.OpenContainingFolderRequested, material_id: 'm2' }).effects[0].request.explorer_open_mode, 'existing_tab');
   assert.equal(transition(state, { type: Event.BatchLaunchRequested, group_id: 'g1' }).effects[0].request.explorer_open_mode, 'existing_tab');
 });
 
