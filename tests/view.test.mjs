@@ -1051,3 +1051,10 @@ test('PDF header directly selects and identifies all three display modes', () =>
   assert.match(styles,/\.pdf-display-modes \.pdf-display-button\[aria-pressed="true"\]/);
   assert.match(styles,/\.preview-actions \[hidden\],\.row-action-button\[hidden\]\{display:none!important\}/);
 });
+
+test('window list rows expose the full title as a tooltip and clamp to two lines', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/screen-refresh.css', import.meta.url), 'utf8');
+  assert.ok(source.includes('windowTitle.title=item.title;'));
+  assert.match(css, /\.window-title \{[^}]*-webkit-line-clamp: 2[^}]*overflow-wrap: anywhere/);
+});

@@ -422,3 +422,8 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
   display: flex !important; position: absolute; left: 0; top: var(--chrome-top-4, 112px); bottom: 0; width: min(220px, 42%); z-index: 29;
   background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); overflow: hidden;
 }
+
+/* window list: up to two wrapped lines, full title in the tooltip */
+.window-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: anywhere; word-break: break-word; font-size: 12px; line-height: 1.45; color: var(--text); }
+.window-row { align-items: center; padding-block: 7px; }
+.window-row-actions { align-self: center; }
