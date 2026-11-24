@@ -1107,7 +1107,7 @@ test('saved-window view uses its own heading, flags only unverified items and hi
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../src/screen-refresh.css', import.meta.url), 'utf8');
   assert.ok(source.includes("mainRole.heading.textContent='ウィンドウ';drop.hidden=true;"));
-  assert.ok(source.includes("mainRole.heading.textContent='メイン資料';drop.hidden=false;"));
+  assert.ok(source.includes("mainRole.heading.textContent='メイン資料';drop.hidden=!next.can_edit;"));
   assert.ok(source.includes("parts.state.textContent=item.restorability==='conditional'?'要確認':'';"));
   assert.ok(!source.includes("el('span','status','一時保存')"));
   assert.match(css, /\.snapshot-material-row \.status:empty \{ visibility: hidden; \}/);
@@ -1130,4 +1130,11 @@ test('settings recovery candidates are labelled by kind, time and revision in Ja
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   assert.ok(!source.includes('revision ${'));
   assert.ok(!source.includes('schema 3へ'));
+});
+
+test('read-only mode explains why nothing can be added instead of pointing to disabled controls', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.ok(source.includes("model.can_edit?'右上の「資料を追加」またはドラッグ＆ドロップで登録できます。':'読み取り専用のため、資料の登録や編集はできません。'"));
+  assert.ok(source.includes('addRootGroup.disabled=!next.can_edit;'));
+  assert.ok(!source.includes('将来schema'));
 });
