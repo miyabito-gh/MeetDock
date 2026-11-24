@@ -431,3 +431,7 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 /* saved windows: status only for items that need checking; remove button aligned with material row actions */
 .snapshot-material-row .status:empty { visibility: hidden; }
 .snapshot-material-row .snapshot-remove { grid-column: 3; }
+
+/* the usual state stays readable but recedes so opened and failing items stand out */
+.status[data-tone="quiet"] { background: transparent; color: var(--muted); padding-inline: 0; }
+.status[data-tone="quiet"] .status-mark { display: none; }

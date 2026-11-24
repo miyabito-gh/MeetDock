@@ -1113,3 +1113,11 @@ test('saved-window view uses its own heading, flags only unverified items and hi
   assert.match(css, /\.snapshot-material-row \.status:empty \{ visibility: hidden; \}/);
   assert.match(css, /\.snapshot-material-row \.snapshot-remove \{ grid-column: 3; \}/);
 });
+
+test('the usual available state is quiet text while opened and failing states keep their pills', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/screen-refresh.css', import.meta.url), 'utf8');
+  assert.ok(source.includes("p.state.dataset.tone=error?'warning':status?.open_state==='open'?'available':available?'quiet':'neutral';"));
+  assert.match(css, /\.status\[data-tone="quiet"\] \{ background: transparent; color: var\(--muted\); padding-inline: 0; \}/);
+  assert.match(css, /\.status\[data-tone="quiet"\] \.status-mark \{ display: none; \}/);
+});
