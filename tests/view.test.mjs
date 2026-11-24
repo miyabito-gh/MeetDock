@@ -1080,3 +1080,9 @@ test('saved-window rows show the normalized path with the full path as a tooltip
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   assert.ok(source.includes('parts.path.textContent=displayPath(target.path);parts.path.title=parts.path.textContent;'));
 });
+
+test('empty state points to group creation when no group exists yet', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.ok(source.includes("const noGroup=!model.query&&model.can_edit&&!model.config?.groups?.length;"));
+  assert.ok(source.includes("noGroup?'左の「＋ ルート追加」からグループを作成すると、資料を登録できます。'"));
+});
