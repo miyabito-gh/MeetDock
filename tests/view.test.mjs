@@ -873,7 +873,7 @@ test('unsaved state uses a title indicator and toolbar actions without a floatin
   assert.ok(source.includes("saveButton=button('保存','save'"));
   const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
   assert.match(styles,/\.title-line\{display:flex/);
-  assert.match(styles,/\.edit-state\[data-state="Dirty"\]/);
+  assert.match(readFileSync(new URL('../src/screen-refresh.css',import.meta.url),'utf8'),/\.edit-state\[data-state="Dirty"\] \{/);
 });
 
 test('Ctrl+S saves dirty state through the existing save action', () => {
@@ -942,7 +942,7 @@ test('group and material operations use an accessible in-app dialog with explici
   assert.doesNotMatch(source,/confirm\('(未保存の変更|空のグループ|資料を削除)/);
   assert.match(styles,/\.operation-dialog-text\{[^}]*line-height:1\.6/);
   assert.match(styles,/\.operation-dialog \.field\[hidden\]\{display:none!important\}/);
-  assert.match(styles,/\.danger-button\{[^}]*background:var\(--danger\)/);
+  assert.match(readFileSync(new URL('../src/screen-refresh.css',import.meta.url),'utf8'),/\.danger-button \{[^}]*background: var\(--danger\)/);
 });
 
 test('confirmation-only operations do not leave a hidden required input blocking submit',()=>{
