@@ -425,5 +425,7 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 
 /* window list: up to two wrapped lines, full title in the tooltip */
 .window-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; white-space: normal; overflow-wrap: anywhere; word-break: break-word; font-size: 12px; line-height: 1.45; color: var(--text); }
+/* path-like titles (e.g. Explorer) show every segment so the location stays identifiable */
+.window-title.window-title-path { display: block; -webkit-line-clamp: none; line-clamp: none; overflow: visible; font-family: Consolas, "Cascadia Mono", "Segoe UI", Meiryo, monospace; }
 .window-row { align-items: center; padding-block: 7px; }
 .window-row-actions { align-self: center; }

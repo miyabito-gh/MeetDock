@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm';
 import { createFocusSync } from '../src/focus-sync.js';
 import { createPdfViewerPort } from '../src/pdf-viewer-port.js';
 import { annotationSessionChange, commitAnnotations, createAnnotationHistory, createStroke, redoAnnotations, undoAnnotations } from '../src/pdf-annotations.js';
-import { batchButtonAction, batchSummary, displayPath, groupTreeRenderKey, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfDocumentKeyDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+import { batchButtonAction, batchSummary, displayPath, groupTreeRenderKey, isPathLikeTitle, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfDocumentKeyDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
 
 test('PDF annotation canvases follow rendered pages without allocating all document pages',()=>{
   assert.deepEqual(pdfOverlayBounds({offsetLeft:24,offsetTop:24,clientWidth:712,clientHeight:1007}),{left:24,top:24,width:712,height:1007});
@@ -1057,4 +1057,13 @@ test('window list rows expose the full title as a tooltip and clamp to two lines
   const css = readFileSync(new URL('../src/screen-refresh.css', import.meta.url), 'utf8');
   assert.ok(source.includes('windowTitle.title=item.title;'));
   assert.match(css, /\.window-title \{[^}]*-webkit-line-clamp: 2[^}]*overflow-wrap: anywhere/);
+});
+
+test('window list shows path-like titles in full with the path font', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/screen-refresh.css', import.meta.url), 'utf8');
+  for (const title of ['C:\\Fixtures\\会議', 'c:/fixtures', '\\\\server\\share\\dir']) assert.equal(isPathLikeTitle(title), true, title);
+  for (const title of ['売上報告.xlsx - Excel', 'C:', 'Cドライブ', '\\single', '']) assert.equal(isPathLikeTitle(title), false, title);
+  assert.ok(source.includes("if(isPathLikeTitle(item.title))windowTitle.classList.add('window-title-path');"));
+  assert.match(css, /\.window-title\.window-title-path \{[^}]*-webkit-line-clamp: none[^}]*font-family: Consolas/);
 });
