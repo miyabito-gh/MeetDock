@@ -387,5 +387,3 @@ export class PdfViewAdapter {
     await this.#teardown();
   }
 }
-
-export function createPdfViewAdapter(options) { return new PdfViewAdapter(options); }
