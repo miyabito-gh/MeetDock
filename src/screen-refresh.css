@@ -310,7 +310,6 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 .window-row { border-color: var(--line-light); }
 .window-app-group { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .window-app-head { background: var(--surface-2); border-color: var(--line-light); }
-.window-app-mark { background: var(--accent2); color: var(--accent3); }
 .window-count { background: var(--hover); color: var(--muted); }
 .window-exclusions { border-color: var(--line); }
 .window-exclusion-row { border-color: var(--line); background: var(--surface-2); }

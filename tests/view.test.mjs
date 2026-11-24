@@ -455,8 +455,10 @@ test('window inventory groups applications and sorts groups and titles without u
   for (const token of ["new Intl.Collator('ja'", "key=`${item.app_name}\\u0000${item.executable_name}`", "'window-app-group'", "'window-app-head'", "`${group.items.length}件`", "group.items.sort((a,b)=>collator.compare(a.title,b.title))"]) assert.ok(source.includes(token));
   assert.ok(source.includes("windowsList.querySelectorAll('.window-row')"));
   assert.match(styles, /\.window-app-group\{[^}]*border:1px solid var\(--line\)/);
-  assert.match(styles, /\.window-app-head\{[^}]*min-height:40px/);
-  assert.match(styles, /\.window-app-items \.window-row\{min-height:42px;padding:5px 10px 5px 44px\}/);
+  assert.match(styles, /\.window-app-head\{[^}]*min-height:32px/);
+  assert.match(styles, /\.window-app-items \.window-row\{min-height:42px;padding:5px 10px\}/);
+  assert.match(styles, /\.window-app-names\{[^}]*flex-direction:row/);
+  assert.ok(!source.includes('window-app-mark'));
   assert.match(styles, /\.window-app-group\{margin:5px 0 8px/);
 });
 
