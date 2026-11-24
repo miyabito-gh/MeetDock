@@ -209,6 +209,8 @@ input::placeholder { color: var(--muted); }
 .secondary:active:not(:disabled) { background: var(--line); }
 .primary, .actions .primary, .toolbar-edit-actions [data-action="save"] { background: var(--accent-fill); border-color: var(--accent-fill); color: var(--on-accent); }
 .primary:hover:not(:disabled), .actions .primary:hover:not(:disabled), .toolbar-edit-actions [data-action="save"]:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.toolbar-edit-actions { flex: 0 0 auto; }
+.toolbar-edit-actions .edit-action { white-space: nowrap; }
 .primary:active:not(:disabled) { filter: brightness(.94); }
 .toolbar-runtime-actions, .pdf-display-modes { border-color: var(--line); background: var(--surface-2); border-radius: 999px; }
 .toolbar-auxiliary-actions { border-color: var(--line-light); }

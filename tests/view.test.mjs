@@ -1086,3 +1086,11 @@ test('empty state points to group creation when no group exists yet', () => {
   assert.ok(source.includes("const noGroup=!model.query&&model.can_edit&&!model.config?.groups?.length;"));
   assert.ok(source.includes("noGroup?'左の「＋ ルート追加」からグループを作成すると、資料を登録できます。'"));
 });
+
+test('toolbar gives the title the edit-action space while clean and keeps edit buttons on one line', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/screen-refresh.css', import.meta.url), 'utf8');
+  assert.ok(source.includes("editActions.hidden=next.edit==='Clean';"));
+  assert.ok(source.includes("title.textContent=next.query?'検索結果':selected?.name??'資料';title.title=title.textContent;"));
+  assert.match(css, /\.toolbar-edit-actions \.edit-action \{ white-space: nowrap; \}/);
+});
