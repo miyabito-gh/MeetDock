@@ -1067,3 +1067,11 @@ test('window list shows path-like titles in full with the path font', () => {
   assert.ok(source.includes("if(isPathLikeTitle(item.title))windowTitle.classList.add('window-title-path');"));
   assert.match(css, /\.window-title\.window-title-path \{[^}]*-webkit-line-clamp: none[^}]*font-family: Consolas/);
 });
+
+test('counts, dialog actions and danger buttons use the shared notation and button styles', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /\} 件`/);
+  assert.ok(!source.includes('draftへ追加'));
+  assert.ok(source.includes("button('登録','dnd-confirm','primary')"));
+  assert.ok(source.includes("button('初期化','issue-init','secondary danger')"));
+});
