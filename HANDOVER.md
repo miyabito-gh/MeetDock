@@ -1,13 +1,14 @@
 # MeetDock 引継ぎ（現行）
 
-更新: 2026-10-29。詳細仕様は `MeetDock 基本・詳細設計書.md`、IPC契約は `IPC_CONTRACT.md`、状態遷移は `MEDIATOR_STATE_TRANSITIONS.md`、責務分離は `ARCHITECTURE_RESPONSIBILITY.md`、作業規則は `AGENTS.md`。過去の工程記録・検証ログ・長い引継ぎ文書は整理のため削除済み。必要なら git 履歴（コミット 723c906 の親、およびこの文書を追加するコミットの親）から復元できる。
+更新: 2026-11-24。詳細仕様は `MeetDock 基本・詳細設計書.md`、IPC契約は `IPC_CONTRACT.md`、状態遷移は `MEDIATOR_STATE_TRANSITIONS.md`、責務分離は `ARCHITECTURE_RESPONSIBILITY.md`、作業規則は `AGENTS.md`。過去の工程記録・検証ログ・長い引継ぎ文書は整理のため削除済み。必要なら git 履歴（コミット 723c906 の親、およびこの文書を追加するコミットの親）から復元できる。
 
 ## 実装状態
 
 - Tauri v2 + Rust / Vite + Vanilla JS。Phase 0〜7（契約・Mediator・設定永続化・状態同期・起動/Windows連携・PDF protocol/PDF.js・UI）は実装済み。
-- PDF画面: sidecar注釈（マーカー・Undo/Redo）、しおり左レール、日本語CMap同梱、資料切替ショートカット、全画面表示。
-- 画面刷新は `src/screen-refresh.css` と `src/main.js`。
-- `npm test` は 674 件すべて成功（2026-10-29）。
+- PDF画面: sidecar注釈（マーカー・Undo/Redo）、しおり左レール、日本語CMap同梱、資料切替ショートカット、全画面表示（上端・Tabでのchrome再表示、マーカー／しおりのオーバーレイ表示）。
+- スタイルは `src/base.css`（旧 `mock-styles.css`）→ `src/visibility.css` → `src/screen-refresh.css` の順に読み込み、色はすべて `screen-refresh.css` のトークン。
+- 2026-11-24 の監査（ブランチ `feature/audit-fixes`）: ウィンドウ一覧のパス全文表示、列見出し行の削除、一時保存ウィンドウ画面の専用化、通常状態「利用可能」の控えめ表示、読み取り専用・グループ未作成時の案内、文言の日本語化、無効CSSルールの削除など。詳細は `STATUS.md`。
+- `npm test` は 691 件すべて成功（2026-11-24）。
 
 ## 未完了・保留
 
