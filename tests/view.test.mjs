@@ -1100,3 +1100,14 @@ test('role sections rely on their heading and count instead of a repeated column
   assert.ok(!source.includes('list-header'));
   assert.ok(source.includes("const panel=el('div','panel'),list=el('div','materials');panel.append(list);"));
 });
+
+test('saved-window view uses its own heading, flags only unverified items and hides the material drop zone', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/screen-refresh.css', import.meta.url), 'utf8');
+  assert.ok(source.includes("mainRole.heading.textContent='ウィンドウ';drop.hidden=true;"));
+  assert.ok(source.includes("mainRole.heading.textContent='メイン資料';drop.hidden=false;"));
+  assert.ok(source.includes("parts.state.textContent=item.restorability==='conditional'?'要確認':'';"));
+  assert.ok(!source.includes("el('span','status','一時保存')"));
+  assert.match(css, /\.snapshot-material-row \.status:empty \{ visibility: hidden; \}/);
+  assert.match(css, /\.snapshot-material-row \.snapshot-remove \{ grid-column: 3; \}/);
+});

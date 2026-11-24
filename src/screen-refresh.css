@@ -428,3 +428,7 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 .window-title.window-title-path { display: block; -webkit-line-clamp: none; line-clamp: none; overflow: visible; font-family: Consolas, "Cascadia Mono", "Segoe UI", Meiryo, monospace; }
 .window-row { align-items: center; padding-block: 7px; }
 .window-row-actions { align-self: center; }
+
+/* saved windows: status only for items that need checking; remove button aligned with material row actions */
+.snapshot-material-row .status:empty { visibility: hidden; }
+.snapshot-material-row .snapshot-remove { grid-column: 3; }
