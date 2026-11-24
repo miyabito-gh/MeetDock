@@ -1075,3 +1075,8 @@ test('counts, dialog actions and danger buttons use the shared notation and butt
   assert.ok(source.includes("button('登録','dnd-confirm','primary')"));
   assert.ok(source.includes("button('初期化','issue-init','secondary danger')"));
 });
+
+test('saved-window rows show the normalized path with the full path as a tooltip like material rows', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.ok(source.includes('parts.path.textContent=displayPath(target.path);parts.path.title=parts.path.textContent;'));
+});
