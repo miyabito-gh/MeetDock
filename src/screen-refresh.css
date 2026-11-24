@@ -239,7 +239,6 @@ input::placeholder { color: var(--muted); }
 .role-badge.main, .role-tag.main { background: var(--badge-main-bg); color: var(--badge-main-fg); }
 .role-badge.reference, .role-tag.ref { background: var(--surface-2); color: var(--muted); }
 .panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: none; }
-.list-header { background: var(--surface-2); border-color: var(--line); color: var(--muted); }
 .material-row { min-height: 58px; border-color: var(--line-light); background: var(--surface); transition: background-color .14s ease; }
 .material-row:hover { background: var(--surface-2); }
 .material-row.pdf-current { background: var(--accent2); box-shadow: inset 3px 0 var(--accent); }

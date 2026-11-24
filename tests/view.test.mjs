@@ -895,7 +895,7 @@ test('toolbar groups remain stable and material status is lightweight', () => {
   assert.match(styles,/\.status\[data-tone="available"\] \.status-mark/);
   assert.match(styles,/\.row-actions\{width:auto;display:flex;align-items:center;justify-content:flex-end/);
   assert.match(styles,/\.list-pane\{container:material-list \/ inline-size\}/);
-  assert.match(styles,/\.list-header,\.material-row\{grid-template-columns:minmax\(0,1fr\) 116px 90px\}/);
+  assert.match(styles,/\.material-row\{grid-template-columns:minmax\(0,1fr\) 116px 90px\}/);
   assert.match(styles,/\.material-row \.row-actions\{position:static;right:auto;top:auto;transform:none/);
   assert.match(styles,/@container material-list \(max-width:540px\)\{/);
   assert.match(styles,/\.material-row \.row-actions\{grid-column:2!important;grid-row:2;margin-left:0;justify-self:end\}/);
@@ -1093,4 +1093,10 @@ test('toolbar gives the title the edit-action space while clean and keeps edit b
   assert.ok(source.includes("editActions.hidden=next.edit==='Clean';"));
   assert.ok(source.includes("title.textContent=next.query?'検索結果':selected?.name??'資料';title.title=title.textContent;"));
   assert.match(css, /\.toolbar-edit-actions \.edit-action \{ white-space: nowrap; \}/);
+});
+
+test('role sections rely on their heading and count instead of a repeated column header row', () => {
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.ok(!source.includes('list-header'));
+  assert.ok(source.includes("const panel=el('div','panel'),list=el('div','materials');panel.append(list);"));
 });
