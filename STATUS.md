@@ -1,12 +1,12 @@
 # MeetDock 現状の保全記録
 
-記録日: 2026-11-24
+記録日: 2026-11-25
 
 ## 現在の作業状態
 
-- 現行ブランチ: `feature/audit-fixes`（`feature/claude-style-redesign` の `1f5b7ee` から分岐）
-- 作業ツリー: 記録時点でクリーン（このファイルの更新コミットを除く）
-- push: 未実施（両ブランチとも origin に無い）
+- 既定ブランチ: `master`
+- 統合: `feature/claude-style-redesign` の `1f5b7ee` を含む `feature/audit-fixes` を `c858cd5` まで fast-forward。
+- 統合後の検証: `npm test` 691 件と `cargo test --manifest-path src-tauri/Cargo.toml` 84 件が通過。`npm run build` 成功（既知のチャンクサイズ警告あり）。
 
 ## 最終作業の内容（2026-11-24, feature/audit-fixes）
 
@@ -35,11 +35,6 @@
 - 空の `artifacts/`: Git 管理外。削除は作業ルール上、明示指示が必要。
 - 設計書類（基本・詳細設計書、IPC_CONTRACT、MEDIATOR_STATE_TRANSITIONS、ARCHITECTURE_RESPONSIBILITY）の陳腐化確認: 仕様の正否判断が必要なため未着手。
 - 最小幅で未保存状態のとき、ツールバーのタイトルは省略される（全文はツールチップ）。
-
-## 保全上のリスク（要対応）
-
-- `feature/claude-style-redesign` と `feature/audit-fixes` はどちらも未 push。ローカルの作業コミットは、PC 故障・誤操作・ブランチ削除で失われる可能性があります。
-- push はユーザーの指示があるまで行わない。
 
 ## 残件
 
