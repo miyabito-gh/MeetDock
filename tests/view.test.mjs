@@ -6,7 +6,7 @@ import { runInNewContext } from 'node:vm';
 import { createFocusSync } from '../src/focus-sync.js';
 import { createPdfViewerPort } from '../src/pdf-viewer-port.js';
 import { annotationSessionChange, commitAnnotations, createAnnotationHistory, createStroke, redoAnnotations, undoAnnotations } from '../src/pdf-annotations.js';
-import { batchButtonAction, batchSummary, displayPath, groupTreeRenderKey, isPathLikeTitle, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfDocumentKeyDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
+import { batchButtonAction, batchSummary, candidateLabel, displayPath, groupTreeRenderKey, isPathLikeTitle, materialIcon, menuNextIndex, noticeMessage, noticeTone, pdfArrowBoundaryDirection, pdfDocumentKeyDirection, pdfOverlayBounds, pdfPageKeyDirection, placeStableRow, reorderAvailable, reorderDropAction, snapshotMaterialTarget, visibleMaterials } from '../src/view.js';
 
 test('PDF annotation canvases follow rendered pages without allocating all document pages',()=>{
   assert.deepEqual(pdfOverlayBounds({offsetLeft:24,offsetTop:24,clientWidth:712,clientHeight:1007}),{left:24,top:24,width:712,height:1007});
@@ -1120,4 +1120,14 @@ test('the usual available state is quiet text while opened and failing states ke
   assert.ok(source.includes("p.state.dataset.tone=error?'warning':status?.open_state==='open'?'available':available?'quiet':'neutral';"));
   assert.match(css, /\.status\[data-tone="quiet"\] \{ background: transparent; color: var\(--muted\); padding-inline: 0; \}/);
   assert.match(css, /\.status\[data-tone="quiet"\] \.status-mark \{ display: none; \}/);
+});
+
+test('settings recovery candidates are labelled by kind, time and revision in Japanese', () => {
+  assert.equal(candidateLabel({ candidate_id: 'c1', kind: 'backup', revision: 3, last_updated: null }), 'バックアップ・第3版');
+  assert.equal(candidateLabel({ candidate_id: 'c2', kind: 'temporary', revision: null, last_updated: null }), '保存途中の一時ファイル');
+  const dated = candidateLabel({ candidate_id: 'c3', kind: 'legacy', revision: 0, last_updated: '2026-11-24T01:00:00Z' });
+  assert.match(dated, /^旧形式の設定・2026\/11\/2[45] .*・第0版$/);
+  const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
+  assert.ok(!source.includes('revision ${'));
+  assert.ok(!source.includes('schema 3へ'));
 });
