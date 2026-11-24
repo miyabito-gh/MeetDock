@@ -10,7 +10,7 @@ import { createRoot } from './root.js';
 import { Event } from './model.js';
 import { handleCloseRequest } from './event-chain.js';
 import { createAppView } from './view.js';
-import './mock-styles.css';
+import './base.css';
 import './visibility.css';
 import './screen-refresh.css';
 

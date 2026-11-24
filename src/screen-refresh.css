@@ -1,5 +1,5 @@
 /* MeetDock visual system: warm neutral surfaces, one terracotta accent, border-first depth.
-   All colors live in the tokens below; components reference tokens only. Loaded last, so it themes mock-styles.css / visibility.css. */
+   All colors live in the tokens below; components reference tokens only. Loaded last, so it themes base.css / visibility.css. */
 :root {
   color-scheme: light dark;
   /* surfaces */

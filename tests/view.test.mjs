@@ -22,7 +22,7 @@ test('PDF annotation canvases follow rendered pages without allocating all docum
 });
 
 test('PDF marker and bookmark controls use the standard menu background',()=>{
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   assert.match(styles,/\.annotation-toolbar\{[^}]*background:#fff/);
   assert.match(styles,/\.bookmark-panel\{[^}]*background:#fff/);
   assert.match(styles,/\.toolbar-more-panel\{[^}]*background:#fff/);
@@ -30,7 +30,7 @@ test('PDF marker and bookmark controls use the standard menu background',()=>{
 
 test('PDF marker and bookmark controls are collapsible and bookmarks use a scrolling left rail',()=>{
   const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   assert.match(view,/annotationTools\.hidden=true;bookmarkPanel\.hidden=true/);
   assert.ok(view.indexOf("const markerToolsToggle=pdfIconButton('marker-tools-toggle'")<view.indexOf('utilityGroup.append('));
   assert.ok(view.indexOf("bookmarkToolsToggle=pdfIconButton('bookmark-tools-toggle'")<view.indexOf('utilityGroup.append('));
@@ -104,7 +104,7 @@ test('opening one bookmark action menu closes the other and keeps the control st
 
 test('PDF reading toolbar separates primary controls and keeps narrow bookmark rail over the canvas',()=>{
   const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   assert.match(view,/utilityGroup\.append\(selectTool,handButton,pdfSearchToggle,markerToolsToggle,bookmarkToolsToggle\);ptools\.append\(pageGroup,zoomGroup,utilityGroup\)/);
   for(const action of ['pdf-search-toggle','marker-tools-toggle','bookmark-tools-toggle','pdf-fit','bookmark-add']) assert.ok(view.includes(`pdfIconButton('${action}'`));
   assert.match(styles,/\.viewer-toolbar \.pdf-zoom-group,\.viewer-toolbar \.pdf-utility-group\{[^}]*border-left:1px solid/);
@@ -113,7 +113,7 @@ test('PDF reading toolbar separates primary controls and keeps narrow bookmark r
 
 test('PDF marker colors visibly expose selection and retain toggle and eraser behavior',()=>{
   const view=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   const control=color=>({dataset:{color},setAttribute(name,value){this[name]=value}});
   const colors=['yellow','green','pink'].map(control),eraser=control();
   const handlers={};
@@ -189,7 +189,7 @@ test('PDF marker pointer events retain their actual page and support Undo across
 });
 
 test('collapsed sidebar plus maximized PDF removes width limit and background focus', () => {
-  const css = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/base.css', import.meta.url), 'utf8');
   const view = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
   assert.match(css, /\.app-shell\.sidebar-collapsed \.preview\.maximized\{max-width:none;flex-basis:100%;\}/);
   for (const region of ['sidebar', 'listPane', 'toolbar', 'split']) assert.match(view, new RegExp(`${region}\\.inert=`));
@@ -423,7 +423,7 @@ test('exit confirmation stays inside MeetDock and resolves save, discard, cancel
 });
 
 test('window inventory dialog balances context and workspace while keeping settings outside the list scroll', () => {
-  const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../src/base.css', import.meta.url), 'utf8');
   assert.match(styles, /dialog\.modal\.windows-dialog\[open\]\{display:flex;width:min\(1080px,calc\(100vw - 64px\)\);max-width:min\(1080px,calc\(100vw - 64px\)\);height:min\(760px,calc\(100vh - 48px\)\)/);
   assert.match(styles, /\.windows-dialog:not\(\[open\]\)\{display:none\}/);
   assert.doesNotMatch(styles, /\.windows-dialog\{[^}]*width:/);
@@ -442,7 +442,7 @@ test('saved windows appear as a sidebar group with launch and registration actio
   for(const duplicate of ['window-snapshot-list','window-snapshot-row','保存一覧を表示',"'launch-all-window-snapshot'"])assert.ok(!source.includes(duplicate));
 });
 test('snapshot rows expose staged removal outside reorder mode and lock during save',()=>{
-  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8'),styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8'),styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   assert.ok(source.includes("button('×','remove-window-snapshot-item'"));
   assert.ok(source.includes("emit('removeWindowSnapshotItem',index)"));
   assert.ok(source.includes("next.window_snapshot_dirty||next.edit==='Saving'"));
@@ -451,7 +451,7 @@ test('snapshot rows expose staged removal outside reorder mode and lock during s
 
 test('window inventory groups applications and sorts groups and titles without usage history', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../src/base.css', import.meta.url), 'utf8');
   for (const token of ["new Intl.Collator('ja'", "key=`${item.app_name}\\u0000${item.executable_name}`", "'window-app-group'", "'window-app-head'", "`${group.items.length}件`", "group.items.sort((a,b)=>collator.compare(a.title,b.title))"]) assert.ok(source.includes(token));
   assert.ok(source.includes("windowsList.querySelectorAll('.window-row')"));
   assert.match(styles, /\.window-app-group\{[^}]*border:1px solid var\(--line\)/);
@@ -703,7 +703,7 @@ test('primary toolbar omits the redundant edit-mode button and groups PDF contro
 
 test('runtime actions use consistent labeled icons and low-frequency reorder lives in overflow', () => {
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   assert.ok(source.includes("sync=button('','sync','secondary toolbar-icon-button')"));
   assert.ok(source.includes("windowsButton=button('','open-windows','secondary toolbar-icon-button')"));
   assert.ok(source.includes("windowsButton.setAttribute('aria-label','ウィンドウ一覧を開く')"));
@@ -729,7 +729,7 @@ test('PDF toolbar exposes submitted text search, match navigation, counts, and P
 });
 
 test('PDF controls reflow against the resizable preview width without overflowing labels', () => {
-  const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../src/base.css', import.meta.url), 'utf8');
   assert.match(styles, /\.preview\{container:pdf-preview \/ inline-size/);
   assert.match(styles, /\.app-shell\.sidebar-collapsed \.preview\{max-width:calc\(1200px \+ var\(--sidebar-w,250px\)\)\}/);
   assert.match(styles, /@container pdf-preview \(max-width:520px\)/);
@@ -771,7 +771,7 @@ test('group navigation renders a collapsible parent-child tree', () => {
   for (const token of ['collapsedGroups', "'group-toggle'", "'aria-expanded'", "children.get(g.id)", "'group-menu'", "'＋ ルート追加'"]) assert.ok(source.includes(token));
   assert.ok(source.includes("row.setAttribute('aria-level',String(depth+1))"));
   assert.ok(source.includes("'group-label'"));
-  const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../src/base.css', import.meta.url), 'utf8');
   assert.match(styles, /padding-left:calc\(var\(--group-depth\) \* 18px\)/);
   assert.doesNotMatch(styles, /\.group-row::before|\.group-row::after/);
 });
@@ -796,7 +796,7 @@ test('saved window rows reuse material icons and the left icon owns activate-or-
 
 test('groups and materials expose internal drag reorder affordances', () => {
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   for(const token of ["'toggle-reorder'",'reorderMode','applyReorderMode',"el('button','drag-handle','⠿')",'elementFromPoint',"addEventListener('pointerdown'","addEventListener('pointermove'",'finishReorder','reorderGroup','reorderMaterial','cancelReorder'])assert.ok(source.includes(token));
   assert.doesNotMatch(source,/addEventListener\('dragstart'/);
   assert.match(styles,/\.drag-handle\{[^}]*width:24px;[^}]*flex:0 0 24px/);
@@ -836,7 +836,7 @@ test('PDF preview Alt+Left/Right switches documents only with an unmodified non-
 
 test('reorder mode deletes material registration without confirmation',()=>{
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   assert.ok(source.includes("actionIcon('delete-material','reorder-delete-button danger'"));
   assert.match(source,/else if\(a==='delete-material'\)emit\('deleteMaterial',id,true\)/);
   assert.ok(source.includes("else if(a==='delete-material')openOperation({title:'資料の登録を削除'"));
@@ -847,7 +847,7 @@ test('reorder mode deletes material registration without confirmation',()=>{
 
 test('temporary window group stays separated at the bottom and never exposes reorder affordance',()=>{
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   assert.ok(source.includes("row.classList.contains('snapshot-group')"));
   assert.ok(source.includes('groups.append(row)'));
   assert.ok(source.includes("previousEdit==='Saving'&&next.edit==='Clean'"));
@@ -858,7 +858,7 @@ test('temporary window group stays separated at the bottom and never exposes reo
 
 test('material pointer reorder can move across roles at an explicit position or section tail', () => {
   const source = readFileSync(new URL('../src/view.js', import.meta.url), 'utf8');
-  const styles = readFileSync(new URL('../src/mock-styles.css', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../src/base.css', import.meta.url), 'utf8');
   for (const token of ["s.dataset.role=role", "closest('.role-section')", "beforeId:before?.dataset.materialId??null", "reorderDropAction(kind,sourceId,source,target)", "'drop-tail'"])
     assert.ok(source.includes(token), token);
   assert.ok(source.includes("ratio=index===candidates.length-1 ? .35 : .5"));
@@ -871,7 +871,7 @@ test('unsaved state uses a title indicator and toolbar actions without a floatin
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
   assert.ok(source.includes("editState=el('span','edit-state')"));
   assert.ok(source.includes("saveButton=button('保存','save'"));
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   assert.match(styles,/\.title-line\{display:flex/);
   assert.match(readFileSync(new URL('../src/screen-refresh.css',import.meta.url),'utf8'),/\.edit-state\[data-state="Dirty"\] \{/);
 });
@@ -893,7 +893,7 @@ test('toolbar groups remain stable and material status is lightweight', () => {
   assert.ok(source.includes("setAttribute('aria-label','補助操作')"));
   assert.ok(source.includes("setAttribute('aria-label','主要操作')"));
   assert.ok(source.includes("p.state.setAttribute('aria-label',`状態: ${stateLabel}`)"));
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   assert.match(styles,/\.status\[data-tone="available"\] \.status-mark/);
   assert.match(styles,/\.row-actions\{width:auto;display:flex;align-items:center;justify-content:flex-end/);
   assert.match(styles,/\.list-pane\{container:material-list \/ inline-size\}/);
@@ -915,7 +915,7 @@ test('Explorer opening mode remains internal and is not exposed as a UI setting'
   assert.doesNotMatch(source,/group-explorer-mode/);
   assert.match(source,/button\('全体をエクスポート'/);
   assert.match(source,/button\('選択グループをエクスポート'/);
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   assert.match(styles,/\.toolbar-more-panel\{width:max-content;min-width:180px/);
   assert.match(styles,/\.toolbar-menu-button\{white-space:nowrap\}/);
 });
@@ -936,7 +936,7 @@ test('DnD confirmation and PDF external fallback are explicit UI actions', () =>
 
 test('group and material operations use an accessible in-app dialog with explicit contracts', () => {
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   for(const token of ["'modal operation-dialog'","'子グループと資料を含めて複製'","'別のグループへ移動'","'登録のみ削除（実ファイルは残す）'","emit('duplicateGroup',item.id)","emit('moveGroup',item.id,parentId||null)","emit('moveMaterial',item.id,item.group_id,item.role==='main'?'reference':'main')",'groupDescendants(item.id)',"operationDialog.addEventListener('cancel'","operationSubmit.type='submit'"])assert.ok(source.includes(token));
   assert.doesNotMatch(source,/prompt\('(新しいグループ名|子グループ名|グループ名)'/);
   assert.doesNotMatch(source,/confirm\('(未保存の変更|空のグループ|資料を削除)/);
@@ -1040,7 +1040,7 @@ test('group tree redraw restores the focused group control for keyboard context 
 
 test('PDF header directly selects and identifies all three display modes', () => {
   const source=readFileSync(new URL('../src/view.js',import.meta.url),'utf8');
-  const styles=readFileSync(new URL('../src/mock-styles.css',import.meta.url),'utf8');
+  const styles=readFileSync(new URL('../src/base.css',import.meta.url),'utf8');
   for(const label of ['ペインに表示','ウィンドウ全体に表示','全画面表示']) assert.ok(source.includes(label));
   assert.doesNotMatch(source,/pdfStage/);
   assert.ok(source.includes("pdfModes.setAttribute('aria-label','PDFの表示範囲')"));
