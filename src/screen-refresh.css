@@ -242,7 +242,6 @@ input::placeholder { color: var(--muted); }
 .material-row:hover { background: var(--surface-2); }
 .material-row.pdf-current { background: var(--accent2); box-shadow: inset 3px 0 var(--accent); }
 .material-name { color: var(--text); }
-.file-name, .material-target { color: var(--muted); }
 .file-icon { border-radius: var(--radius-sm); border-color: var(--line-light); background: var(--surface-2); color: var(--muted); }
 .file-icon:hover:not(:disabled) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent); }
 .file-icon.xlsx, .file-icon.excel { color: var(--kind-green); background: color-mix(in srgb, var(--kind-green) 14%, var(--surface)); }
@@ -308,7 +307,6 @@ dialog::backdrop { background: var(--scrim); backdrop-filter: blur(2px); }
 .windows-dialog-head { padding: 20px 24px; border-color: var(--line); }
 .windows-list { padding: 10px 24px; }
 .window-row { border-color: var(--line-light); }
-.window-title { color: var(--text); }
 .window-app-group { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .window-app-head { background: var(--surface-2); border-color: var(--line-light); }
 .window-app-mark { background: var(--accent2); color: var(--accent3); }
